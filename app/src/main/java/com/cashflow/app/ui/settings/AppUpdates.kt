@@ -20,6 +20,9 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.cashflow.app.ui.components.AppButton
+import com.cashflow.app.ui.components.AppButtonStyle
+import com.cashflow.app.ui.components.SectionCard
 import com.cashflow.app.update.UpdateManager
 import com.cashflow.app.update.UpdateState
 
@@ -29,8 +32,7 @@ internal fun AppUpdatesSection(manager: UpdateManager) {
     // Back from the "install unknown apps" screen: continue with the install if it was granted.
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { manager.onResumed() }
 
-    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        HorizontalDivider()
+    SectionCard {
         Text("App updates", style = MaterialTheme.typography.titleMedium)
         Text("Installed: v${manager.installedVersionName} (${manager.installedVersionCode})")
 
@@ -43,7 +45,7 @@ internal fun AppUpdatesSection(manager: UpdateManager) {
             UpdateState.UpToDate -> Text("You're up to date")
             is UpdateState.UpdateAvailable -> {
                 Text("Update available: v${s.version}")
-                Button(onClick = manager::download, modifier = Modifier.fillMaxWidth()) { Text("Update") }
+                AppButton("Update", onClick = manager::download, modifier = Modifier.fillMaxWidth())
             }
             is UpdateState.Downloading -> {
                 Text("Downloading…")
@@ -55,21 +57,21 @@ internal fun AppUpdatesSection(manager: UpdateManager) {
             }
             UpdateState.ReadyToInstall -> {
                 Text("Update downloaded and verified.")
-                Button(onClick = manager::install, modifier = Modifier.fillMaxWidth()) { Text("Install update") }
+                AppButton("Install update", onClick = manager::install, modifier = Modifier.fillMaxWidth())
             }
             UpdateState.NeedsInstallPermission -> {
                 Text("To install the update, allow Cashflow to install apps. Turn on \"Allow from this source\", then come back.")
-                Button(onClick = manager::openInstallPermissionSettings, modifier = Modifier.fillMaxWidth()) {
-                    Text("Open settings")
-                }
+                AppButton("Open settings", onClick = manager::openInstallPermissionSettings, modifier = Modifier.fillMaxWidth())
             }
             is UpdateState.Error -> Text(s.message, color = MaterialTheme.colorScheme.error)
         }
 
-        OutlinedButton(
+        AppButton(
+            "Check for updates",
             onClick = manager::check,
             enabled = state !is UpdateState.Checking && state !is UpdateState.Downloading,
             modifier = Modifier.fillMaxWidth(),
-        ) { Text("Check for updates") }
+            style = AppButtonStyle.Outlined,
+        )
     }
 }

@@ -2,6 +2,8 @@ package com.cashflow.app.ui.settings
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import com.cashflow.app.ui.components.SectionCard
 import androidx.compose.foundation.layout.Row
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
@@ -48,35 +50,33 @@ import java.time.format.DateTimeFormatter
 
 private val TimeFormat = DateTimeFormatter.ofPattern("HH:mm")
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
     viewModel: SettingsViewModel,
     repository: LedgerRepository,
     updateManager: UpdateManager,
-    onBack: () -> Unit,
+    contentPadding: PaddingValues,
 ) {
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     // Bumped by the debug actions so the text fields re-read the replaced data.
     var generation by remember { mutableIntStateOf(0) }
+    val current = settings
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("Settings") },
-                navigationIcon = { TextButton(onClick = onBack) { Text("Back") } },
-            )
-        },
-    ) { padding ->
-        val current = settings
-        Column(
-            Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-        ) {
-            if (current != null) {
-                key(generation) {
+    Column(
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(
+            start = 20.dp,
+            end = 20.dp,
+            top = contentPadding.calculateTopPadding() + 16.dp,
+            bottom = contentPadding.calculateBottomPadding() + 24.dp,
+        ),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
+        Text("Settings", style = MaterialTheme.typography.headlineMedium)
+        if (current != null) {
+            key(generation) {
+                SectionCard {
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                        Column(Modifier.weight(1f)) {
+                        Column(Modifier.weight(1f).padding(end = 12.dp)) {
                             Text("Dynamic wallet", style = MaterialTheme.typography.titleMedium)
                             Text(
                                 if (current.walletMode == WalletMode.DYNAMIC) {
@@ -85,6 +85,7 @@ fun SettingsScreen(
                                     "Static: income sources are ignored; only logged transactions change the balance."
                                 },
                                 style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
                         Switch(
@@ -96,6 +97,8 @@ fun SettingsScreen(
                             },
                         )
                     }
+                }
+                SectionCard {
                     AmountField(
                         label = "Starting balance (TND)",
                         initial = current.startingBalance,
@@ -113,10 +116,10 @@ fun SettingsScreen(
                         onPick = { t -> viewModel.update { it.copy(reminderTime = t) } },
                     )
                 }
-                IncomeSourcesSection(viewModel)
-                AppUpdatesSection(updateManager)
-                DebugSection(repository) { viewModel.reload { generation++ } }
             }
+            IncomeSourcesSection(viewModel)
+            AppUpdatesSection(updateManager)
+            DebugSection(repository) { viewModel.reload { generation++ } }
         }
     }
 }
@@ -144,7 +147,7 @@ private fun AmountField(label: String, initial: Long, allowNegative: Boolean, on
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun DateField(label: String, value: LocalDate, onPick: (LocalDate) -> Unit) {
+internal fun DateField(label: String, value: LocalDate, onPick: (LocalDate) -> Unit) {
     var open by remember { mutableStateOf(false) }
     OutlinedButton(onClick = { open = true }, modifier = Modifier.fillMaxWidth()) {
         Text("$label: $value")

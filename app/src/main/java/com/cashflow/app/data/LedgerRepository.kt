@@ -42,7 +42,22 @@ class LedgerRepository(private val db: AppDatabase) {
 
     suspend fun confirm(id: Long) = txDao.setStatus(id, TxStatus.CONFIRMED)
     suspend fun skip(id: Long) = txDao.setStatus(id, TxStatus.SKIPPED)
-    suspend fun undo(id: Long) = txDao.setStatus(id, TxStatus.PENDING)
+
+    /** Confirms with a different amount: only this row changes (recurring rules are untouched). */
+    suspend fun confirmWithAmount(id: Long, amount: Long) {
+        db.withTransaction {
+            txDao.setAmount(id, amount)
+            txDao.setStatus(id, TxStatus.CONFIRMED)
+        }
+    }
+
+    /** Back to PENDING; [restoreAmount] puts back the amount an edited confirm had replaced. */
+    suspend fun undo(id: Long, restoreAmount: Long? = null) {
+        db.withTransaction {
+            if (restoreAmount != null) txDao.setAmount(id, restoreAmount)
+            txDao.setStatus(id, TxStatus.PENDING)
+        }
+    }
 
     // ---- rules / income sources --------------------------------------------------------------
 
