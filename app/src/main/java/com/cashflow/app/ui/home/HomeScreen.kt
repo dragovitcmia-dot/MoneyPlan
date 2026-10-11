@@ -36,7 +36,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.OutlinedTextField
+import com.cashflow.app.ui.components.LabeledTextField
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
@@ -512,7 +512,7 @@ private fun EditAmountSheet(tx: Transaction, title: String, onDismiss: () -> Uni
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            OutlinedTextField(
+            LabeledTextField(
                 value = text,
                 onValueChange = { text = it },
                 label = { Text(stringResource(R.string.amount_label)) },

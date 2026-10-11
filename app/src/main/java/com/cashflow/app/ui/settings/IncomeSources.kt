@@ -17,7 +17,7 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
+import com.cashflow.app.ui.components.LabeledTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -152,14 +152,14 @@ private fun SourceDialog(
         title = { Text(stringResource(if (initial == null) R.string.add_regular_income else R.string.edit_regular_income)) },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                OutlinedTextField(
+                LabeledTextField(
                     value = name,
                     onValueChange = { name = it },
                     label = { Text(stringResource(R.string.source_name_label)) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
-                OutlinedTextField(
+                LabeledTextField(
                     value = amountText,
                     onValueChange = { amountText = it },
                     label = { Text(stringResource(R.string.amount_label)) },
@@ -190,7 +190,7 @@ private fun SourceDialog(
                     }
                 }
                 if (kind == ScheduleKind.MONTH_DAY) {
-                    OutlinedTextField(
+                    LabeledTextField(
                         value = dayText,
                         onValueChange = { dayText = it },
                         label = { Text(stringResource(R.string.day_of_month_label)) },

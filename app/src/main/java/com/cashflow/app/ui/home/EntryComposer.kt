@@ -5,6 +5,8 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -19,7 +21,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.OutlinedTextField
+import com.cashflow.app.ui.components.LabeledTextField
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
@@ -99,7 +101,7 @@ private fun FormProblem.message() = stringResource(
  * Shared composer for EXPENSE and INCOME: amount on the keypad, then when it happens: Now, Later
  * or Repeats. Every expense is run through the what-if safety check before it is saved.
  */
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun EntryComposer(
     kind: TxKind,
@@ -214,7 +216,7 @@ fun EntryComposer(
                 onClear = { form = form.copy(amountText = ""); haptics.confirm() },
             )
 
-            OutlinedTextField(
+            LabeledTextField(
                 value = form.description,
                 onValueChange = { form = form.copy(description = it) },
                 label = { Text(stringResource(R.string.description_label)) },
@@ -223,14 +225,19 @@ fun EntryComposer(
                 modifier = Modifier.fillMaxWidth(),
             )
 
-            SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
-                Timing.entries.forEachIndexed { index, t ->
-                    SegmentedButton(
+            // Wrapping chips (not a segmented bar) so the three words never get squeezed at large font sizes.
+            FlowRow(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Timing.entries.forEach { t ->
+                    FilterChip(
                         selected = form.timing == t,
                         onClick = { form = form.copy(timing = t); haptics.tick() },
-                        shape = SegmentedButtonDefaults.itemShape(index, Timing.entries.size),
+                        label = { Text(t.label(), style = MaterialTheme.typography.titleSmall) },
                         modifier = Modifier.heightIn(min = 56.dp),
-                    ) { Text(t.label()) }
+                    )
                 }
             }
 
@@ -272,7 +279,7 @@ fun EntryComposer(
                                 )
                             }
                         }
-                        PatternChoice.EVERY_N -> OutlinedTextField(
+                        PatternChoice.EVERY_N -> LabeledTextField(
                             value = form.everyN,
                             onValueChange = { form = form.copy(everyN = it.filter(Char::isDigit).take(3)) },
                             label = { Text(stringResource(R.string.every_n_label)) },
@@ -282,7 +289,7 @@ fun EntryComposer(
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                             modifier = Modifier.fillMaxWidth(),
                         )
-                        PatternChoice.MONTH_DAY -> OutlinedTextField(
+                        PatternChoice.MONTH_DAY -> LabeledTextField(
                             value = form.dayOfMonth,
                             onValueChange = { form = form.copy(dayOfMonth = it.filter(Char::isDigit).take(2)) },
                             label = { Text(stringResource(R.string.day_of_month_label)) },
@@ -330,6 +337,7 @@ fun EntryComposer(
                 enabled = !saving,
                 modifier = Modifier.fillMaxWidth().heightIn(min = 64.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = accentFill, contentColor = colors.buttonLabel),
+                textStyle = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
             )
         }
     }

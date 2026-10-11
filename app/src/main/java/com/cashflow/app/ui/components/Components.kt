@@ -20,7 +20,15 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonColors
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Card
+import androidx.compose.material3.LocalContentColor
+import androidx.compose.material3.LocalTextStyle
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.ProvideTextStyle
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.MaterialTheme
@@ -76,6 +84,7 @@ fun AppButton(
     enabled: Boolean = true,
     style: AppButtonStyle = AppButtonStyle.Primary,
     colors: ButtonColors? = null,
+    textStyle: TextStyle? = null,
 ) {
     val source = remember { MutableInteractionSource() }
     val m = modifier.pressScale(source).heightIn(min = 56.dp)
@@ -83,14 +92,14 @@ fun AppButton(
         AppButtonStyle.Primary -> Button(
             onClick, m, enabled = enabled, elevation = null, interactionSource = source,
             colors = colors ?: ButtonDefaults.buttonColors(),
-        ) { Text(text, textAlign = TextAlign.Center) }
+        ) { Text(text, textAlign = TextAlign.Center, style = textStyle ?: LocalTextStyle.current) }
         AppButtonStyle.Tonal -> FilledTonalButton(onClick, m, enabled = enabled, elevation = null, interactionSource = source) {
             Text(text, textAlign = TextAlign.Center)
         }
         AppButtonStyle.Outlined -> OutlinedButton(
             onClick, m, enabled = enabled, interactionSource = source,
             border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-        ) { Text(text, textAlign = TextAlign.Center) }
+        ) { Text(text, textAlign = TextAlign.Center, style = textStyle ?: LocalTextStyle.current) }
     }
 }
 
@@ -239,3 +248,36 @@ fun Modifier.fullBleed(horizontalPadding: androidx.compose.ui.unit.Dp): Modifier
 @Composable
 fun quantityString(@androidx.annotation.PluralsRes id: Int, count: Int, vararg args: Any): String =
     androidx.compose.ui.platform.LocalContext.current.resources.getQuantityString(id, count, *args)
+
+/**
+ * Text field with its label ABOVE the field instead of floating on the border, so the label can
+ * wrap onto several lines at large font sizes without overlapping the outline.
+ */
+@Composable
+fun LabeledTextField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    label: @Composable () -> Unit,
+    modifier: Modifier = Modifier,
+    singleLine: Boolean = false,
+    isError: Boolean = false,
+    placeholder: (@Composable () -> Unit)? = null,
+    supportingText: (@Composable () -> Unit)? = null,
+    keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
+) {
+    Column(modifier.semantics(mergeDescendants = true) {}, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        CompositionLocalProvider(LocalContentColor provides if (isError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant) {
+            ProvideTextStyle(MaterialTheme.typography.labelLarge) { label() }
+        }
+        OutlinedTextField(
+            value = value,
+            onValueChange = onValueChange,
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = singleLine,
+            isError = isError,
+            placeholder = placeholder,
+            supportingText = supportingText,
+            keyboardOptions = keyboardOptions,
+        )
+    }
+}

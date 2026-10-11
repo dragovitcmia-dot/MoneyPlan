@@ -88,9 +88,9 @@ class NotFound(Exception):
     pass
 
 
-def find(text, scroll=True, last=False):
-    """Waits up to 10 s for a node with exactly this text; scrolls down while it is missing."""
-    deadline = time.time() + FIND_TIMEOUT
+def find(text, scroll=True, last=False, timeout=FIND_TIMEOUT):
+    """Waits up to `timeout` (10 s) for a node with exactly this text; scrolls down while it is missing."""
+    deadline = time.time() + timeout
     last_nodes = None
     while True:
         nodes = dump_nodes()
@@ -104,8 +104,18 @@ def find(text, scroll=True, last=False):
                 sh(f"input swipe {w // 2} {int(h * 0.75)} {w // 2} {int(h * 0.35)} 300")
         if time.time() > deadline:
             visible = [(t or d) for t, d, _ in (last_nodes or []) if (t or d)]
-            raise NotFound(f"text {text!r} not found within {FIND_TIMEOUT:.0f}s; visible texts: {visible}")
+            raise NotFound(f"text {text!r} not found within {timeout:.0f}s; visible texts: {visible}")
         time.sleep(0.5)
+
+
+def diagnostics():
+    pid = sh(f"pidof {PKG}", check=False).strip()
+    print(f"  pid: {pid or 'NONE'}")
+    log = adb("logcat", "-d", check=False).splitlines()
+    mine = [l for l in log if PKG in l or "FATAL" in l or " E AndroidRuntime" in l or "ANR" in l]
+    print("  logcat (package-related, last 60):")
+    for line in mine[-60:]:
+        print("   ", line)
 
 
 def tap_text(text, **kw):
@@ -158,6 +168,8 @@ def run_config(name, night, font, size, density):
     sh(f"monkey -p {PKG} -c android.intent.category.LAUNCHER 1")
     time.sleep(3)
     try:
+        # A cold start (new resolution, cleared data, software rendering) can be slow: allow 30 s here.
+        find(TEXT_SETTINGS, scroll=False, timeout=30)
         tap_text(TEXT_SETTINGS, scroll=False)
         tap_text(TEXT_LOAD_SAMPLE)  # scrolls down to the debug section
         time.sleep(2.5)
@@ -180,6 +192,7 @@ def run_config(name, night, font, size, density):
     except NotFound as e:
         screenshot(f"{name}-FAILED")
         print("  NOT FOUND:", e)
+        diagnostics()
         nodes = dump_nodes() or []
         print("  dump:", [(t, d, b) for t, d, b in nodes if t or d][:80])
         return [f"{name}: {e}"]
