@@ -39,6 +39,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.cashflow.app.data.LedgerRepository
 import com.cashflow.app.debug.DebugSection
 import com.cashflow.app.engine.Money
+import com.cashflow.app.update.UpdateManager
 import com.cashflow.app.engine.WalletMode
 import java.time.LocalDate
 import java.time.LocalTime
@@ -52,6 +53,7 @@ private val TimeFormat = DateTimeFormatter.ofPattern("HH:mm")
 fun SettingsScreen(
     viewModel: SettingsViewModel,
     repository: LedgerRepository,
+    updateManager: UpdateManager,
     onBack: () -> Unit,
 ) {
     val settings by viewModel.settings.collectAsStateWithLifecycle()
@@ -112,6 +114,7 @@ fun SettingsScreen(
                     )
                 }
                 IncomeSourcesSection(viewModel)
+                AppUpdatesSection(updateManager)
                 DebugSection(repository) { viewModel.reload { generation++ } }
             }
         }
