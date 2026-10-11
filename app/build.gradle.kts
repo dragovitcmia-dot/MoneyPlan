@@ -67,7 +67,7 @@ android {
 }
 
 composeCompiler {
-    stabilityConfigurationFiles.add(layout.projectDirectory.file("compose-stability.conf"))
+    stabilityConfigurationFile.set(layout.projectDirectory.file("compose-stability.conf"))
 }
 
 ksp {
