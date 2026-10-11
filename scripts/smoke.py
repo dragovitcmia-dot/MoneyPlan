@@ -278,10 +278,13 @@ def burst(prefix, frames, relaunch):
 
 
 def band_info(path):
-    """(ink pixel count, left extent, right extent, gray crop) of the hero band of a screenshot."""
+    """(ink pixel count, left extent, right extent, gray crop) of the hero band of a frame. Frames may be
+    smaller than the 1080-wide screen (video); extents are returned in 1080-wide device pixels and the ink
+    count is normalised the same way."""
     from PIL import Image
     img = Image.open(path).convert("L")
-    crop = img.crop((0, HERO_BAND[0], img.width, HERO_BAND[1]))
+    scale = img.width / 1080.0
+    crop = img.crop((0, round(HERO_BAND[0] * scale), img.width, round(HERO_BAND[1] * scale)))
     px = crop.load()
     w, h = crop.size
     cols = [False] * w
@@ -292,7 +295,47 @@ def band_info(path):
                 cols[x] = True
                 count += 1
     xs = [x for x, c in enumerate(cols) if c]
-    return count, (xs[0] if xs else None), (xs[-1] if xs else None), crop
+    left = round(xs[0] / scale) if xs else None
+    right = round(xs[-1] / scale) if xs else None
+    return round(count / (scale * scale)), left, right, crop
+
+
+def extract_video_frames(video, prefix, fps=30):
+    """Decodes the screen recording into PNG frames (evenly spaced in time, `fps` per second) with ffmpeg
+    from the imageio-ffmpeg wheel. Returns [(path, seconds since the first video frame)]."""
+    import glob
+    import imageio_ffmpeg
+    ffmpeg = imageio_ffmpeg.get_ffmpeg_exe()
+    for old in glob.glob(os.path.join(OUT, f"{prefix}-*.png")):
+        os.remove(old)
+    pattern = os.path.join(OUT, f"{prefix}-%03d.png")
+    r = subprocess.run([ffmpeg, "-v", "error", "-y", "-i", video, "-vf", f"fps={fps}", "-compression_level", "1", pattern],
+                       capture_output=True, text=True)
+    if r.returncode != 0:
+        raise RuntimeError(f"ffmpeg failed: {r.stderr.strip()}")
+    paths = sorted(glob.glob(os.path.join(OUT, f"{prefix}-*.png")))
+    return [(p, i / fps) for i, p in enumerate(paths)]
+
+
+def record_launch(prefix, seconds=6):
+    """Cold-starts the app while the screen is being recorded; returns the decoded frames."""
+    sh("rm -f /sdcard/hero.mp4")
+    adb("logcat", "-c", check=False)
+    sh("am force-stop " + PKG)
+    sh(f"(screenrecord --time-limit {seconds} --bit-rate 16000000 /sdcard/hero.mp4 >/sdcard/hero_rec.log 2>&1 &)")
+    time.sleep(1.5)
+    sh(f"am start -n {PKG}/.MainActivity >/dev/null 2>&1")
+    time.sleep(seconds)
+    time.sleep(1.5)  # screenrecord finalises the file
+    os.makedirs(OUT, exist_ok=True)
+    video = os.path.join(OUT, f"{prefix}.mp4")
+    adb("pull", "/sdcard/hero.mp4", video, check=False)
+    if not os.path.exists(video) or os.path.getsize(video) < 1000:
+        print("  screenrecord log:", sh("cat /sdcard/hero_rec.log", check=False).strip())
+        return None
+    frames = extract_video_frames(video, prefix)
+    os.remove(video)  # only the PNG frames are published
+    return frames
 
 
 def mean_abs_diff(a, b):
@@ -328,44 +371,66 @@ def run_hero_animation():
         sh(f"am force-stop {PKG}")
         time.sleep(1)
 
-        # 1) Launch from closed with real animations: burst of screenshots from the moment of launch.
+        # 1) Launch from closed with real animations. The screen is recorded (screencap is far too slow to
+        #    catch a 1.5 s animation on a CI emulator) and decoded to 30 frames per second.
         set_animations("1.0")
-        frames = burst("hero-anim", BURST_FRAMES, relaunch=True)
-        time.sleep(3.5)
+        frames = record_launch("hero-anim")
+        if not frames:
+            problems.append("hero: screenrecord produced no video")
+            frames = []
+        print("  logcat CashflowHero:")
+        for line in adb("logcat", "-d", "-v", "time", "-s", "CashflowHero:I", check=False).splitlines():
+            if "CashflowHero" in line:
+                print("   ", line)
+        time.sleep(1)
         screenshot("hero-anim-final")
         final = band_info(os.path.join(OUT, "hero-anim-final.png"))
         infos = []
-        print("  frame  t(s)   ink   left right")
         for path, t in frames:
             count, left, right, crop = band_info(path)
-            print(f"  {os.path.basename(path)[-6:-4]:>5} {t:5.2f} {count:6d} {left!s:>5} {right!s:>5}")
             infos.append((path, t, count, left, right, crop))
-        hero_frames = [(p, t, c, l, r, crop) for p, t, c, l, r, crop in infos if MIN_INK_PIXELS <= c <= MAX_INK_PIXELS]
-        if len(hero_frames) < 5:
+        hero_frames = [x for x in infos if MIN_INK_PIXELS <= x[2] <= MAX_INK_PIXELS]
+        print("  frame   t(s)    ink  left right  diff-to-final")
+        for path, t, count, left, right, crop in infos:
+            if MIN_INK_PIXELS <= count <= MAX_INK_PIXELS:
+                d = mean_abs_diff(crop, final[3].resize(crop.size))
+                print(f"  {os.path.basename(path)[-7:-4]:>5} {t:6.2f} {count:6d} {left!s:>5} {right!s:>5}  {d:6.2f}")
+        if len(hero_frames) < 10:
             problems.append(f"hero: only {len(hero_frames)} frames show the number; expected an animation burst")
         else:
-            make_filmstrip([(p, t, c, crop) for p, t, c, l, r, crop in hero_frames], "hero-anim-filmstrip.png")
+            make_filmstrip([(p, t, c, crop) for p, t, c, l, r, crop in hero_frames[::3]], "hero-anim-filmstrip.png")
             rights = [r for *_, r, _ in hero_frames]
             lefts = [l for _, _, _, l, _, _ in hero_frames]
             span_r = max(rights) - min(rights)
             span_l = max(lefts) - min(lefts)
             print(f"  hero frames: {len(hero_frames)}  right extent range {min(rights)}..{max(rights)} ({span_r}px)  "
                   f"left extent range {min(lefts)}..{max(lefts)} ({span_l}px)")
-            # The TND label is static, so the right edge must not move at all. The left edge is the ink of
+            # The TND label is static, so the right edge must not move at all (video frames are lossy and
+            # possibly downscaled, hence a little tolerance for the quantisation). The left edge is the ink of
             # the first digit, whose shape differs from digit to digit (a '1' starts further right than a
             # '9'), so it gets a glyph-shape allowance; the slot layout itself is fixed-width.
             if span_r > 2:
                 problems.append(f"hero: right extent moved by {span_r}px across frames (limit 2)")
             if span_l > 24:
                 problems.append(f"hero: left extent moved by {span_l}px across frames (limit 24 for glyph shapes)")
-            changed = sum(
-                1 for a, b in zip(hero_frames, hero_frames[1:]) if mean_abs_diff(a[5], b[5]) > 0.5
-            )
+            diffs = [mean_abs_diff(f[5], final[3].resize(f[5].size)) for f in hero_frames]
+            moving = [i for i, d in enumerate(diffs) if d > 1.0]
+            changed = sum(1 for a, b in zip(hero_frames, hero_frames[1:]) if mean_abs_diff(a[5], b[5]) > 0.5)
             print(f"  consecutive hero frames that differ: {changed} of {len(hero_frames) - 1}")
-            if changed < 2:
+            if changed < 6:
                 problems.append("hero: the number did not visibly animate between frames")
-            diff_final = mean_abs_diff(hero_frames[-1][5], final[3])
-            print(f"  last burst frame vs final frame: mean abs diff {diff_final:.2f}")
+            if moving:
+                t_first = hero_frames[0][1]
+                t_last = hero_frames[moving[-1]][1]
+                print(f"  observed: first number frame t={t_first:.2f}s, last frame that still differs from the final "
+                      f"value t={t_last:.2f}s -> animation visible for {t_last - t_first + 1 / 30:.2f}s (spec 1.5s)")
+                if not 1.0 <= t_last - t_first + 1 / 30 <= 2.0:
+                    problems.append("hero: observed animation duration is far from 1.5 s")
+            else:
+                problems.append("hero: every frame already shows the final value (the launch animation did not play)")
+            print(f"  last frame vs final screenshot: mean abs diff {diffs[-1]:.2f}")
+            if diffs[-1] > 1.0:
+                problems.append("hero: the last frame does not show the final value")
         nodes = dump_nodes() or []
         descs = [d for _, d, _ in nodes if d.startswith("Available:")]
         print("  hero content description:", descs)
@@ -382,10 +447,16 @@ def run_hero_animation():
         if not hero_back:
             problems.append("hero: no frame after returning from the background shows the number")
         else:
-            worst = max(mean_abs_diff(i[3], final[3]) for _, i in hero_back)
-            print(f"  worst difference to the final frame: {worst:.2f}")
-            if worst > 1.0:
-                problems.append(f"hero: after returning from the background the number differs from the final value (diff {worst:.2f})")
+            ds = [mean_abs_diff(i[3], final[3]) for _, i in hero_back]
+            print("  difference of each return frame to the final frame:", " ".join(f"{d:.2f}" for d in ds))
+            # The very first frame can still be the window-open transition (the whole window is scaled), so
+            # one frame may differ; a replayed count-down would differ in many frames.
+            if sum(1 for d in ds if d > 1.0) > 1 or ds[-1] > 1.0:
+                problems.append(f"hero: after returning from the background the number differs from the final value ({ds})")
+        replayed = [l for l in adb("logcat", "-d", "-v", "time", "-s", "CashflowHero:I", check=False).splitlines() if "show action" in l]
+        print("  hero show() calls after return from background:", len(replayed))
+        if replayed:
+            problems.append("hero: the animation replayed after returning from the background")
     except NotFound as e:
         screenshot("hero-FAILED")
         print("  NOT FOUND:", e)

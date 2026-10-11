@@ -161,6 +161,7 @@ private class HeroGlyphs(
     val height: Float,
     val smallTop: Float,
     val labelTop: Float,
+    val labelGap: Float,
 )
 
 private fun measureHero(
@@ -200,6 +201,7 @@ private fun measureHero(
         height = big[0].size.height.toFloat(),
         smallTop = baseline - small[0].firstBaseline,
         labelTop = baseline - label.firstBaseline,
+        labelGap = (bigDigit * 0.25).toFloat(),
     )
 }
 
@@ -258,7 +260,7 @@ private fun DrawScope.drawHero(odometer: HeroOdometer, g: HeroGlyphs, normalColo
             SlotKind.MINUS -> if (negative) drawCentered(g.minus, x, w, 0f, color)
             SlotKind.GROUP -> Unit // a fixed blank gap
             SlotKind.POINT -> drawCentered(g.point, x, w, g.smallTop, dim)
-            SlotKind.LABEL -> drawText(g.label, dim, Offset(x, g.labelTop))
+            SlotKind.LABEL -> drawText(g.label, dim, Offset(x + g.labelGap, g.labelTop))
             SlotKind.DIGIT_BIG -> drawWheel(Odometer.wheel(magnitude, slot.index), g.big, x, w, 0f, color)
             SlotKind.DIGIT_SMALL -> drawWheel(Odometer.wheel(magnitude, slot.index), g.small, x, w, g.smallTop, dim)
         }
