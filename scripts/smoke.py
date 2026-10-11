@@ -224,6 +224,7 @@ BURST_FRAMES = 24
 HERO_BAND = (290, 470)
 INK_MIN_LUMA = 150  # white digits / 80%-alpha decimals; the skeleton blocks and background are much darker
 MIN_INK_PIXELS = 500
+MAX_INK_PIXELS = 60000  # more than this is the bright launcher wallpaper, not the app
 
 
 def set_animations(scale):
@@ -233,29 +234,46 @@ def set_animations(scale):
 
 def burst(prefix, frames, relaunch):
     """Captures `frames` screenshots as fast as the device allows, in one on-device loop (no adb round trip
-    between frames), starting right after the app is launched. Returns [(path, seconds_since_first)]."""
-    sh("rm -f /sdcard/hero_*.png /sdcard/hero_times.txt")
+    between frames), starting right after the app is launched. Raw (uncompressed) screencap is used because
+    PNG compression takes ~300 ms per frame. Returns [(path, seconds since the launch command)]."""
+    from PIL import Image
+    sh("rm -f /sdcard/hero_*.raw /sdcard/hero_times.txt")
+    adb("logcat", "-c", check=False)
     start = f"am force-stop {PKG}; " if relaunch else ""
     loop = (
-        f"{start}(monkey -p {PKG} -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1 &); "
-        f"i=0; while [ $i -lt {frames} ]; do n=$(printf %02d $i); screencap -p /sdcard/hero_$n.png; "
-        f"echo \"$n $(date +%s%N)\" >> /sdcard/hero_times.txt; i=$((i+1)); done"
+        f"{start}echo L $(date +%s%N) > /sdcard/hero_times.txt; "
+        f"(am start -n {PKG}/.MainActivity >/dev/null 2>&1 &); "
+        f"i=0; while [ $i -lt {frames} ]; do n=$(printf %02d $i); a=$(date +%s%N); "
+        f"screencap /sdcard/hero_$n.raw; b=$(date +%s%N); echo \"$n $a $b\" >> /sdcard/hero_times.txt; i=$((i+1)); done"
     )
     sh(loop)
     times = {}
+    launch_ns = 0
     for line in adb("shell", "cat /sdcard/hero_times.txt", check=False).splitlines():
         parts = line.split()
-        if len(parts) == 2:
-            times[parts[0]] = int(parts[1])
+        if parts[:1] == ["L"] and len(parts) == 2:
+            launch_ns = int(parts[1])
+        elif len(parts) == 3:
+            times[parts[0]] = (int(parts[1]) + int(parts[2])) // 2
     os.makedirs(OUT, exist_ok=True)
     out = []
-    t0 = min(times.values()) if times else 0
     for i in range(frames):
         n = f"{i:02d}"
+        raw = os.path.join(OUT, f"{prefix}-{n}.raw")
+        adb("pull", f"/sdcard/hero_{n}.raw", raw, check=False)
+        if not os.path.exists(raw):
+            continue
+        data = open(raw, "rb").read()
+        os.remove(raw)
+        width, height = int.from_bytes(data[0:4], "little"), int.from_bytes(data[4:8], "little")
+        pixels = data[len(data) - width * height * 4:]  # header is 12 or 16 bytes depending on the release
         path = os.path.join(OUT, f"{prefix}-{n}.png")
-        adb("pull", f"/sdcard/hero_{n}.png", path, check=False)
-        if os.path.exists(path):
-            out.append((path, (times.get(n, t0) - t0) / 1e9))
+        Image.frombytes("RGBA", (width, height), pixels).convert("RGB").save(path, optimize=False, compress_level=1)
+        out.append((path, (times.get(n, launch_ns) - launch_ns) / 1e9))
+    print("  logcat CashflowHero:")
+    for line in adb("logcat", "-d", "-v", "time", "-s", "CashflowHero:I", check=False).splitlines():
+        if "CashflowHero" in line:
+            print("   ", line)
     return out
 
 
@@ -322,7 +340,7 @@ def run_hero_animation():
             count, left, right, crop = band_info(path)
             print(f"  {os.path.basename(path)[-6:-4]:>5} {t:5.2f} {count:6d} {left!s:>5} {right!s:>5}")
             infos.append((path, t, count, left, right, crop))
-        hero_frames = [(p, t, c, l, r, crop) for p, t, c, l, r, crop in infos if c >= MIN_INK_PIXELS]
+        hero_frames = [(p, t, c, l, r, crop) for p, t, c, l, r, crop in infos if MIN_INK_PIXELS <= c <= MAX_INK_PIXELS]
         if len(hero_frames) < 5:
             problems.append(f"hero: only {len(hero_frames)} frames show the number; expected an animation burst")
         else:
@@ -359,7 +377,7 @@ def run_hero_animation():
         time.sleep(2)
         back = burst("hero-return", 8, relaunch=False)
         shown = [(p, band_info(p)) for p, _ in back]
-        hero_back = [(p, i) for p, i in shown if i[0] >= MIN_INK_PIXELS]
+        hero_back = [(p, i) for p, i in shown if MIN_INK_PIXELS <= i[0] <= MAX_INK_PIXELS]
         print(f"  return from background: {len(hero_back)} of {len(back)} frames show the number")
         if not hero_back:
             problems.append("hero: no frame after returning from the background shows the number")

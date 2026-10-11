@@ -1,6 +1,7 @@
 package com.cashflow.app
 
 import android.os.Bundle
+import android.util.Log
 import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -65,6 +66,7 @@ class MainActivity : ComponentActivity() {
                     home.state.map { it?.available }.distinctUntilChanged().collectLatest { value ->
                         if (value != null) {
                             val action = HeroLaunch.decide(freshLaunch, firstEmission, animationsEnabled())
+                            Log.i("CashflowHero", "emission=$value fresh=$freshLaunch first=$firstEmission -> $action")
                             firstEmission = false
                             odometer.show(value, action, haptics)
                         }

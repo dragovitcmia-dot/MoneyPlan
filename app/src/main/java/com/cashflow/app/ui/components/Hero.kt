@@ -1,6 +1,7 @@
 package com.cashflow.app.ui.components
 
 import android.os.SystemClock
+import android.util.Log
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animate
@@ -62,6 +63,8 @@ import kotlin.math.roundToLong
  * ([timeFraction], [settle]) is only read in the draw phase of [HeroNumber], so nothing recomposes
  * while it spins.
  */
+private const val TAG = "CashflowHero"
+
 @Stable
 class HeroOdometer {
     var fromCents by mutableLongStateOf(0L)
@@ -96,6 +99,7 @@ class HeroOdometer {
             HeroAction.LAUNCH_COUNTDOWN -> HeroLaunch.startCents(target)
             HeroAction.ANIMATE_CHANGE -> if (hasValue) currentCents().roundToLong() else target
         }
+        Log.i(TAG, "show action=$action from=$start to=$target t=${SystemClock.uptimeMillis()}")
         settle.snapTo(if (start == target) 1f else 0f)
         // Written together, without a suspension point in between, so no frame mixes old and new.
         fromCents = start
@@ -131,6 +135,7 @@ class HeroOdometer {
             animate(0f, 1f, animationSpec = tween(OdometerTiming.DURATION_MILLIS, easing = LinearEasing)) { value, _ ->
                 timeFraction = value
             }
+            Log.i(TAG, "settled t=${SystemClock.uptimeMillis()}")
             ticker.cancel()
         }
         haptics.arrive()
