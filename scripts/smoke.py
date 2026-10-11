@@ -47,6 +47,8 @@ DESC_PREV_MONTH = S["calendar_previous_month"]
 CALENDAR_CONFIGS = {"dark-normal", "light-normal", "dark-font2", "dark-320dp"}
 # Configurations that also screenshot the bottom of Settings.
 SETTINGS_BOTTOM_CONFIGS = {"dark-normal", "dark-font2"}
+# Configurations that also switch "Add my income automatically" off to look at the dimmed income list.
+INCOME_OFF_CONFIGS = {"dark-normal", "light-normal"}
 SAMPLE_MONTH = (2026, 11)  # the reference scenario's interesting month
 
 
@@ -116,7 +118,7 @@ def find(text, scroll=True, last=False, timeout=FIND_TIMEOUT, contains=False):
                 return sorted(hits, key=lambda b: (b[1], b[0]))[-1 if last else 0]
             if scroll:
                 w, h = screen_size(nodes)
-                sh(f"input swipe {w // 2} {int(h * 0.75)} {w // 2} {int(h * 0.35)} 300")
+                sh(f"input swipe {w // 2} {int(h * 0.8)} {w // 2} {int(h * 0.25)} 300")
         if time.time() > deadline:
             visible = [(t or d) for t, d, _ in (last_nodes or []) if (t or d)]
             raise NotFound(f"text {text!r} not found within {timeout:.0f}s; visible texts: {visible}")
@@ -357,6 +359,17 @@ def upcoming_flow(name):
 def settings_flow(name):
     """Settings screenshots: Repeating payments (and its editor), and the bottom of the screen."""
     problems = []
+    if name in INCOME_OFF_CONFIGS:
+        switch_text = S["auto_income_title"]
+        tap_text(switch_text, scroll=False, last=True)  # the switch has the same description as its label
+        time.sleep(1)
+        try:
+            find(S["income_not_auto"], scroll=False, timeout=8)
+            screenshot(f"{name}-settings-income-off")
+        except NotFound as e:
+            problems.append(f"{name}: switching automatic income off did not show the note ({e})")
+        tap_text(switch_text, scroll=False, last=True)  # back on
+        time.sleep(1)
     find(TEXT_REPEATING, scroll=True)
     time.sleep(0.5)
     screenshot(f"{name}-repeating")
@@ -378,7 +391,7 @@ def run_config(name, night, font, size, density):
     try:
         launch()
         tap_text(TEXT_SETTINGS, scroll=False)
-        tap_text(TEXT_LOAD_SAMPLE)  # scrolls down to the debug section
+        tap_text(TEXT_LOAD_SAMPLE, timeout=60)  # scrolls down to the developer tools card (a long screen at large fonts)
         time.sleep(2.5)
         tap_text(TEXT_HOME, scroll=False)
         time.sleep(4)  # the count-up finishes

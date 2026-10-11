@@ -77,7 +77,9 @@ internal fun IncomeCard(viewModel: SettingsViewModel, settings: AppSettings, lay
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
+            val autoTitle = stringResource(R.string.auto_income_title)
             Switch(
+                modifier = Modifier.semantics { contentDescription = autoTitle },
                 checked = settings.walletMode == WalletMode.DYNAMIC,
                 onCheckedChange = { dynamic ->
                     viewModel.update { it.copy(walletMode = if (dynamic) WalletMode.DYNAMIC else WalletMode.STATIC) }
