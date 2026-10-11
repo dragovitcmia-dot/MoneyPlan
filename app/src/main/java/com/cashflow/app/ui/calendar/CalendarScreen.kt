@@ -8,8 +8,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.defaultMinSize
@@ -102,7 +100,6 @@ private val GridPadding = 8.dp
  * The Calendar tab: a month grid you can swipe, with each day's planned expense (red) and extra income
  * (green) in the cell, days that close below zero tinted red, and a day sheet to look at and change one day.
  */
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun CalendarScreen(
     calendar: CalendarViewModel,
@@ -173,23 +170,25 @@ fun CalendarScreen(
             ),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            // Month title, arrows and the Today button (they wrap onto two lines at large font sizes).
-            FlowRow(
+            // Month title with its arrows; the Today button sits under it (the same layout at every font size).
+            Column(
                 Modifier.fillMaxWidth().padding(horizontal = 12.dp),
-                horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterHorizontally),
+                horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
-                IconButton(onClick = { scope.launch { pager.animateScrollToPage((pager.currentPage - 1).coerceAtLeast(0)) } }, modifier = Modifier.align(Alignment.CenterVertically)) {
-                    Icon(Icons.Filled.KeyboardArrowLeft, contentDescription = stringResource(R.string.calendar_previous_month))
-                }
-                Text(
-                    title,
-                    style = MaterialTheme.typography.titleLarge,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.align(Alignment.CenterVertically).semantics { heading() }.padding(horizontal = 4.dp),
-                )
-                IconButton(onClick = { scope.launch { pager.animateScrollToPage((pager.currentPage + 1).coerceAtMost(MonthPages.COUNT - 1)) } }, modifier = Modifier.align(Alignment.CenterVertically)) {
-                    Icon(Icons.Filled.KeyboardArrowRight, contentDescription = stringResource(R.string.calendar_next_month))
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(onClick = { scope.launch { pager.animateScrollToPage((pager.currentPage - 1).coerceAtLeast(0)) } }) {
+                        Icon(Icons.Filled.KeyboardArrowLeft, contentDescription = stringResource(R.string.calendar_previous_month))
+                    }
+                    Text(
+                        title,
+                        style = MaterialTheme.typography.titleLarge,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.weight(1f).semantics { heading() },
+                    )
+                    IconButton(onClick = { scope.launch { pager.animateScrollToPage((pager.currentPage + 1).coerceAtMost(MonthPages.COUNT - 1)) } }) {
+                        Icon(Icons.Filled.KeyboardArrowRight, contentDescription = stringResource(R.string.calendar_next_month))
+                    }
                 }
                 AppButton(
                     stringResource(R.string.calendar_today),
@@ -199,7 +198,6 @@ fun CalendarScreen(
                         goToMonth(YearMonth.from(today))
                     },
                     style = AppButtonStyle.Tonal,
-                    modifier = Modifier.align(Alignment.CenterVertically),
                 )
             }
 
@@ -290,7 +288,7 @@ fun CalendarScreen(
 private fun ShortBanner(day: LocalDate, onClick: () -> Unit) {
     val text = stringResource(
         R.string.calendar_runs_short,
-        day.format(DateTimeFormatter.ofPattern("d MMM", Locale.getDefault())),
+        day.format(DateTimeFormatter.ofPattern("d MMM", Locale.getDefault())).replace(' ', '\u00A0'), // "10 Nov" never breaks
     )
     val action = stringResource(R.string.calendar_runs_short_action)
     Surface(

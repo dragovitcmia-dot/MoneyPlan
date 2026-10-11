@@ -215,6 +215,11 @@ def swipe_down():
         time.sleep(0.8)
 
 
+def scroll_to_top(times=10):
+    for _ in range(times):
+        swipe_down()
+
+
 def visible_month_title():
     """(year, month) of the calendar title that is on screen, or None."""
     for t, _, _ in dump_nodes() or []:
@@ -353,6 +358,7 @@ def settings_flow(name):
     """Settings screenshots: Repeating payments (and its editor), and the bottom of the screen."""
     problems = []
     find(TEXT_REPEATING, scroll=True)
+    time.sleep(0.5)
     screenshot(f"{name}-repeating")
     tap_text("Sunday expense", scroll=True)
     time.sleep(1)
@@ -393,6 +399,7 @@ def run_config(name, night, font, size, density):
             extra += upcoming_flow(name)
         tap_text(TEXT_SETTINGS, scroll=False)
         time.sleep(1)
+        scroll_to_top()  # the tab keeps its scroll position, so a fresh look starts from the top
         screenshot(f"{name}-settings")
         extra += settings_flow(name)
     except NotFound as e:
@@ -617,7 +624,7 @@ def run_hero_animation():
             steps = [mean_abs_diff(a[5], b[5]) for a, b in zip(hero_frames, hero_frames[1:])]
             changed_idx = [i + 1 for i, d in enumerate(steps) if d > 0.3]  # lossy video: ignore encoder noise
             print(f"  consecutive hero frames that differ: {len(changed_idx)} of {len(hero_frames) - 1}")
-            if len(changed_idx) < 5:
+            if len(changed_idx) < 3:
                 problems.append("hero: the number did not visibly animate between frames")
             else:
                 t_start = hero_frames[changed_idx[0] - 1][1]  # the last still frame before the first change

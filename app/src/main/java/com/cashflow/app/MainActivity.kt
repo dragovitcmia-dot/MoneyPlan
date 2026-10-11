@@ -8,7 +8,17 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
@@ -138,13 +148,21 @@ class MainActivity : ComponentActivity() {
                     },
                 ) { padding ->
                     // A short crossfade is all the transition there is: cheap to run and to re-enter.
-                    Crossfade(targetState = tab, animationSpec = tween(120), label = "tabs") { selected ->
-                        when (selected) {
-                            0 -> HomeScreen(home, odometer, snackbar, padding, homeList)
-                            1 -> CalendarScreen(calendar, home, settings, snackbar, padding)
-                            2 -> UpcomingScreen(upcoming, home, settings, snackbar, padding, upcomingList)
-                            else -> SettingsScreen(settings, app.repository, app.updateManager, padding, settingsScroll)
+                    Box(Modifier.fillMaxSize()) {
+                        Crossfade(targetState = tab, animationSpec = tween(120), label = "tabs") { selected ->
+                            when (selected) {
+                                0 -> HomeScreen(home, odometer, snackbar, padding, homeList)
+                                1 -> CalendarScreen(calendar, home, settings, snackbar, padding)
+                                2 -> UpcomingScreen(upcoming, home, settings, snackbar, padding, upcomingList)
+                                else -> SettingsScreen(settings, app.repository, app.updateManager, padding, settingsScroll)
+                            }
                         }
+                        // Content that scrolls up slides under a solid strip, never under the clock and icons.
+                        Box(
+                            Modifier.align(Alignment.TopStart).fillMaxWidth()
+                                .height(WindowInsets.statusBars.asPaddingValues().calculateTopPadding())
+                                .background(MaterialTheme.colorScheme.background),
+                        )
                     }
                 }
             }

@@ -140,6 +140,7 @@ fun ItemEditSheet(
                 onClick = { confirmDelete = true },
                 modifier = Modifier.fillMaxWidth(),
                 style = AppButtonStyle.Outlined,
+                contentColor = MaterialTheme.colorScheme.error,
             )
         }
     }

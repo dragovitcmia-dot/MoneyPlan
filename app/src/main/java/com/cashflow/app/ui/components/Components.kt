@@ -85,6 +85,8 @@ fun AppButton(
     style: AppButtonStyle = AppButtonStyle.Primary,
     colors: ButtonColors? = null,
     textStyle: TextStyle? = null,
+    /** Label colour of the Tonal / Outlined styles (e.g. red for a destructive action). */
+    contentColor: Color? = null,
 ) {
     val source = remember { MutableInteractionSource() }
     val m = modifier.pressScale(source).heightIn(min = 56.dp)
@@ -93,12 +95,16 @@ fun AppButton(
             onClick, m, enabled = enabled, elevation = null, interactionSource = source,
             colors = colors ?: ButtonDefaults.buttonColors(),
         ) { Text(text, textAlign = TextAlign.Center, style = textStyle ?: LocalTextStyle.current) }
-        AppButtonStyle.Tonal -> FilledTonalButton(onClick, m, enabled = enabled, elevation = null, interactionSource = source) {
+        AppButtonStyle.Tonal -> FilledTonalButton(
+            onClick, m, enabled = enabled, elevation = null, interactionSource = source,
+            colors = if (contentColor != null) ButtonDefaults.filledTonalButtonColors(contentColor = contentColor) else ButtonDefaults.filledTonalButtonColors(),
+        ) {
             Text(text, textAlign = TextAlign.Center)
         }
         AppButtonStyle.Outlined -> OutlinedButton(
             onClick, m, enabled = enabled, interactionSource = source,
             border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+            colors = if (contentColor != null) ButtonDefaults.outlinedButtonColors(contentColor = contentColor) else ButtonDefaults.outlinedButtonColors(),
         ) { Text(text, textAlign = TextAlign.Center, style = textStyle ?: LocalTextStyle.current) }
     }
 }
