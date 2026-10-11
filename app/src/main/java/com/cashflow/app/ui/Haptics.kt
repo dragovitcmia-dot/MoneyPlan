@@ -15,7 +15,7 @@ class Haptics(private val view: View) {
     /** Something was skipped, or a warning was cancelled. */
     fun reject() = perform(if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) HapticFeedbackConstants.REJECT else HapticFeedbackConstants.LONG_PRESS)
 
-    /** Light tick: swipe threshold reached, keypad press. */
+    /** Light tick: swipe threshold reached, keypad press, roulette steps. */
     fun tick() = perform(
         when {
             Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE -> HapticFeedbackConstants.SEGMENT_TICK
@@ -23,6 +23,9 @@ class Haptics(private val view: View) {
             else -> HapticFeedbackConstants.CLOCK_TICK
         },
     )
+
+    /** The count-up has arrived: a slightly stronger tick than the roulette ticks. */
+    fun arrive() = perform(HapticFeedbackConstants.CONTEXT_CLICK)
 
     private fun perform(constant: Int) {
         view.performHapticFeedback(constant)

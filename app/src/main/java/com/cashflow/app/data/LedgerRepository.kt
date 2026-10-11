@@ -7,7 +7,9 @@ import com.cashflow.app.engine.RuleChange
 import com.cashflow.app.engine.RuleMaintenance
 import com.cashflow.app.engine.Transaction
 import com.cashflow.app.engine.TxStatus
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import java.time.LocalDate
 
@@ -23,8 +25,12 @@ class LedgerRepository(private val db: AppDatabase) {
 
     /** Null until the first [runMaintenance] has created the settings row. */
     val settings: Flow<AppSettings?> = settingsDao.observe().map { it?.toDomain() }
-    val transactions: Flow<List<Transaction>> = txDao.observeAll().map { rows -> rows.map { it.toDomain() } }
-    val rules: Flow<List<RecurringRule>> = ruleDao.observeAll().map { rows -> rows.map { it.toDomain() } }
+
+    // Row mapping can touch thousands of rows, so it runs off the main thread.
+    val transactions: Flow<List<Transaction>> =
+        txDao.observeAll().map { rows -> rows.map { it.toDomain() } }.flowOn(Dispatchers.Default)
+    val rules: Flow<List<RecurringRule>> =
+        ruleDao.observeAll().map { rows -> rows.map { it.toDomain() } }.flowOn(Dispatchers.Default)
 
     /** Run on app start, on resume, and when the day changes. Idempotent; never confirms anything. */
     suspend fun runMaintenance(today: LocalDate) {

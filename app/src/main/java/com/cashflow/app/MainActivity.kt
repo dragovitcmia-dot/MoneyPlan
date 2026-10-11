@@ -4,15 +4,8 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.ContentTransform
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
-import androidx.compose.animation.togetherWith
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.tween
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Settings
@@ -30,7 +23,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.cashflow.app.ui.ViewModelFactory
@@ -72,24 +65,23 @@ class MainActivity : ComponentActivity() {
                                 selected = tab == 0,
                                 onClick = { tab = 0 },
                                 icon = { Icon(Icons.Filled.Home, contentDescription = null) },
-                                label = { Text("Home") },
+                                label = { Text(stringResource(R.string.nav_home)) },
+                                alwaysShowLabel = true,
                                 colors = colors,
                             )
                             NavigationBarItem(
                                 selected = tab == 1,
                                 onClick = { tab = 1 },
                                 icon = { Icon(Icons.Filled.Settings, contentDescription = null) },
-                                label = { Text("Settings") },
+                                label = { Text(stringResource(R.string.nav_settings)) },
+                                alwaysShowLabel = true,
                                 colors = colors,
                             )
                         }
                     },
                 ) { padding ->
-                    AnimatedContent(
-                        targetState = tab,
-                        transitionSpec = { tabTransition(targetState > initialState) },
-                        label = "tabs",
-                    ) { selected ->
+                    // A short crossfade is all the transition there is: cheap to run and to re-enter.
+                    Crossfade(targetState = tab, animationSpec = tween(120), label = "tabs") { selected ->
                         if (selected == 0) {
                             HomeScreen(home, snackbar, padding)
                         } else {
@@ -100,13 +92,4 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
-}
-
-/** Spring-driven slide + fade between tabs; direction follows the tab order. */
-private fun tabTransition(forward: Boolean): ContentTransform {
-    val sign = if (forward) 1 else -1
-    val offsetSpec = spring<IntOffset>(dampingRatio = 0.9f, stiffness = Spring.StiffnessMediumLow)
-    val fadeSpec = spring<Float>(stiffness = Spring.StiffnessMediumLow)
-    return (slideInHorizontally(offsetSpec) { it * sign / 6 } + fadeIn(fadeSpec)) togetherWith
-        (slideOutHorizontally(offsetSpec) { -it * sign / 6 } + fadeOut(fadeSpec))
 }

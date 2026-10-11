@@ -1,5 +1,6 @@
 package com.cashflow.app.ui.settings
 
+import androidx.annotation.StringRes
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -29,8 +30,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.cashflow.app.R
 import com.cashflow.app.engine.Money
 import com.cashflow.app.engine.RecurrencePattern
 import com.cashflow.app.engine.RecurringRule
@@ -43,12 +46,12 @@ import java.time.LocalTime
 import java.time.format.TextStyle
 import java.util.Locale
 
-private enum class ScheduleKind(val label: String) {
-    DAILY("Every day"),
-    WEEKLY("Every week"),
-    MONTH_DAY("Day of month"),
-    MONTH_FIRST("First day of month"),
-    MONTH_LAST("Last day of month"),
+private enum class ScheduleKind(@StringRes val label: Int) {
+    DAILY(R.string.choice_daily),
+    WEEKLY(R.string.choice_weekly),
+    MONTH_DAY(R.string.choice_month_day),
+    MONTH_FIRST(R.string.choice_month_first),
+    MONTH_LAST(R.string.choice_month_last),
 }
 
 private fun RecurrencePattern.toKind() = when (this) {
@@ -62,13 +65,14 @@ private fun RecurrencePattern.toKind() = when (this) {
 
 private fun dayName(d: DayOfWeek) = d.getDisplayName(TextStyle.FULL, Locale.getDefault())
 
+@Composable
 internal fun scheduleSummary(p: RecurrencePattern): String = when (p) {
-    RecurrencePattern.Daily -> "Every day"
-    is RecurrencePattern.Weekly -> "Every ${dayName(p.dayOfWeek)}"
-    is RecurrencePattern.DayOfMonth -> "Day ${p.day} of each month"
-    RecurrencePattern.MonthFirst -> "First day of each month"
-    RecurrencePattern.MonthLast -> "Last day of each month"
-    is RecurrencePattern.EveryNDays -> "Every ${p.n} days"
+    RecurrencePattern.Daily -> stringResource(R.string.sched_daily)
+    is RecurrencePattern.Weekly -> stringResource(R.string.sched_weekly, dayName(p.dayOfWeek))
+    is RecurrencePattern.DayOfMonth -> stringResource(R.string.sched_month_day, p.day)
+    RecurrencePattern.MonthFirst -> stringResource(R.string.sched_first)
+    RecurrencePattern.MonthLast -> stringResource(R.string.sched_last)
+    is RecurrencePattern.EveryNDays -> stringResource(R.string.sched_every_n, p.n)
 }
 
 @Composable
@@ -79,9 +83,9 @@ internal fun IncomeSourcesSection(viewModel: SettingsViewModel) {
     var adding by remember { mutableStateOf(false) }
 
     SectionCard {
-        Text("Income sources", style = MaterialTheme.typography.titleMedium)
+        Text(stringResource(R.string.regular_income_title), style = MaterialTheme.typography.titleMedium)
         if (sources.isEmpty()) {
-            Text("No income sources yet.", style = MaterialTheme.typography.bodyMedium)
+            Text(stringResource(R.string.regular_income_empty), style = MaterialTheme.typography.bodyMedium)
         }
         for (source in sources) {
             Card(Modifier.fillMaxWidth().clickable { editing = source }) {
@@ -89,7 +93,7 @@ internal fun IncomeSourcesSection(viewModel: SettingsViewModel) {
                     Column(Modifier.weight(1f)) {
                         Text(source.description, style = MaterialTheme.typography.bodyLarge)
                         Text(
-                            "${Money.formatDisplay(source.amount)} · ${scheduleSummary(source.pattern)}",
+                            stringResource(R.string.amount_and_schedule, Money.formatDisplay(source.amount), scheduleSummary(source.pattern)),
                             style = MaterialTheme.typography.bodySmall,
                         )
                     }
@@ -100,7 +104,7 @@ internal fun IncomeSourcesSection(viewModel: SettingsViewModel) {
                 }
             }
         }
-        AppButton("Add income source", onClick = { adding = true }, modifier = Modifier.fillMaxWidth(), style = AppButtonStyle.Outlined)
+        AppButton(stringResource(R.string.add_regular_income), onClick = { adding = true }, modifier = Modifier.fillMaxWidth(), style = AppButtonStyle.Outlined)
     }
 
     if (adding) {
@@ -145,33 +149,33 @@ private fun SourceDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(if (initial == null) "Add income source" else "Edit income source") },
+        title = { Text(stringResource(if (initial == null) R.string.add_regular_income else R.string.edit_regular_income)) },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
-                    label = { Text("Name") },
+                    label = { Text(stringResource(R.string.source_name_label)) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
                 OutlinedTextField(
                     value = amountText,
                     onValueChange = { amountText = it },
-                    label = { Text("Amount (TND)") },
+                    label = { Text(stringResource(R.string.amount_label)) },
                     singleLine = true,
                     isError = amountText.isNotEmpty() && amount == null,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     modifier = Modifier.fillMaxWidth(),
                 )
-                Text("Schedule", style = MaterialTheme.typography.labelLarge)
+                Text(stringResource(R.string.source_how_often), style = MaterialTheme.typography.labelLarge)
                 for (option in ScheduleKind.entries) {
                     Row(
                         Modifier.fillMaxWidth().clickable { kind = option },
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         RadioButton(selected = kind == option, onClick = { kind = option })
-                        Text(option.label)
+                        Text(stringResource(option.label))
                     }
                 }
                 if (kind == ScheduleKind.WEEKLY) {
@@ -189,18 +193,18 @@ private fun SourceDialog(
                     OutlinedTextField(
                         value = dayText,
                         onValueChange = { dayText = it },
-                        label = { Text("Day of month (1-31)") },
+                        label = { Text(stringResource(R.string.day_of_month_label)) },
                         singleLine = true,
                         isError = day == null,
-                        supportingText = { Text("Shorter months use their last day.") },
+                        supportingText = { Text(stringResource(R.string.day_of_month_hint)) },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         modifier = Modifier.fillMaxWidth(),
                     )
                 }
-                TimeField(label = "Confirm time", value = confirmTime, onPick = { confirmTime = it })
+                TimeField(label = stringResource(R.string.source_ask_time), value = confirmTime, onPick = { confirmTime = it })
                 if (onDelete != null) {
                     TextButton(onClick = { confirmDelete = true }) {
-                        Text("Delete source", color = MaterialTheme.colorScheme.error)
+                        Text(stringResource(R.string.delete_regular_income), color = MaterialTheme.colorScheme.error)
                     }
                 }
             }
@@ -230,18 +234,18 @@ private fun SourceDialog(
                         ),
                     )
                 },
-            ) { Text("Save") }
+            ) { Text(stringResource(R.string.action_save)) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) } },
     )
 
     if (confirmDelete && onDelete != null) {
         AlertDialog(
             onDismissRequest = { confirmDelete = false },
-            title = { Text("Delete \"${initial?.description}\"?") },
-            text = { Text("Future pending occurrences are removed. Confirmed and skipped history is kept.") },
-            confirmButton = { TextButton(onClick = { confirmDelete = false; onDelete() }) { Text("Delete") } },
-            dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("Cancel") } },
+            title = { Text(stringResource(R.string.delete_title, initial?.description.orEmpty())) },
+            text = { Column(Modifier.verticalScroll(rememberScrollState())) { Text(stringResource(R.string.delete_body)) } },
+            confirmButton = { TextButton(onClick = { confirmDelete = false; onDelete() }) { Text(stringResource(R.string.action_delete)) } },
+            dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text(stringResource(R.string.action_cancel)) } },
         )
     }
 }

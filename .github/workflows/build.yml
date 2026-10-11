@@ -22,7 +22,7 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
 
       - name: Unit tests and debug APK
-        run: ./gradlew testDebugUnitTest assembleDebug --stacktrace
+        run: ./gradlew testDebugUnitTest assemblePreview --stacktrace
 
       - name: Print test summary
         if: always()
@@ -74,19 +74,37 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: cashflow-debug-apk
-          path: app/build/outputs/apk/debug/app-debug.apk
+          path: app/build/outputs/apk/preview/app-preview.apk
+
+      - name: Verify the APK (signing certificate, not debuggable, versionCode)
+        run: |
+          APK=app/build/outputs/apk/preview/app-preview.apk
+          BT=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
+          "$BT/apksigner" verify --print-certs "$APK" | tee apksigner.txt
+          CERT=$(sed -n 's/^Signer #1 certificate SHA-256 digest: //p' apksigner.txt | head -1 | tr 'A-F' 'a-f')
+          KS=$(keytool -list -keystore app/debug.keystore -storepass android 2>/dev/null | sed -n 's/^Certificate fingerprint (SHA-256): //p' | tr -d ':' | tr 'A-F' 'a-f')
+          echo "APK signing certificate sha256: $CERT"
+          echo "debug.keystore certificate sha256: $KS"
+          BADGING=$("$BT/aapt2" dump badging "$APK")
+          echo "$BADGING" | grep -E "^package:|application-debuggable|sdkVersion|targetSdkVersion" || true
+          VC=$(echo "$BADGING" | sed -n "s/.*versionCode='\([0-9]*\)'.*/\1/p" | head -1)
+          VN=$(echo "$BADGING" | sed -n "s/.*versionName='\([^']*\)'.*/\1/p" | head -1)
+          DEBUGGABLE=no
+          if echo "$BADGING" | grep -q "application-debuggable"; then DEBUGGABLE=yes; fi
+          echo "debuggable: $DEBUGGABLE"
+          echo "::notice title=APK verification::cert=$CERT keystore=$KS debuggable=$DEBUGGABLE versionCode=$VC versionName=$VN"
+          [ -n "$CERT" ] && [ "$CERT" = "$KS" ] || { echo "signing certificate does not match debug.keystore"; exit 1; }
+          [ "$DEBUGGABLE" = "no" ] || { echo "APK is debuggable"; exit 1; }
+          if [ "$GITHUB_REF" = "refs/heads/main" ] && [ "$VC" != "$GITHUB_RUN_NUMBER" ]; then
+            echo "versionCode in APK ($VC) does not match GITHUB_RUN_NUMBER ($GITHUB_RUN_NUMBER)"; exit 1
+          fi
+          echo "VC=$VC" >> "$GITHUB_ENV"
+          echo "VN=$VN" >> "$GITHUB_ENV"
 
       - name: Write version.json
         if: github.ref == 'refs/heads/main'
         run: |
-          APK=app/build/outputs/apk/debug/app-debug.apk
-          AAPT2=$(ls "$ANDROID_HOME"/build-tools/*/aapt2 | sort -V | tail -1)
-          BADGING=$("$AAPT2" dump badging "$APK")
-          VC=$(echo "$BADGING" | sed -n "s/.*versionCode='\([0-9]*\)'.*/\1/p" | head -1)
-          VN=$(echo "$BADGING" | sed -n "s/.*versionName='\([^']*\)'.*/\1/p" | head -1)
-          if [ "$VC" != "$GITHUB_RUN_NUMBER" ]; then
-            echo "versionCode in APK ($VC) does not match GITHUB_RUN_NUMBER ($GITHUB_RUN_NUMBER)"; exit 1
-          fi
+          APK=app/build/outputs/apk/preview/app-preview.apk
           SHA=$(sha256sum "$APK" | cut -d' ' -f1)
           cp "$APK" cashflow-debug.apk
           printf '{"versionCode": %s, "versionName": "%s", "sha256": "%s", "apkUrl": "https://github.com/Dragovitcmia-dot/MoneyPlan/releases/download/latest-debug/cashflow-debug.apk"}\n' "$VC" "$VN" "$SHA" > version.json

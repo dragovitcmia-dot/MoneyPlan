@@ -94,4 +94,21 @@ class UpdateLogicTest {
         assertTrue(UpdateLogic.VERSION_URL.startsWith("https://github.com/Dragovitcmia-dot/MoneyPlan/releases/download/latest-debug/"))
         assertTrue(UpdateLogic.VERSION_URL.endsWith("/version.json"))
     }
+
+    // ---- one-tap update decision -------------------------------------------------------------
+
+    private fun info(code: Long) = VersionInfo(code, "1.$code", sha, url)
+
+    @Test fun decision_up_to_date_when_not_newer() {
+        assertEquals(UpdateLogic.Decision.UpToDate, UpdateLogic.decide(info(5), 5, canInstallPackages = true))
+        assertEquals(UpdateLogic.Decision.UpToDate, UpdateLogic.decide(info(4), 5, canInstallPackages = false))
+    }
+
+    @Test fun decision_downloads_when_newer_and_allowed() {
+        assertEquals(UpdateLogic.Decision.Download(info(6)), UpdateLogic.decide(info(6), 5, canInstallPackages = true))
+    }
+
+    @Test fun decision_asks_for_permission_first_when_newer_but_not_allowed() {
+        assertEquals(UpdateLogic.Decision.NeedsPermission(info(6)), UpdateLogic.decide(info(6), 5, canInstallPackages = false))
+    }
 }
