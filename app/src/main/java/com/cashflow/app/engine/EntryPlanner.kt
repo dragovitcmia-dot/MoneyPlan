@@ -8,8 +8,16 @@ sealed interface NewEntry {
     val amount: Long
     val description: String
 
-    /** Already happened: stored as a CONFIRMED immediate transaction dated today. */
-    data class Now(override val kind: TxKind, override val amount: Long, override val description: String) : NewEntry
+    /**
+     * Already happened: stored as a CONFIRMED immediate transaction dated today, or dated [date] when
+     * it is entered for a past day of the calendar.
+     */
+    data class Now(
+        override val kind: TxKind,
+        override val amount: Long,
+        override val description: String,
+        val date: LocalDate? = null,
+    ) : NewEntry
 
     /** One-time, planned for [date] (today or earlier will show up in "To confirm"). */
     data class Planned(
@@ -54,7 +62,7 @@ object EntryPlanner {
     /** The transaction for a [NewEntry.Now] or [NewEntry.Planned]; null for recurring entries. */
     fun transactionFor(entry: NewEntry, today: LocalDate): Transaction? = when (entry) {
         is NewEntry.Now -> Transaction(
-            date = today, amount = entry.amount, kind = entry.kind, description = descriptionOf(entry),
+            date = entry.date ?: today, amount = entry.amount, kind = entry.kind, description = descriptionOf(entry),
             status = TxStatus.CONFIRMED, source = TxSource.MANUAL, isPlanned = false,
         )
         is NewEntry.Planned -> Transaction(

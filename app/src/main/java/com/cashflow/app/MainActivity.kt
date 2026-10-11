@@ -8,9 +8,22 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.List
+import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Density
+import com.cashflow.app.ui.calendar.CalendarScreen
+import com.cashflow.app.ui.calendar.CalendarViewModel
+import com.cashflow.app.ui.components.FitText
+import com.cashflow.app.ui.upcoming.UpcomingScreen
+import com.cashflow.app.ui.upcoming.UpcomingViewModel
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
@@ -53,6 +66,12 @@ class MainActivity : ComponentActivity() {
                 val factory = ViewModelFactory(app)
                 val home: HomeViewModel = viewModel(factory = factory)
                 val settings: SettingsViewModel = viewModel(factory = factory)
+                val calendar: CalendarViewModel = viewModel(factory = factory)
+                val upcoming: UpcomingViewModel = viewModel(factory = factory)
+                // Scroll positions live here, above the tab switch, so each tab is where the user left it.
+                val homeList = rememberLazyListState()
+                val upcomingList = rememberLazyListState()
+                val settingsScroll = rememberScrollState()
                 var tab by rememberSaveable { mutableIntStateOf(0) }
                 val snackbar = remember { SnackbarHostState() }
 
@@ -77,42 +96,54 @@ class MainActivity : ComponentActivity() {
                     containerColor = MaterialTheme.colorScheme.background,
                     snackbarHost = { SnackbarHost(snackbar) },
                     bottomBar = {
-                        NavigationBar(
-                            containerColor = MaterialTheme.colorScheme.surface,
-                            tonalElevation = 0.dp,
-                        ) {
-                            val colors = NavigationBarItemDefaults.colors(
-                                indicatorColor = MaterialTheme.colorScheme.primaryContainer,
-                                selectedIconColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                                selectedTextColor = MaterialTheme.colorScheme.onSurface,
-                                unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                                unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                            NavigationBarItem(
-                                selected = tab == 0,
-                                onClick = { tab = 0 },
-                                icon = { Icon(Icons.Filled.Home, contentDescription = null) },
-                                label = { Text(stringResource(R.string.nav_home)) },
-                                alwaysShowLabel = true,
-                                colors = colors,
-                            )
-                            NavigationBarItem(
-                                selected = tab == 1,
-                                onClick = { tab = 1 },
-                                icon = { Icon(Icons.Filled.Settings, contentDescription = null) },
-                                label = { Text(stringResource(R.string.nav_settings)) },
-                                alwaysShowLabel = true,
-                                colors = colors,
-                            )
+                        // Four labelled tabs. The labels follow the font size up to 1.3x and then shrink to fit,
+                        // so "Calendar" and "Upcoming" never get cut off.
+                        val density = LocalDensity.current
+                        CompositionLocalProvider(LocalDensity provides Density(density.density, minOf(density.fontScale, 1.3f))) {
+                            NavigationBar(
+                                containerColor = MaterialTheme.colorScheme.surface,
+                                tonalElevation = 0.dp,
+                            ) {
+                                val colors = NavigationBarItemDefaults.colors(
+                                    indicatorColor = MaterialTheme.colorScheme.primaryContainer,
+                                    selectedIconColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                                    selectedTextColor = MaterialTheme.colorScheme.onSurface,
+                                    unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                                val tabs: List<Triple<Int, ImageVector, Int>> = listOf(
+                                    Triple(0, Icons.Filled.Home, R.string.nav_home),
+                                    Triple(1, Icons.Filled.DateRange, R.string.nav_calendar),
+                                    Triple(2, Icons.AutoMirrored.Filled.List, R.string.nav_upcoming),
+                                    Triple(3, Icons.Filled.Settings, R.string.nav_settings),
+                                )
+                                for ((index, icon, label) in tabs) {
+                                    NavigationBarItem(
+                                        selected = tab == index,
+                                        onClick = { tab = index },
+                                        icon = { Icon(icon, contentDescription = null) },
+                                        label = {
+                                            FitText(
+                                                stringResource(label),
+                                                if (tab == index) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
+                                                MaterialTheme.typography.labelMedium,
+                                            )
+                                        },
+                                        alwaysShowLabel = true,
+                                        colors = colors,
+                                    )
+                                }
+                            }
                         }
                     },
                 ) { padding ->
                     // A short crossfade is all the transition there is: cheap to run and to re-enter.
                     Crossfade(targetState = tab, animationSpec = tween(120), label = "tabs") { selected ->
-                        if (selected == 0) {
-                            HomeScreen(home, odometer, snackbar, padding)
-                        } else {
-                            SettingsScreen(settings, app.repository, app.updateManager, padding)
+                        when (selected) {
+                            0 -> HomeScreen(home, odometer, snackbar, padding, homeList)
+                            1 -> CalendarScreen(calendar, home, settings, snackbar, padding)
+                            2 -> UpcomingScreen(upcoming, home, settings, snackbar, padding, upcomingList)
+                            else -> SettingsScreen(settings, app.repository, app.updateManager, padding, settingsScroll)
                         }
                     }
                 }

@@ -37,6 +37,17 @@ TEXT_SETTINGS = S["nav_settings"]
 TEXT_HOME = S["nav_home"]
 TEXT_LOAD_SAMPLE = S["debug_load_sample"]
 TEXT_EXPENSE = S["button_expense"]
+NAV_CALENDAR = S["nav_calendar"]
+NAV_UPCOMING = S["nav_upcoming"]
+TEXT_REPEATING = S["repeating_title"]
+DESC_NEXT_MONTH = S["calendar_next_month"]
+DESC_PREV_MONTH = S["calendar_previous_month"]
+
+# Configurations that also walk through Calendar, day sheet, item edit, Upcoming and Repeating payments.
+CALENDAR_CONFIGS = {"dark-normal", "light-normal", "dark-font2", "dark-320dp"}
+# Configurations that also screenshot the bottom of Settings.
+SETTINGS_BOTTOM_CONFIGS = {"dark-normal", "dark-font2"}
+SAMPLE_MONTH = (2026, 11)  # the reference scenario's interesting month
 
 
 def adb(*args, check=True):
@@ -88,15 +99,19 @@ class NotFound(Exception):
     pass
 
 
-def find(text, scroll=True, last=False, timeout=FIND_TIMEOUT):
-    """Waits up to `timeout` (10 s) for a node with exactly this text; scrolls down while it is missing."""
+def find(text, scroll=True, last=False, timeout=FIND_TIMEOUT, contains=False):
+    """Waits up to `timeout` (10 s) for a node with exactly this text (or, with `contains`, a text or content
+    description that includes it); scrolls down while it is missing."""
     deadline = time.time() + timeout
     last_nodes = None
     while True:
         nodes = dump_nodes()
         if nodes:
             last_nodes = nodes
-            hits = [b for t, d, b in nodes if t.strip() == text or d.strip() == text]
+            if contains:
+                hits = [b for t, d, b in nodes if text in t or text in d]
+            else:
+                hits = [b for t, d, b in nodes if t.strip() == text or d.strip() == text]
             if hits:
                 return sorted(hits, key=lambda b: (b[1], b[0]))[-1 if last else 0]
             if scroll:
@@ -179,6 +194,178 @@ def launch():
     raise NotFound("the app never showed its UI after 3 launch attempts")
 
 
+# ---- calendar / upcoming / settings walk-through -------------------------------------------------------
+
+MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
+
+
+def swipe_up(fraction_from=0.75, fraction_to=0.3):
+    nodes = dump_nodes() or []
+    if nodes:
+        w, h = screen_size(nodes)
+        sh(f"input swipe {w // 2} {int(h * fraction_from)} {w // 2} {int(h * fraction_to)} 300")
+        time.sleep(0.8)
+
+
+def swipe_down():
+    nodes = dump_nodes() or []
+    if nodes:
+        w, h = screen_size(nodes)
+        sh(f"input swipe {w // 2} {int(h * 0.3)} {w // 2} {int(h * 0.75)} 300")
+        time.sleep(0.8)
+
+
+def visible_month_title():
+    """(year, month) of the calendar title that is on screen, or None."""
+    for t, _, _ in dump_nodes() or []:
+        m = re.fullmatch(r"([A-Z][a-z]+) (\d{4})", t.strip())
+        if m and m.group(1) in MONTHS:
+            return int(m.group(2)), MONTHS.index(m.group(1)) + 1
+    return None
+
+
+def go_to_month(year, month):
+    for _ in range(40):
+        shown = visible_month_title()
+        if shown == (year, month):
+            return
+        if shown is None:
+            time.sleep(0.7)
+            continue
+        forward = (year, month) > shown
+        tap_text(DESC_NEXT_MONTH if forward else DESC_PREV_MONTH, scroll=False)
+        time.sleep(0.8)
+    raise NotFound(f"could not navigate the calendar to {year}-{month:02d}")
+
+
+def cell_descriptions():
+    """{date: content description} of the calendar cells, scrolling the tab once to reach the lower rows."""
+    out = {}
+    pattern = re.compile(r"^[A-Za-z]+, ([A-Za-z]+) (\d+), (\d{4})")
+
+    def collect():
+        for _, d, _ in dump_nodes() or []:
+            m = pattern.match(d)
+            if m and m.group(1) in MONTHS:
+                out[(int(m.group(3)), MONTHS.index(m.group(1)) + 1, int(m.group(2)))] = d
+
+    collect()
+    swipe_up()
+    collect()
+    swipe_down()
+    return out
+
+
+def check_sample_numbers(name):
+    """Compares what the November 2026 cells say (their accessibility text) with the reference scenario."""
+    import datetime
+    problems = []
+    cells = cell_descriptions()
+    y, m = SAMPLE_MONTH
+    for day in range(1, 31):
+        d = cells.get((y, m, day))
+        if d is None:
+            problems.append(f"{name}: calendar cell for {y}-{m:02d}-{day:02d} was not found")
+            continue
+        short = "Money runs short" in d
+        want_short = day in (10, 12)
+        if short != want_short:
+            problems.append(f"{name}: {y}-{m:02d}-{day:02d} short={short}, expected {want_short} ({d!r})")
+        if "Income" in d:
+            problems.append(f"{name}: {y}-{m:02d}-{day:02d} shows income although only daily income exists ({d!r})")
+    expected = {10: 380, 12: 63, 28: 220, 30: 25}
+    for day in range(1, 31):
+        if datetime.date(y, m, day).weekday() == 6:
+            expected[day] = 75  # the Sunday rule
+    for day, amount in expected.items():
+        d = cells.get((y, m, day), "")
+        if f"Expenses {amount} dinars" not in d:
+            problems.append(f"{name}: {y}-{m:02d}-{day:02d} should say 'Expenses {amount} dinars' but says {d!r}")
+    for day in range(1, 31):
+        if day not in expected and "Expenses" in cells.get((y, m, day), ""):
+            problems.append(f"{name}: {y}-{m:02d}-{day:02d} shows an expense that is not in the scenario")
+    print(f"  calendar numbers checked against the reference scenario: {len(cells)} cells read, {len(problems)} problems")
+    return problems
+
+
+def calendar_flow(name):
+    problems = []
+    tap_text(NAV_CALENDAR, scroll=False)
+    time.sleep(1.5)
+    screenshot(f"{name}-calendar")
+    go_to_month(*SAMPLE_MONTH)
+    time.sleep(1)
+    screenshot(f"{name}-calendar-nov")
+    problems += check_sample_numbers(name)
+
+    # Day sheet of Nov 10: closes at -10, so "Short by 10 TND" and the item list.
+    tap_text("November 10, 2026", scroll=False, contains=True)
+    time.sleep(1.2)
+    screenshot(f"{name}-day-sheet")
+    find(S["day_end_short"].replace("%1$s", "10"), scroll=False, timeout=8)
+    # One item: change it.
+    tap_text("Expense 11/10")
+    time.sleep(1)
+    find(S["item_edit_title"], scroll=False, timeout=8)
+    screenshot(f"{name}-item-edit")
+    swipe_up()
+    screenshot(f"{name}-item-edit-bottom")
+    sh("input keyevent 4")  # closes the edit sheet
+    time.sleep(1.2)
+    # Add from the day: the composer opens with that day prefilled.
+    tap_text(TEXT_EXPENSE)
+    find("1", scroll=True, last=True)
+    time.sleep(1)
+    screenshot(f"{name}-day-composer")
+    sh("input keyevent 4")  # closes the composer
+    time.sleep(1.2)
+    sh("input keyevent 4")  # closes the day sheet
+    time.sleep(1.2)
+
+    # An item that comes from a repeating payment (Sunday Nov 8).
+    tap_text("November 8, 2026", scroll=False, contains=True)
+    time.sleep(1.2)
+    tap_text("Sunday expense")
+    time.sleep(1)
+    find(S["item_edit_title"], scroll=False, timeout=8)
+    screenshot(f"{name}-item-edit-series")
+    sh("input keyevent 4")
+    time.sleep(1.2)
+    sh("input keyevent 4")
+    time.sleep(1.2)
+    return problems
+
+
+def upcoming_flow(name):
+    problems = []
+    tap_text(NAV_UPCOMING, scroll=False)
+    time.sleep(1.5)
+    screenshot(f"{name}-upcoming")
+    try:
+        find(S["short_by_tag"].replace("%1$s", "10"), timeout=30)
+        screenshot(f"{name}-upcoming-short")
+    except NotFound as e:
+        problems.append(f"{name}: Upcoming has no 'Short by 10 TND' row for Nov 10 ({e})")
+    return problems
+
+
+def settings_flow(name):
+    """Settings screenshots: Repeating payments (and its editor), and the bottom of the screen."""
+    problems = []
+    find(TEXT_REPEATING, scroll=True)
+    screenshot(f"{name}-repeating")
+    tap_text("Sunday expense", scroll=True)
+    time.sleep(1)
+    screenshot(f"{name}-repeating-edit")
+    sh("input keyevent 4")
+    time.sleep(1)
+    if name in SETTINGS_BOTTOM_CONFIGS:
+        for _ in range(8):
+            swipe_up()
+        screenshot(f"{name}-settings-bottom")
+    return problems
+
+
 def run_config(name, night, font, size, density):
     print(f"== {name}: night={night} font={font} size={size or 'default'}")
     configure(night, font, size, density)
@@ -200,9 +387,14 @@ def run_config(name, night, font, size, density):
         screenshot(f"{name}-composer-typed")
         sh("input keyevent 4")  # back: closes the composer
         time.sleep(1.5)
+        extra = []
+        if name in CALENDAR_CONFIGS:
+            extra += calendar_flow(name)
+            extra += upcoming_flow(name)
         tap_text(TEXT_SETTINGS, scroll=False)
         time.sleep(1)
         screenshot(f"{name}-settings")
+        extra += settings_flow(name)
     except NotFound as e:
         screenshot(f"{name}-FAILED")
         print("  NOT FOUND:", e)
@@ -210,7 +402,7 @@ def run_config(name, night, font, size, density):
         nodes = dump_nodes() or []
         print("  dump:", [(t, d, b) for t, d, b in nodes if t or d][:80])
         return [f"{name}: {e}"]
-    problems = []
+    problems = list(extra)
     if not app_alive():
         problems.append(f"{name}: app process is not alive")
     problems += [f"{name}: crash in log:\n{c}" for c in crash_log()]

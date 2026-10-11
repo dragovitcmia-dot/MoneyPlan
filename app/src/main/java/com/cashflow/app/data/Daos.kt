@@ -6,6 +6,7 @@ import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Update
 import com.cashflow.app.engine.TxStatus
+import java.time.LocalDate
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -28,6 +29,13 @@ interface TransactionDao {
 
     @Query("UPDATE transactions SET amount = :amount WHERE id = :id")
     suspend fun setAmount(id: Long, amount: Long)
+
+    @Query("SELECT * FROM transactions WHERE id = :id")
+    suspend fun get(id: Long): TransactionEntity?
+
+    /** Single-item edit. occurrenceDate and the rule link are deliberately not touched. */
+    @Query("UPDATE transactions SET amount = :amount, description = :description, date = :date WHERE id = :id")
+    suspend fun updateItem(id: Long, amount: Long, description: String, date: LocalDate)
 
     @Query("DELETE FROM transactions WHERE id IN (:ids)")
     suspend fun deleteByIds(ids: List<Long>)

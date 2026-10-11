@@ -61,6 +61,16 @@ object RuleMaintenance {
         return RuleChange(regenerated, deleteIds, inserts)
     }
 
+    /**
+     * "Stop repeating": the series ends today. PENDING occurrences dated after today are removed;
+     * everything dated today or earlier (waiting, done, skipped) stays.
+     */
+    fun stop(rule: RecurringRule, rows: List<Transaction>, today: LocalDate): RuleChange =
+        RuleChange(rule.copy(endDate = minOf(today, rule.endDate ?: today)), futurePending(rows, today), emptyList())
+
+    /** A series that still produces (or may produce) occurrences: not ended before today. */
+    fun isRunning(rule: RecurringRule, today: LocalDate): Boolean = rule.endDate == null || !rule.endDate.isBefore(today)
+
     private fun futurePending(rows: List<Transaction>, today: LocalDate): List<Long> =
         rows.filter { it.status == TxStatus.PENDING && it.date.isAfter(today) }.map { it.id }
 }

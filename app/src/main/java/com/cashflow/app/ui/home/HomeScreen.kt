@@ -24,7 +24,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -87,6 +87,10 @@ import com.cashflow.app.ui.components.HeroOdometer
 import com.cashflow.app.ui.components.AppButton
 import com.cashflow.app.ui.components.AppButtonStyle
 import com.cashflow.app.ui.components.AppCard
+import com.cashflow.app.ui.components.KindButtons
+import com.cashflow.app.ui.items.CardDate
+import com.cashflow.app.ui.items.WaitingCard
+import com.cashflow.app.ui.items.rememberItemActions
 import com.cashflow.app.ui.components.pressScale
 import com.cashflow.app.ui.components.quantityString
 import com.cashflow.app.ui.rememberHaptics
@@ -105,6 +109,7 @@ fun HomeScreen(
     odometer: HeroOdometer,
     snackbarHost: SnackbarHostState,
     contentPadding: PaddingValues,
+    listState: LazyListState,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { viewModel.refresh() }
@@ -113,7 +118,7 @@ fun HomeScreen(
     if (ui == null) {
         HomeSkeleton(contentPadding) // nothing numeric until the first data emission
     } else {
-        HomeContent(ui, viewModel, odometer, snackbarHost, contentPadding)
+        HomeContent(ui, viewModel, odometer, snackbarHost, contentPadding, listState)
     }
 }
 
@@ -124,52 +129,18 @@ private fun HomeContent(
     odometer: HeroOdometer,
     snackbarHost: SnackbarHostState,
     padding: PaddingValues,
+    listState: LazyListState,
 ) {
-    val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
     val haptics = rememberHaptics()
-    val resources = LocalContext.current.resources
     val showHint by viewModel.swipeHintVisible.collectAsStateWithLifecycle()
     var composerKind by rememberSaveable { mutableStateOf<String?>(null) }
     var editing by remember { mutableStateOf<Transaction?>(null) }
 
-    val undoLabel = stringResource(R.string.action_undo)
-
-    /** Shows [message] for 5 seconds, with an Undo action when [onUndo] is given. */
-    fun announce(message: String, onUndo: (() -> Unit)? = null) {
-        scope.launch {
-            snackbarHost.currentSnackbarData?.dismiss()
-            val timer = launch {
-                delay(5_000)
-                snackbarHost.currentSnackbarData?.dismiss()
-            }
-            val result = snackbarHost.showSnackbar(
-                message = message,
-                actionLabel = if (onUndo != null) undoLabel else null,
-                duration = SnackbarDuration.Indefinite,
-            )
-            timer.cancel()
-            if (result == SnackbarResult.ActionPerformed) onUndo?.invoke()
-        }
-    }
-
-    fun labelOf(tx: Transaction) = tx.description.ifBlank {
-        resources.getString(if (tx.kind == TxKind.INCOME) R.string.item_income else R.string.item_expense)
-    }
-
-    fun confirm(tx: Transaction, newAmount: Long? = null) {
-        haptics.confirm()
-        viewModel.confirm(tx.id, newAmount)
-        announce(resources.getString(R.string.confirmed_item, labelOf(tx))) {
-            viewModel.undo(tx.id, if (newAmount != null) tx.amount else null)
-        }
-    }
-
-    fun skip(tx: Transaction) {
-        haptics.reject()
-        viewModel.skip(tx.id)
-        announce(resources.getString(R.string.skipped_item, labelOf(tx))) { viewModel.undo(tx.id) }
-    }
+    val actions = rememberItemActions(viewModel, snackbarHost)
+    fun labelOf(tx: Transaction) = actions.labelOf(tx)
+    fun confirm(tx: Transaction, newAmount: Long? = null) = actions.confirm(tx, newAmount)
+    fun skip(tx: Transaction) = actions.skip(tx)
 
     LazyColumn(
         state = listState,
@@ -191,7 +162,7 @@ private fun HomeContent(
         }
         item(key = "next", contentType = "next") { NextExpenseCard(ui.nextExpense) }
         item(key = "buttons", contentType = "buttons") {
-            ActionButtons(
+            KindButtons(
                 onExpense = { composerKind = TxKind.EXPENSE.name },
                 onIncome = { composerKind = TxKind.INCOME.name },
             )
@@ -228,7 +199,7 @@ private fun HomeContent(
             ui = ui,
             whatIf = viewModel::whatIf,
             onSave = viewModel::save,
-            onSaved = { message -> announce(message) },
+            onSaved = { message -> actions.announce(message) },
             onDismiss = { composerKind = null },
         )
     }
@@ -323,53 +294,6 @@ private fun daysAwayText(days: Int): String = when (days) {
     else -> quantityString(R.plurals.in_days, days, days)
 }
 
-/** Two big side-by-side buttons (stacked when the system font is very large so labels never clip). */
-@Composable
-private fun ActionButtons(onExpense: () -> Unit, onIncome: () -> Unit) {
-    val colors = MaterialTheme.cashflow
-    val stacked = LocalDensity.current.fontScale > 1.3f
-    val expense = @Composable { m: Modifier ->
-        BigActionButton(stringResource(R.string.button_expense), colors.expenseFill, colors.buttonLabel, onExpense, m)
-    }
-    val income = @Composable { m: Modifier ->
-        BigActionButton(stringResource(R.string.button_income), colors.incomeFill, colors.buttonLabel, onIncome, m)
-    }
-    if (stacked) {
-        Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            expense(Modifier.fillMaxWidth())
-            income(Modifier.fillMaxWidth())
-        }
-    } else {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            expense(Modifier.weight(1f))
-            income(Modifier.weight(1f))
-        }
-    }
-}
-
-@Composable
-private fun BigActionButton(label: String, fill: Color, labelColor: Color, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    val source = remember { MutableInteractionSource() }
-    Surface(
-        onClick = onClick,
-        modifier = modifier.pressScale(source),
-        shape = MaterialTheme.shapes.large,
-        color = fill,
-        contentColor = labelColor,
-        interactionSource = source,
-    ) {
-        Box(Modifier.fillMaxWidth().heightIn(min = 80.dp).padding(horizontal = 8.dp, vertical = 12.dp), contentAlignment = Alignment.Center) {
-            Text(
-                label.uppercase(),
-                color = labelColor,
-                fontSize = 20.sp,
-                fontWeight = FontWeight.Bold,
-                textAlign = TextAlign.Center,
-            )
-        }
-    }
-}
-
 @Composable
 private fun CaughtUp() {
     Column(
@@ -386,112 +310,6 @@ private fun CaughtUp() {
         Text(stringResource(R.string.caught_up), style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
-
-/**
- * Swipe right = confirm, swipe left = skip (no buttons). Small hints on the card edges show how,
- * until the first successful swipe. Tapping opens the "different amount" sheet. TalkBack gets
- * Confirm and Skip as custom actions.
- */
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun WaitingCard(
-    tx: Transaction,
-    showHint: Boolean,
-    haptics: Haptics,
-    onConfirm: (fromSwipe: Boolean) -> Unit,
-    onSkip: (fromSwipe: Boolean) -> Unit,
-    onOpen: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    // The callbacks always return false: the row leaves the list when the data changes, and
-    // snapping back keeps the swipe state clean if the item later returns (Undo).
-    val state = rememberSwipeToDismissBoxState(
-        confirmValueChange = { value ->
-            when (value) {
-                SwipeToDismissBoxValue.StartToEnd -> onConfirm(true)
-                SwipeToDismissBoxValue.EndToStart -> onSkip(true)
-                SwipeToDismissBoxValue.Settled -> Unit
-            }
-            false
-        },
-        positionalThreshold = { total -> total * 0.35f },
-    )
-    LaunchedEffect(state.targetValue) {
-        if (state.targetValue != SwipeToDismissBoxValue.Settled) haptics.tick() // threshold reached
-    }
-    val confirmLabel = stringResource(R.string.action_confirm)
-    val skipLabel = stringResource(R.string.action_skip)
-
-    SwipeToDismissBox(
-        state = state,
-        modifier = modifier,
-        backgroundContent = {
-            val direction = state.dismissDirection
-            val color = when (direction) {
-                SwipeToDismissBoxValue.StartToEnd -> MaterialTheme.colorScheme.primary
-                SwipeToDismissBoxValue.EndToStart -> MaterialTheme.cashflow.hairline
-                SwipeToDismissBoxValue.Settled -> Color.Transparent
-            }
-            Box(
-                Modifier.fillMaxSize().clip(MaterialTheme.shapes.large).background(color).padding(horizontal = 24.dp),
-                contentAlignment = if (direction == SwipeToDismissBoxValue.StartToEnd) Alignment.CenterStart else Alignment.CenterEnd,
-            ) {
-                when (direction) {
-                    SwipeToDismissBoxValue.StartToEnd ->
-                        Text(confirmLabel, color = MaterialTheme.colorScheme.onPrimary, style = MaterialTheme.typography.titleMedium)
-                    SwipeToDismissBoxValue.EndToStart ->
-                        Text(skipLabel, color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.titleMedium)
-                    SwipeToDismissBoxValue.Settled -> Unit
-                }
-            }
-        },
-    ) {
-        val income = tx.kind == TxKind.INCOME
-        AppCard(
-            Modifier.fillMaxWidth().semantics {
-                // TalkBack users cannot swipe the card: they get the same two actions from the actions menu.
-                customActions = listOf(
-                    CustomAccessibilityAction(confirmLabel) { onConfirm(false); true },
-                    CustomAccessibilityAction(skipLabel) { onSkip(false); true },
-                )
-            },
-            onClick = onOpen,
-        ) {
-            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Top) {
-                    Column(Modifier.weight(1f).padding(end = 12.dp)) {
-                        Text(
-                            tx.description.ifBlank {
-                                stringResource(if (income) R.string.item_income else R.string.item_expense)
-                            },
-                            style = MaterialTheme.typography.titleMedium,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                        Text(
-                            tx.date.format(CardDate),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    Text(
-                        Money.formatSigned(tx.kind, tx.amount),
-                        style = MaterialTheme.typography.titleMedium,
-                        color = if (income) MaterialTheme.colorScheme.primary else MaterialTheme.cashflow.negative,
-                    )
-                }
-                AnimatedVisibility(visible = showHint, enter = fadeIn(), exit = fadeOut()) {
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        Text(stringResource(R.string.hint_skip), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Text(stringResource(R.string.hint_confirm), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                }
-            }
-        }
-    }
-}
-
-private val CardDate: DateTimeFormatter = DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM)
 
 /** Confirm with a different amount: the field is prefilled; a changed amount updates only this row. */
 @OptIn(ExperimentalMaterial3Api::class)

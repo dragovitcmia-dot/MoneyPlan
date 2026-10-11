@@ -38,6 +38,10 @@ class CashflowColors(
     val keyAction: Color,
     val keyPressed: Color,
     val keyText: Color,
+    val dayNegativeFill: Color,
+    val daySelectedFill: Color,
+    val badge: Color,
+    val cellIncome: Color,
 )
 
 private fun ThemePalette.extra() = CashflowColors(
@@ -53,6 +57,10 @@ private fun ThemePalette.extra() = CashflowColors(
     keyAction = Color(keyAction),
     keyPressed = Color(keyPressed),
     keyText = Color(keyText),
+    dayNegativeFill = Color(dayNegativeFill),
+    daySelectedFill = Color(daySelectedFill),
+    badge = Color(badge),
+    cellIncome = Color(cellIncome),
 )
 
 private val LocalCashflowColors = staticCompositionLocalOf { Palette.dark.extra() }

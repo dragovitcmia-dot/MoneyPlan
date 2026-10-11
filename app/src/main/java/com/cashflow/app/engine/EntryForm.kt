@@ -27,6 +27,10 @@ data class EntryFormState(
     val startDate: LocalDate,
     val hasEnd: Boolean = false,
     val endDate: LocalDate,
+    /** Date of a "Now" entry: null = today; a past calendar day for "already happened on that day". */
+    val nowDate: LocalDate? = null,
+    /** The timing choices on offer (a past day has no "Later", a future day has no "Now"). */
+    val timings: List<Timing> = Timing.entries,
 ) {
     companion object {
         fun initial(kind: TxKind, today: LocalDate) = EntryFormState(
@@ -37,6 +41,24 @@ data class EntryFormState(
             startDate = today,
             endDate = today.plusMonths(1),
         )
+
+        /**
+         * The form opened from a calendar day. Past day: already happened on that date (only "Repeats" is the
+         * other choice). Today: like the Home buttons. Future day: Later on that date ("Now" is not offered).
+         */
+        fun forDay(kind: TxKind, day: LocalDate, today: LocalDate): EntryFormState {
+            val base = initial(kind, today).copy(
+                weekday = day.dayOfWeek,
+                dayOfMonth = day.dayOfMonth.toString(),
+                startDate = day,
+                endDate = day.plusMonths(1),
+            )
+            return when {
+                day.isBefore(today) -> base.copy(timing = Timing.NOW, nowDate = day, timings = listOf(Timing.NOW, Timing.REPEATS))
+                day == today -> base
+                else -> base.copy(timing = Timing.LATER, laterDate = day, timings = listOf(Timing.LATER, Timing.REPEATS))
+            }
+        }
     }
 }
 
@@ -70,7 +92,7 @@ object EntryForm {
         val description = state.description.trim().ifEmpty { defaultDescription }
 
         val entry: NewEntry? = when (state.timing) {
-            Timing.NOW -> NewEntry.Now(state.kind, amount, description)
+            Timing.NOW -> NewEntry.Now(state.kind, amount, description, state.nowDate)
             Timing.LATER -> NewEntry.Planned(state.kind, amount, description, state.laterDate)
             Timing.REPEATS -> {
                 val n = state.everyN.toIntOrNull()?.takeIf { it >= 1 }

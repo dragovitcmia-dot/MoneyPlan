@@ -4,6 +4,8 @@
 
     <!-- Navigation -->
     <string name="nav_home">Home</string>
+    <string name="nav_calendar">Calendar</string>
+    <string name="nav_upcoming">Upcoming</string>
     <string name="nav_settings">Settings</string>
 
     <!-- Home -->
@@ -85,6 +87,65 @@
     </plurals>
     <string name="warning_add_anyway">Add anyway</string>
 
+    <!-- Calendar -->
+    <string name="calendar_previous_month">Previous month</string>
+    <string name="calendar_next_month">Next month</string>
+    <string name="calendar_today">Today</string>
+    <string name="calendar_runs_short">Money runs short on %1$s</string>
+    <string name="calendar_runs_short_action">Show that day</string>
+    <string name="cal_desc_today">today</string>
+    <string name="cal_desc_expenses">Expenses %1$s dinars</string>
+    <string name="cal_desc_income">Income %1$s dinars</string>
+    <string name="cal_desc_short">Money runs short</string>
+    <plurals name="cal_desc_waiting">
+        <item quantity="one">%d item waiting for you</item>
+        <item quantity="other">%d items waiting for you</item>
+    </plurals>
+    <string name="cal_loading">Loading the month…</string>
+    <string name="calendar_dots_hint">Red dot: money going out. Green dot: money coming in. Tap a day to see the amounts.</string>
+
+    <!-- Day sheet -->
+    <string name="day_end_have">You’ll have %1$s TND at the end of this day</string>
+    <string name="day_end_had">You had %1$s TND at the end of this day</string>
+    <string name="day_end_short">Short by %1$s TND at the end of this day</string>
+    <string name="day_nothing">Nothing planned for this day.</string>
+    <string name="status_waiting">Waiting for you</string>
+    <string name="status_planned">Planned</string>
+    <string name="status_done">Done</string>
+    <string name="status_skipped">Skipped</string>
+    <string name="repeats_label">Repeats</string>
+
+    <!-- Change one item -->
+    <string name="item_edit_title">Change this item</string>
+    <string name="item_date_label">Date</string>
+    <string name="item_series_note">This comes from a repeating payment. Changes here only affect this day.</string>
+    <string name="item_edit_series">Edit this repeating payment</string>
+    <string name="action_done">Done</string>
+    <string name="action_mark_waiting">Mark as waiting</string>
+    <string name="item_saved">Changes saved</string>
+    <string name="marked_waiting">%1$s is waiting for you again</string>
+    <string name="item_delete_title">Delete “%1$s”?</string>
+    <string name="item_delete_manual_body">This removes it for good.</string>
+    <string name="item_delete_series_body">This payment will be skipped for this day only. The other days of the repeating payment stay as they are.</string>
+    <string name="item_deleted">Deleted %1$s</string>
+    <string name="item_skipped_this_day">Skipped %1$s for this day only</string>
+
+    <!-- Add from a day -->
+    <string name="timing_happened">Already happened</string>
+    <string name="now_hint_past_expense">You spent this on %1$s. It counts on that day.</string>
+    <string name="now_hint_past_income">You received this on %1$s. It counts on that day.</string>
+
+    <!-- Upcoming -->
+    <string name="upcoming_title">Coming up</string>
+    <string name="filter_all">All</string>
+    <string name="filter_expenses">Expenses</string>
+    <string name="filter_income">Income</string>
+    <string name="upcoming_empty">Nothing coming up</string>
+    <string name="group_this_week">This week</string>
+    <string name="daily_income_row">Daily income +%1$s TND</string>
+    <string name="daily_income_row_hint">Added every day, not listed one by one</string>
+    <string name="short_by_tag">Short by %1$s TND</string>
+
     <!-- Settings -->
     <string name="settings_title">Settings</string>
     <string name="auto_income_title">Add my income automatically</string>
@@ -112,6 +173,24 @@
     <string name="sched_first">First day of each month</string>
     <string name="sched_last">Last day of each month</string>
     <string name="sched_every_n">Every %1$d days</string>
+
+    <!-- Settings cards -->
+    <string name="income_card_title">Income</string>
+    <string name="income_not_auto">Income is not being added automatically.</string>
+    <string name="repeating_title">Repeating payments</string>
+    <string name="repeating_empty">Nothing here yet. Add one with EXPENSE, then choose Repeats.</string>
+    <string name="repeating_switch_description">Turn %1$s on or off</string>
+    <string name="edit_repeating_title">Change repeating payment</string>
+    <string name="repeating_name_label">Name</string>
+    <string name="repeating_ends_switch">Ends on a date</string>
+    <string name="repeating_ends_label">Last day</string>
+    <string name="stop_repeating">Stop repeating</string>
+    <string name="stop_title">Stop “%1$s”?</string>
+    <string name="stop_body">It stops from today. Payments still waiting in the future are removed. Payments you already answered stay in your history.</string>
+    <string name="starting_title">Starting point</string>
+    <string name="starting_locked_note">Clear all data to start again</string>
+    <string name="developer_title">Developer tools</string>
+    <string name="developer_note">For testing only. These buttons change or erase the data on this phone.</string>
 
     <!-- App updates -->
     <string name="updates_title">App updates</string>
