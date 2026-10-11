@@ -142,7 +142,7 @@ def crash_log():
     hits = []
     lines = log.splitlines()
     for i, line in enumerate(lines):
-        if "FATAL EXCEPTION" in line or "AndroidRuntime" in line:
+        if "FATAL EXCEPTION" in line or " E AndroidRuntime" in line:
             block = "\n".join(lines[i:i + 6])
             if PKG in block:
                 hits.append(block)
