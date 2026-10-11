@@ -287,11 +287,13 @@ def band_info(path):
     crop = img.crop((0, round(HERO_BAND[0] * scale), img.width, round(HERO_BAND[1] * scale)))
     px = crop.load()
     w, h = crop.size
+    # While the window fades in the whole number is dimmer, so "ink" is relative to the brightest pixel.
+    threshold = max(INK_MIN_LUMA // 2, 0.55 * crop.getextrema()[1])
     cols = [False] * w
     count = 0
     for x in range(w):
         for y in range(h):
-            if px[x, y] > INK_MIN_LUMA:
+            if px[x, y] > threshold:
                 cols[x] = True
                 count += 1
     xs = [x for x, c in enumerate(cols) if c]
