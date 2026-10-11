@@ -34,6 +34,7 @@ class MainActivity : ComponentActivity() {
                     SettingsScreen(
                         viewModel = settings,
                         repository = app.repository,
+                        updateManager = app.updateManager,
                         onBack = { showSettings = false },
                     )
                 } else {
