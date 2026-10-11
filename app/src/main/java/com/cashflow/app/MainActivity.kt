@@ -1,6 +1,7 @@
 package com.cashflow.app
 
 import android.os.Bundle
+import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -26,10 +27,9 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.cashflow.app.ui.components.AvailableCounter
+import com.cashflow.app.engine.HeroLaunch
+import com.cashflow.app.ui.components.HeroOdometer
 import com.cashflow.app.ui.rememberHaptics
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -46,6 +46,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         val app = application as CashflowApp
+        val freshLaunch = savedInstanceState == null
         setContent {
             CashflowTheme {
                 val factory = ViewModelFactory(app)
@@ -54,19 +55,19 @@ class MainActivity : ComponentActivity() {
                 var tab by rememberSaveable { mutableIntStateOf(0) }
                 val snackbar = remember { SnackbarHostState() }
 
-                // The Available count-up lives here, above the tabs, so switching tabs never restarts it.
-                // Every time the app comes to the foreground it counts up from 0 to the current value;
-                // afterwards it follows value changes from the old value to the new one.
+                // The hero odometer lives here, above the tabs, so switching tabs never touches it. The launch
+                // count-down plays ONLY on a fresh start (no saved state); returning from the background,
+                // rotation / theme / font changes and tab switches never replay it.
                 val haptics = rememberHaptics()
-                val counter = remember { AvailableCounter() }
-                var foregroundCount by remember { mutableIntStateOf(0) }
-                LifecycleEventEffect(Lifecycle.Event.ON_START) {
-                    counter.arm()
-                    foregroundCount++
-                }
-                LaunchedEffect(foregroundCount) {
+                val odometer = remember { HeroOdometer() }
+                LaunchedEffect(Unit) {
+                    var firstEmission = true
                     home.state.map { it?.available }.distinctUntilChanged().collectLatest { value ->
-                        if (value != null) counter.run(value, haptics)
+                        if (value != null) {
+                            val action = HeroLaunch.decide(freshLaunch, firstEmission, animationsEnabled())
+                            firstEmission = false
+                            odometer.show(value, action, haptics)
+                        }
                     }
                 }
 
@@ -107,7 +108,7 @@ class MainActivity : ComponentActivity() {
                     // A short crossfade is all the transition there is: cheap to run and to re-enter.
                     Crossfade(targetState = tab, animationSpec = tween(120), label = "tabs") { selected ->
                         if (selected == 0) {
-                            HomeScreen(home, counter, snackbar, padding)
+                            HomeScreen(home, odometer, snackbar, padding)
                         } else {
                             SettingsScreen(settings, app.repository, app.updateManager, padding)
                         }
@@ -116,4 +117,8 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+
+    /** False when the user turned system animations off (animator duration scale 0): show final values at once. */
+    private fun animationsEnabled(): Boolean =
+        Settings.Global.getFloat(contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) > 0f
 }

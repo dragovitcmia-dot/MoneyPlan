@@ -217,11 +217,177 @@ def run_config(name, night, font, size, density):
     return problems
 
 
+# ---- hero animation frame check -----------------------------------------------------------------------
+
+BURST_FRAMES = 24
+# Rows of the hero number at 1080x2340 (dark, normal font): below the "Available" label, above the chip.
+HERO_BAND = (290, 470)
+INK_MIN_LUMA = 150  # white digits / 80%-alpha decimals; the skeleton blocks and background are much darker
+MIN_INK_PIXELS = 500
+
+
+def set_animations(scale):
+    for key in ("window_animation_scale", "transition_animation_scale", "animator_duration_scale"):
+        sh(f"settings put global {key} {scale}")
+
+
+def burst(prefix, frames, relaunch):
+    """Captures `frames` screenshots as fast as the device allows, in one on-device loop (no adb round trip
+    between frames), starting right after the app is launched. Returns [(path, seconds_since_first)]."""
+    sh("rm -f /sdcard/hero_*.png /sdcard/hero_times.txt")
+    start = f"am force-stop {PKG}; " if relaunch else ""
+    loop = (
+        f"{start}(monkey -p {PKG} -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1 &); "
+        f"i=0; while [ $i -lt {frames} ]; do n=$(printf %02d $i); screencap -p /sdcard/hero_$n.png; "
+        f"echo \"$n $(date +%s%N)\" >> /sdcard/hero_times.txt; i=$((i+1)); done"
+    )
+    sh(loop)
+    times = {}
+    for line in adb("shell", "cat /sdcard/hero_times.txt", check=False).splitlines():
+        parts = line.split()
+        if len(parts) == 2:
+            times[parts[0]] = int(parts[1])
+    os.makedirs(OUT, exist_ok=True)
+    out = []
+    t0 = min(times.values()) if times else 0
+    for i in range(frames):
+        n = f"{i:02d}"
+        path = os.path.join(OUT, f"{prefix}-{n}.png")
+        adb("pull", f"/sdcard/hero_{n}.png", path, check=False)
+        if os.path.exists(path):
+            out.append((path, (times.get(n, t0) - t0) / 1e9))
+    return out
+
+
+def band_info(path):
+    """(ink pixel count, left extent, right extent, gray crop) of the hero band of a screenshot."""
+    from PIL import Image
+    img = Image.open(path).convert("L")
+    crop = img.crop((0, HERO_BAND[0], img.width, HERO_BAND[1]))
+    px = crop.load()
+    w, h = crop.size
+    cols = [False] * w
+    count = 0
+    for x in range(w):
+        for y in range(h):
+            if px[x, y] > INK_MIN_LUMA:
+                cols[x] = True
+                count += 1
+    xs = [x for x, c in enumerate(cols) if c]
+    return count, (xs[0] if xs else None), (xs[-1] if xs else None), crop
+
+
+def mean_abs_diff(a, b):
+    from PIL import ImageChops, ImageStat
+    return ImageStat.Stat(ImageChops.difference(a, b)).mean[0]
+
+
+def make_filmstrip(infos, name):
+    from PIL import Image
+    crops = [c for _, _, _, c in infos]
+    if not crops:
+        return
+    w, h = crops[0].size
+    scale = 0.5
+    cw, ch = int(w * scale), int(h * scale)
+    sheet = Image.new("L", (cw, ch * len(crops)), 0)
+    for i, c in enumerate(crops):
+        sheet.paste(c.resize((cw, ch)), (0, i * ch))
+    sheet.save(os.path.join(OUT, name))
+
+
+def run_hero_animation():
+    print("== hero animation (real motion, animator scale 1)")
+    problems = []
+    configure(True, "1.0", None, None)
+    try:
+        # Setup with animations off (plain flow): fresh data + sample data, then stop the app.
+        set_animations("0.0")
+        launch()
+        tap_text(TEXT_SETTINGS, scroll=False)
+        tap_text(TEXT_LOAD_SAMPLE)
+        time.sleep(2.5)
+        sh(f"am force-stop {PKG}")
+        time.sleep(1)
+
+        # 1) Launch from closed with real animations: burst of screenshots from the moment of launch.
+        set_animations("1.0")
+        frames = burst("hero-anim", BURST_FRAMES, relaunch=True)
+        time.sleep(3.5)
+        screenshot("hero-anim-final")
+        final = band_info(os.path.join(OUT, "hero-anim-final.png"))
+        infos = []
+        print("  frame  t(s)   ink   left right")
+        for path, t in frames:
+            count, left, right, crop = band_info(path)
+            print(f"  {os.path.basename(path)[-6:-4]:>5} {t:5.2f} {count:6d} {left!s:>5} {right!s:>5}")
+            infos.append((path, t, count, left, right, crop))
+        hero_frames = [(p, t, c, l, r, crop) for p, t, c, l, r, crop in infos if c >= MIN_INK_PIXELS]
+        if len(hero_frames) < 5:
+            problems.append(f"hero: only {len(hero_frames)} frames show the number; expected an animation burst")
+        else:
+            make_filmstrip([(p, t, c, crop) for p, t, c, l, r, crop in hero_frames], "hero-anim-filmstrip.png")
+            rights = [r for *_, r, _ in hero_frames]
+            lefts = [l for _, _, _, l, _, _ in hero_frames]
+            span_r = max(rights) - min(rights)
+            span_l = max(lefts) - min(lefts)
+            print(f"  hero frames: {len(hero_frames)}  right extent range {min(rights)}..{max(rights)} ({span_r}px)  "
+                  f"left extent range {min(lefts)}..{max(lefts)} ({span_l}px)")
+            # The TND label is static, so the right edge must not move at all. The left edge is the ink of
+            # the first digit, whose shape differs from digit to digit (a '1' starts further right than a
+            # '9'), so it gets a glyph-shape allowance; the slot layout itself is fixed-width.
+            if span_r > 2:
+                problems.append(f"hero: right extent moved by {span_r}px across frames (limit 2)")
+            if span_l > 24:
+                problems.append(f"hero: left extent moved by {span_l}px across frames (limit 24 for glyph shapes)")
+            changed = sum(
+                1 for a, b in zip(hero_frames, hero_frames[1:]) if mean_abs_diff(a[5], b[5]) > 0.5
+            )
+            print(f"  consecutive hero frames that differ: {changed} of {len(hero_frames) - 1}")
+            if changed < 2:
+                problems.append("hero: the number did not visibly animate between frames")
+            diff_final = mean_abs_diff(hero_frames[-1][5], final[3])
+            print(f"  last burst frame vs final frame: mean abs diff {diff_final:.2f}")
+        nodes = dump_nodes() or []
+        descs = [d for _, d, _ in nodes if d.startswith("Available:")]
+        print("  hero content description:", descs)
+        if not descs:
+            problems.append("hero: no 'Available: ... dinars' content description (TalkBack)")
+
+        # 2) Return from the background: no replay, the final value is there immediately.
+        sh("input keyevent 3")  # HOME
+        time.sleep(2)
+        back = burst("hero-return", 8, relaunch=False)
+        shown = [(p, band_info(p)) for p, _ in back]
+        hero_back = [(p, i) for p, i in shown if i[0] >= MIN_INK_PIXELS]
+        print(f"  return from background: {len(hero_back)} of {len(back)} frames show the number")
+        if not hero_back:
+            problems.append("hero: no frame after returning from the background shows the number")
+        else:
+            worst = max(mean_abs_diff(i[3], final[3]) for _, i in hero_back)
+            print(f"  worst difference to the final frame: {worst:.2f}")
+            if worst > 1.0:
+                problems.append(f"hero: after returning from the background the number differs from the final value (diff {worst:.2f})")
+    except NotFound as e:
+        screenshot("hero-FAILED")
+        print("  NOT FOUND:", e)
+        problems.append(f"hero: {e}")
+    except ImportError:
+        problems.append("hero: Pillow is not installed on the runner")
+    finally:
+        set_animations("0.0")
+    if not app_alive():
+        problems.append("hero: app process is not alive")
+    problems += [f"hero: crash in log:\n{c}" for c in crash_log()]
+    return problems
+
+
 def main():
     problems = []
     try:
         for cfg in CONFIGS:
             problems += run_config(*cfg)
+        problems += run_hero_animation()
     finally:
         restore()
     if problems:

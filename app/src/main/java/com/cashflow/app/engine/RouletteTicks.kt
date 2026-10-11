@@ -9,6 +9,16 @@ object RouletteTicks {
     const val MAX_STEPS = 24
     const val MAX_TICKS = 30
 
+    /** Ticks closer together than this are dropped (they would blur into one buzz). */
+    const val MIN_SPACING_MILLIS = 25L
+
+    /**
+     * Whether a tick may fire now: the 30-tick cap is respected (one slot stays free for the arrival
+     * tick) and at least [MIN_SPACING_MILLIS] have passed since the last tick. [lastTickMillis] < 0 = none yet.
+     */
+    fun shouldFire(nowMillis: Long, lastTickMillis: Long, ticksSoFar: Int): Boolean =
+        ticksSoFar < MAX_TICKS - 1 && (lastTickMillis < 0 || nowMillis - lastTickMillis >= MIN_SPACING_MILLIS)
+
     /** 0 when nothing changes; about one step per TND for small changes, capped at [MAX_STEPS]. */
     fun stepCount(from: Long, to: Long): Int {
         val delta = if (to >= from) to - from else from - to

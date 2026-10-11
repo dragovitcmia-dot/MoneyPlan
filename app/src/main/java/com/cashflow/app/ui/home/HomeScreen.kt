@@ -64,6 +64,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -81,8 +82,8 @@ import com.cashflow.app.engine.NextExpense
 import com.cashflow.app.engine.Transaction
 import com.cashflow.app.engine.TxKind
 import com.cashflow.app.ui.Haptics
-import com.cashflow.app.ui.components.AnimatedAmountText
-import com.cashflow.app.ui.components.AvailableCounter
+import com.cashflow.app.ui.components.HeroNumber
+import com.cashflow.app.ui.components.HeroOdometer
 import com.cashflow.app.ui.components.AppButton
 import com.cashflow.app.ui.components.AppButtonStyle
 import com.cashflow.app.ui.components.AppCard
@@ -101,7 +102,7 @@ private const val WAITING_HEADER_INDEX = 3
 @Composable
 fun HomeScreen(
     viewModel: HomeViewModel,
-    counter: AvailableCounter,
+    odometer: HeroOdometer,
     snackbarHost: SnackbarHostState,
     contentPadding: PaddingValues,
 ) {
@@ -112,7 +113,7 @@ fun HomeScreen(
     if (ui == null) {
         HomeSkeleton(contentPadding) // nothing numeric until the first data emission
     } else {
-        HomeContent(ui, viewModel, counter, snackbarHost, contentPadding)
+        HomeContent(ui, viewModel, odometer, snackbarHost, contentPadding)
     }
 }
 
@@ -120,7 +121,7 @@ fun HomeScreen(
 private fun HomeContent(
     ui: HomeUiState,
     viewModel: HomeViewModel,
-    counter: AvailableCounter,
+    odometer: HeroOdometer,
     snackbarHost: SnackbarHostState,
     padding: PaddingValues,
 ) {
@@ -183,7 +184,7 @@ private fun HomeContent(
     ) {
         item(key = "hero", contentType = "hero") {
             Hero(
-                counter = counter,
+                odometer = odometer,
                 waitingCount = ui.toConfirm.size,
                 onChipClick = { scope.launch { listState.animateScrollToItem(WAITING_HEADER_INDEX) } },
             )
@@ -248,7 +249,7 @@ private fun HomeContent(
 }
 
 @Composable
-private fun Hero(counter: AvailableCounter, waitingCount: Int, onChipClick: () -> Unit) {
+private fun Hero(odometer: HeroOdometer, waitingCount: Int, onChipClick: () -> Unit) {
     val negative = MaterialTheme.cashflow.negative
     val normal = MaterialTheme.colorScheme.onBackground
     Column(
@@ -260,11 +261,9 @@ private fun Hero(counter: AvailableCounter, waitingCount: Int, onChipClick: () -
             stringResource(R.string.available_label),
             style = MaterialTheme.typography.labelLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.clearAndSetSemantics {}, // the number's description already says "Available"
         )
-        AnimatedAmountText(
-            counter = counter,
-            color = { value -> if (value < 0) negative else normal },
-        )
+        HeroNumber(odometer = odometer, normalColor = normal, negativeColor = negative)
         AnimatedVisibility(visible = waitingCount > 0, enter = fadeIn(), exit = fadeOut()) {
             AssistChip(
                 onClick = onChipClick,
