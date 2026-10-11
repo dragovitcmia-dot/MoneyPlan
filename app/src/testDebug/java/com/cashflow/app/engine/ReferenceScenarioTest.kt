@@ -11,7 +11,9 @@ class ReferenceScenarioTest {
     private fun ledger(extra: List<Transaction> = emptyList()): List<Transaction> {
         val rule = ReferenceScenario.sundayRule
         val sundays = Recurrence.missingOccurrences(rule, emptySet(), today).map { rule.occurrenceFor(it) }
-        return ReferenceScenario.oneOffExpenses + sundays + extra
+        val income = ReferenceScenario.dailyIncomeSource
+        val daily = Recurrence.missingOccurrences(income, emptySet(), today).map { income.occurrenceFor(it) }
+        return ReferenceScenario.oneOffExpenses + sundays + daily + extra
     }
 
     private fun engine(extra: List<Transaction> = emptyList()) =
@@ -32,16 +34,24 @@ class ReferenceScenarioTest {
         assertEquals(listOf(d(2026, 11, 10), d(2026, 11, 12)), engine().negativeDays())
 
     @Test fun sunday_rule_materializes_oct11_through_dec27() {
-        val sundays = ledger().filter { it.source == TxSource.RECURRING }.map { it.date }
+        val sundays = ledger().filter { it.recurringRuleId == ReferenceScenario.sundayRule.id }.map { it.date }
         assertEquals(12, sundays.size) // Oct 11 .. Dec 27
         assertEquals(d(2026, 10, 11), sundays.first())
         assertEquals(d(2026, 12, 27), sundays.last())
     }
 
+    @Test fun daily_source_starts_the_day_after_the_balance_start_date() {
+        val income = ReferenceScenario.dailyIncomeSource
+        assertEquals(d(2026, 10, 11), income.startDate)
+        assertEquals(RecurrencePattern.Daily, income.pattern)
+        assertEquals(TxKind.INCOME, income.kind)
+        assertEquals(tnd(30), income.amount)
+    }
+
     @Test fun start_day_state() {
         val e = engine()
         assertEquals(tnd(180), e.currentBalance())
-        assertEquals(tnd(180), e.balanceAfterPending())
+        assertEquals(tnd(180), e.available())
         val next = e.nextExpense()!!
         assertEquals(d(2026, 10, 11), next.date)
         assertEquals(1, next.daysAway)

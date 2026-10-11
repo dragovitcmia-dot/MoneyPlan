@@ -13,8 +13,20 @@ android {
         applicationId = "com.cashflow.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.1.0"
+        // CI run number so every build can install over the previous one; 1 for local builds.
+        versionCode = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 1
+        versionName = "0.2"
+    }
+
+    // A fixed, committed debug key: every CI build is signed identically and updates in place.
+    // (Debug-only key with the well-known password; never use it for a release.)
+    signingConfigs {
+        getByName("debug") {
+            storeFile = file("debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
     }
 
     buildTypes {

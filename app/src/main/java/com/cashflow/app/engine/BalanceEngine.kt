@@ -7,9 +7,12 @@ import java.time.temporal.ChronoUnit
  * Pure balance model of the user's spreadsheet. One instance is an immutable snapshot of
  * (settings, transactions, today); create a new one when any of them changes.
  *
- * Day semantics: the starting balance is the opening balance of balanceStartDate. Daily income is
- * first added on the next day: opening = previous closing + income; closing = opening + one-off
- * income - expenses. SKIPPED rows have no effect anywhere.
+ * Day semantics: the starting balance is the opening balance of balanceStartDate. Income-source
+ * income is added to the day's opening; closing = opening + other income - expenses. SKIPPED rows
+ * have no effect anywhere. Nothing is ever confirmed automatically: PENDING rows stay PENDING until
+ * the user answers, and only CONFIRMED rows count toward [currentBalance].
+ *
+ * In [WalletMode.STATIC] pending income-source rows are ignored everywhere.
  */
 class BalanceEngine(
     val settings: AppSettings,
@@ -17,30 +20,36 @@ class BalanceEngine(
     val today: LocalDate,
 ) {
     private val start = settings.balanceStartDate
-    private val dailyRows: Map<LocalDate, Transaction> =
-        transactions.filter { it.source == TxSource.DAILY_INCOME }.groupBy { it.date }.mapValues { it.value.minBy { t -> t.id } }
-    private val others: List<Transaction> = transactions.filter { it.source != TxSource.DAILY_INCOME }
-    private val othersByDate: Map<LocalDate, List<Transaction>> = others.groupBy { it.date }
 
-    /** Confirmed money only, up to and including today (daily income also when auto-applied). */
+    private fun isSourceIncome(tx: Transaction) = tx.source == TxSource.RECURRING && tx.kind == TxKind.INCOME
+
+    private val ledger: List<Transaction> = transactions.filter {
+        !(settings.walletMode == WalletMode.STATIC && isSourceIncome(it) && it.status == TxStatus.PENDING)
+    }
+    private val byDate: Map<LocalDate, List<Transaction>> = ledger.groupBy { it.date }
+
+    /** Confirmed money only, up to and including today. */
     fun currentBalance(): Long {
         var balance = settings.startingBalance
-        for (tx in others) {
-            if (tx.date < start || tx.date > today || tx.status != TxStatus.CONFIRMED) continue
+        for (tx in ledger) {
+            if (tx.status != TxStatus.CONFIRMED || tx.date < start || tx.date > today) continue
             balance += signed(tx)
-        }
-        for ((date, row) in dailyRows) {
-            if (date <= start || date > today || !countsAsReceived(row)) continue
-            balance += row.amount
         }
         return balance
     }
 
     /**
-     * Balance if every pending item dated today or earlier were settled as planned (pending
-     * expenses spent, pending incomes received). Equals the forecast closing balance of today.
+     * The headline figure: balance if every PENDING item dated today or earlier were settled as
+     * planned (pending expenses spent, pending incomes received). Equals today's forecast closing.
      */
-    fun balanceAfterPending(): Long = simulate(today).lastOrNull()?.closing ?: settings.startingBalance
+    fun available(): Long = simulate(today).lastOrNull()?.closing ?: settings.startingBalance
+
+    /** PENDING items dated today or earlier, oldest first: what the user still has to answer. */
+    fun toConfirm(): List<Transaction> =
+        ledger.filter { it.status == TxStatus.PENDING && it.date >= start && it.date <= today }
+            .sortedWith(compareBy<Transaction> { it.date }.thenBy { it.id })
+
+    fun toConfirmCount(): Int = toConfirm().size
 
     /** Day-by-day forecast; days before balanceStartDate are not part of the ledger. */
     fun forecast(fromDate: LocalDate, toDate: LocalDate): List<DayForecast> =
@@ -53,7 +62,7 @@ class BalanceEngine(
 
     /** Earliest PENDING expense dated today or later (ties: lowest id). */
     fun nextExpense(): NextExpense? {
-        val tx = others
+        val tx = ledger
             .filter { it.kind == TxKind.EXPENSE && it.status == TxStatus.PENDING && it.date >= today }
             .minWithOrNull(compareBy<Transaction> { it.date }.thenBy { it.id }) ?: return null
         return NextExpense(
@@ -67,31 +76,25 @@ class BalanceEngine(
 
     private fun signed(tx: Transaction) = if (tx.kind == TxKind.INCOME) tx.amount else -tx.amount
 
-    private fun countsAsReceived(row: Transaction) =
-        row.status == TxStatus.CONFIRMED || (row.autoApplied && row.status != TxStatus.SKIPPED)
-
-    /** Daily income on [date]: its stored row if there is one, otherwise the planned amount. */
-    private fun dailyIncomeOn(date: LocalDate): Long {
-        if (date <= start) return 0
-        val row = dailyRows[date] ?: return settings.dailyIncomeAmount
-        return if (row.status == TxStatus.SKIPPED) 0 else row.amount
-    }
-
     private fun simulate(to: LocalDate): List<DayForecast> {
         if (to < start) return emptyList()
         val days = ArrayList<DayForecast>()
         var previousClosing = settings.startingBalance
         var date = start
         while (!date.isAfter(to)) {
-            val income = dailyIncomeOn(date)
-            val opening = previousClosing + income
-            val items = othersByDate[date].orEmpty() + listOfNotNull(dailyRows[date].takeIf { date > start })
+            val items = byDate[date].orEmpty()
+            var income = 0L
             var extra = 0L
             var expenses = 0L
-            for (tx in othersByDate[date].orEmpty()) {
+            for (tx in items) {
                 if (tx.status == TxStatus.SKIPPED) continue
-                if (tx.kind == TxKind.INCOME) extra += tx.amount else expenses += tx.amount
+                when {
+                    tx.kind == TxKind.EXPENSE -> expenses += tx.amount
+                    isSourceIncome(tx) -> income += tx.amount
+                    else -> extra += tx.amount
+                }
             }
+            val opening = previousClosing + income
             val closing = opening + extra - expenses
             days += DayForecast(date, opening, income, extra, expenses, closing, items)
             previousClosing = closing

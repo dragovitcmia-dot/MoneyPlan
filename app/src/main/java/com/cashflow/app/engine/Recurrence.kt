@@ -14,6 +14,7 @@ object Recurrence {
         val hi = rule.endDate?.let { minOf(to, it) } ?: to
         if (lo.isAfter(hi)) return emptyList()
         return when (val p = rule.pattern) {
+            RecurrencePattern.Daily -> stepped(lo, 1, hi)
             is RecurrencePattern.Weekly -> stepped(lo.with(TemporalAdjusters.nextOrSame(p.dayOfWeek)), 7, hi)
             is RecurrencePattern.EveryNDays -> {
                 val offset = Math.floorMod(ChronoUnit.DAYS.between(p.anchorDate, lo), p.n.toLong())
