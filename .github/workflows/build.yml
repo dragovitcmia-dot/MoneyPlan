@@ -40,6 +40,21 @@ jobs:
           print("TOTAL", total)
           PY
 
+      - name: Test summary annotation
+        if: always()
+        run: |
+          python3 - <<'PY'
+          import glob, xml.etree.ElementTree as ET
+          lines, total, bad = [], 0, 0
+          for f in sorted(glob.glob("app/build/test-results/testDebugUnitTest/*.xml")):
+              r = ET.parse(f).getroot()
+              n, fl = int(r.get("tests")), int(r.get("failures")) + int(r.get("errors"))
+              total += n; bad += fl
+              lines.append("%s tests=%d failed=%d" % (r.get("name").split(".")[-1], n, fl))
+          lines.append("TOTAL tests=%d failed=%d" % (total, bad))
+          print("::notice title=Unit test summary::" + "%0A".join(lines))
+          PY
+
       - name: Upload test reports
         if: always()
         uses: actions/upload-artifact@v4
