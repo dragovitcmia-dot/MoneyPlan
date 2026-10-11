@@ -22,18 +22,24 @@ class ThemePalette(
     val expenseFill: Long,
     val incomeFill: Long,
     val buttonLabel: Long,
+    val keypadBackground: Long,
     val keyDigit: Long,
     val keyAction: Long,
-    val keyContour: Long,
+    val keyPressed: Long,
+    val keyText: Long,
     val inverseSurface: Long,
     val inverseOnSurface: Long,
     val inverseAccent: Long,
 )
 
 object Palette {
-    /** Fills of the big EXPENSE / INCOME buttons; the same in both themes. */
-    const val EXPENSE_RED = 0xFFFF5C6CL
-    const val INCOME_GREEN = 0xFF3DDC97L
+    /**
+     * Fills of the big EXPENSE / INCOME buttons, the composer header and the Save button; the same in
+     * both themes. Fully saturated, and just dark enough for white text (4.63:1 and 4.64:1).
+     */
+    const val EXPENSE_RED = 0xFFEB0000L
+    const val INCOME_GREEN = 0xFF008800L
+    const val KIND_LABEL = 0xFFFFFFFFL
 
     val dark = ThemePalette(
         background = 0xFF0B0D10, surface = 0xFF14171C, elevated = 0xFF1B1F26, hairline = 0xFF262B33,
@@ -42,8 +48,8 @@ object Palette {
         primaryContainer = 0xFF14382A, onPrimaryContainer = 0xFF3DDC97,
         negativeText = 0xFFFF5C6C, errorContainer = 0xFF3A1A1F, onErrorContainer = 0xFFFF5C6C,
         secondaryContainer = 0xFF1B1F26, onSecondaryContainer = 0xFFF2F4F7,
-        expenseFill = EXPENSE_RED, incomeFill = INCOME_GREEN, buttonLabel = 0xFF0B0D10,
-        keyDigit = 0xFF2A2F37, keyAction = 0xFF20242B, keyContour = 0xFF3A414B,
+        expenseFill = EXPENSE_RED, incomeFill = INCOME_GREEN, buttonLabel = KIND_LABEL,
+        keypadBackground = 0xFF010101, keyDigit = 0xFF2D2D2F, keyAction = 0xFF171719, keyPressed = 0xFF474749, keyText = 0xFFFFFFFF,
         inverseSurface = 0xFFF2F4F7, inverseOnSurface = 0xFF0B0D10, inverseAccent = 0xFF087A4F,
     )
 
@@ -54,8 +60,8 @@ object Palette {
         primaryContainer = 0xFFD7F5E6, onPrimaryContainer = 0xFF064D33,
         negativeText = 0xFFC62839, errorContainer = 0xFFFFDDE0, onErrorContainer = 0xFF7A0F1B,
         secondaryContainer = 0xFFEDEFF3, onSecondaryContainer = 0xFF14171C,
-        expenseFill = EXPENSE_RED, incomeFill = INCOME_GREEN, buttonLabel = 0xFF0B0D10,
-        keyDigit = 0xFFECEFF3, keyAction = 0xFFDDE2E8, keyContour = 0xFFC7CDD6,
+        expenseFill = EXPENSE_RED, incomeFill = INCOME_GREEN, buttonLabel = KIND_LABEL,
+        keypadBackground = 0xFFE9E9EC, keyDigit = 0xFFFFFFFF, keyAction = 0xFFD3D3D8, keyPressed = 0xFFC8C8CE, keyText = 0xFF1C1C1E,
         inverseSurface = 0xFF14171C, inverseOnSurface = 0xFFF2F4F7, inverseAccent = 0xFF3DDC97,
     )
 }
@@ -104,13 +110,12 @@ fun ThemePalette.textPairs(): List<TextPair> = listOf(
     TextPair("chip label on chip", onPrimaryContainer, primaryContainer),
     TextPair("label on error container", onErrorContainer, errorContainer),
     TextPair("label on secondary container", onSecondaryContainer, secondaryContainer),
-    TextPair("EXPENSE button label", buttonLabel, expenseFill, large = true),
-    TextPair("INCOME button label", buttonLabel, incomeFill, large = true),
-    TextPair("EXPENSE label (normal size check)", buttonLabel, expenseFill),
-    TextPair("INCOME label (normal size check)", buttonLabel, incomeFill),
-    TextPair("keypad digit", text, keyDigit, large = true),
-    TextPair("keypad action key", text, keyAction, large = true),
-    TextPair("keypad digit (normal size check)", text, keyDigit),
+    TextPair("white label on EXPENSE fill (Home button, composer header, Save)", buttonLabel, expenseFill),
+    TextPair("white label on INCOME fill (Home button, composer header, Save)", buttonLabel, incomeFill),
+    TextPair("keypad digit on digit key", keyText, keyDigit, large = true),
+    TextPair("keypad digit on digit key (normal size check)", keyText, keyDigit),
+    TextPair("keypad digit on pressed key", keyText, keyPressed),
+    TextPair("backspace icon on backspace key", keyText, keyAction),
     TextPair("skip swipe label on hairline", text, hairline),
     TextPair("snackbar text", inverseOnSurface, inverseSurface),
     TextPair("snackbar action", inverseAccent, inverseSurface),

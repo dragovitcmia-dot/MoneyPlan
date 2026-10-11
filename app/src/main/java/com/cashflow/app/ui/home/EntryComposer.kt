@@ -1,8 +1,12 @@
 package com.cashflow.app.ui.home
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -17,7 +21,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.OutlinedTextField
+import com.cashflow.app.ui.components.LabeledTextField
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
@@ -33,6 +37,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -51,6 +56,7 @@ import com.cashflow.app.engine.TxKind
 import com.cashflow.app.engine.WalletMode
 import com.cashflow.app.engine.WhatIfResult
 import com.cashflow.app.ui.components.AppButton
+import com.cashflow.app.ui.components.fullBleed
 import com.cashflow.app.ui.components.quantityString
 import com.cashflow.app.ui.rememberHaptics
 import com.cashflow.app.ui.settings.DateField
@@ -95,7 +101,7 @@ private fun FormProblem.message() = stringResource(
  * Shared composer for EXPENSE and INCOME: amount on the keypad, then when it happens: Now, Later
  * or Repeats. Every expense is run through the what-if safety check before it is saved.
  */
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun EntryComposer(
     kind: TxKind,
@@ -111,7 +117,6 @@ fun EntryComposer(
     val colors = MaterialTheme.cashflow
     val isExpense = kind == TxKind.EXPENSE
     val accentFill = if (isExpense) colors.expenseFill else colors.incomeFill
-    val headerColor = if (isExpense) colors.negative else colors.positive
 
     var form by remember { mutableStateOf(EntryFormState.initial(kind, ui.today)) }
     var tried by remember { mutableStateOf(false) }
@@ -167,12 +172,18 @@ fun EntryComposer(
             Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp).padding(bottom = 16.dp).navigationBarsPadding(),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            Text(
-                stringResource(if (isExpense) R.string.button_expense else R.string.button_income).uppercase(),
-                style = MaterialTheme.typography.headlineMedium,
-                fontWeight = FontWeight.Bold,
-                color = headerColor,
-            )
+            // Header: a band in the kind color with white bold text, like the big button on Home.
+            Box(
+                Modifier.fillMaxWidth().clip(MaterialTheme.shapes.large).background(accentFill).padding(vertical = 14.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    stringResource(if (isExpense) R.string.button_expense else R.string.button_income).uppercase(),
+                    style = MaterialTheme.typography.headlineMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = colors.buttonLabel,
+                )
+            }
 
             // Amount display
             val amountMissing = tried && FormProblem.AMOUNT_MISSING in problems
@@ -199,12 +210,13 @@ fun EntryComposer(
             }
 
             Keypad(
+                modifier = Modifier.fullBleed(24.dp),
                 onKey = { key -> form = form.copy(amountText = AmountInput.press(form.amountText, key)); haptics.tick() },
                 onBackspace = { form = form.copy(amountText = AmountInput.backspace(form.amountText)); haptics.tick() },
                 onClear = { form = form.copy(amountText = ""); haptics.confirm() },
             )
 
-            OutlinedTextField(
+            LabeledTextField(
                 value = form.description,
                 onValueChange = { form = form.copy(description = it) },
                 label = { Text(stringResource(R.string.description_label)) },
@@ -213,14 +225,19 @@ fun EntryComposer(
                 modifier = Modifier.fillMaxWidth(),
             )
 
-            SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
-                Timing.entries.forEachIndexed { index, t ->
-                    SegmentedButton(
+            // Wrapping chips (not a segmented bar) so the three words never get squeezed at large font sizes.
+            FlowRow(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Timing.entries.forEach { t ->
+                    FilterChip(
                         selected = form.timing == t,
                         onClick = { form = form.copy(timing = t); haptics.tick() },
-                        shape = SegmentedButtonDefaults.itemShape(index, Timing.entries.size),
+                        label = { Text(t.label(), style = MaterialTheme.typography.titleSmall) },
                         modifier = Modifier.heightIn(min = 56.dp),
-                    ) { Text(t.label()) }
+                    )
                 }
             }
 
@@ -262,7 +279,7 @@ fun EntryComposer(
                                 )
                             }
                         }
-                        PatternChoice.EVERY_N -> OutlinedTextField(
+                        PatternChoice.EVERY_N -> LabeledTextField(
                             value = form.everyN,
                             onValueChange = { form = form.copy(everyN = it.filter(Char::isDigit).take(3)) },
                             label = { Text(stringResource(R.string.every_n_label)) },
@@ -272,7 +289,7 @@ fun EntryComposer(
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                             modifier = Modifier.fillMaxWidth(),
                         )
-                        PatternChoice.MONTH_DAY -> OutlinedTextField(
+                        PatternChoice.MONTH_DAY -> LabeledTextField(
                             value = form.dayOfMonth,
                             onValueChange = { form = form.copy(dayOfMonth = it.filter(Char::isDigit).take(2)) },
                             label = { Text(stringResource(R.string.day_of_month_label)) },
@@ -320,6 +337,7 @@ fun EntryComposer(
                 enabled = !saving,
                 modifier = Modifier.fillMaxWidth().heightIn(min = 64.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = accentFill, contentColor = colors.buttonLabel),
+                textStyle = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
             )
         }
     }

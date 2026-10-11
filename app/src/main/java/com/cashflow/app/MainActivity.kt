@@ -18,6 +18,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
@@ -25,7 +26,14 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.cashflow.app.ui.components.AvailableCounter
+import com.cashflow.app.ui.rememberHaptics
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import com.cashflow.app.ui.ViewModelFactory
 import com.cashflow.app.ui.home.HomeScreen
 import com.cashflow.app.ui.home.HomeViewModel
@@ -45,6 +53,22 @@ class MainActivity : ComponentActivity() {
                 val settings: SettingsViewModel = viewModel(factory = factory)
                 var tab by rememberSaveable { mutableIntStateOf(0) }
                 val snackbar = remember { SnackbarHostState() }
+
+                // The Available count-up lives here, above the tabs, so switching tabs never restarts it.
+                // Every time the app comes to the foreground it counts up from 0 to the current value;
+                // afterwards it follows value changes from the old value to the new one.
+                val haptics = rememberHaptics()
+                val counter = remember { AvailableCounter() }
+                var foregroundCount by remember { mutableIntStateOf(0) }
+                LifecycleEventEffect(Lifecycle.Event.ON_START) {
+                    counter.arm()
+                    foregroundCount++
+                }
+                LaunchedEffect(foregroundCount) {
+                    home.state.map { it?.available }.distinctUntilChanged().collectLatest { value ->
+                        if (value != null) counter.run(value, haptics)
+                    }
+                }
 
                 Scaffold(
                     containerColor = MaterialTheme.colorScheme.background,
@@ -83,7 +107,7 @@ class MainActivity : ComponentActivity() {
                     // A short crossfade is all the transition there is: cheap to run and to re-enter.
                     Crossfade(targetState = tab, animationSpec = tween(120), label = "tabs") { selected ->
                         if (selected == 0) {
-                            HomeScreen(home, snackbar, padding)
+                            HomeScreen(home, counter, snackbar, padding)
                         } else {
                             SettingsScreen(settings, app.repository, app.updateManager, padding)
                         }
