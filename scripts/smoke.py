@@ -217,11 +217,275 @@ def run_config(name, night, font, size, density):
     return problems
 
 
+# ---- hero animation frame check -----------------------------------------------------------------------
+
+BURST_FRAMES = 24
+# Rows of the hero number at 1080x2340 (dark, normal font): below the "Available" label, above the chip.
+HERO_BAND = (290, 470)
+INK_MIN_LUMA = 150  # white digits / 80%-alpha decimals; the skeleton blocks and background are much darker
+MIN_INK_PIXELS = 500
+MAX_INK_PIXELS = 60000  # more than this is the bright launcher wallpaper, not the app
+
+
+def set_animations(scale):
+    for key in ("window_animation_scale", "transition_animation_scale", "animator_duration_scale"):
+        sh(f"settings put global {key} {scale}")
+
+
+def burst(prefix, frames, relaunch):
+    """Captures `frames` screenshots as fast as the device allows, in one on-device loop (no adb round trip
+    between frames), starting right after the app is launched. Raw (uncompressed) screencap is used because
+    PNG compression takes ~300 ms per frame. Returns [(path, seconds since the launch command)]."""
+    from PIL import Image
+    sh("rm -f /sdcard/hero_*.raw /sdcard/hero_times.txt")
+    adb("logcat", "-c", check=False)
+    start = f"am force-stop {PKG}; " if relaunch else ""
+    loop = (
+        f"{start}echo L $(date +%s%N) > /sdcard/hero_times.txt; "
+        f"(am start -n {PKG}/.MainActivity >/dev/null 2>&1 &); "
+        f"i=0; while [ $i -lt {frames} ]; do n=$(printf %02d $i); a=$(date +%s%N); "
+        f"screencap /sdcard/hero_$n.raw; b=$(date +%s%N); echo \"$n $a $b\" >> /sdcard/hero_times.txt; i=$((i+1)); done"
+    )
+    sh(loop)
+    times = {}
+    launch_ns = 0
+    for line in adb("shell", "cat /sdcard/hero_times.txt", check=False).splitlines():
+        parts = line.split()
+        if parts[:1] == ["L"] and len(parts) == 2:
+            launch_ns = int(parts[1])
+        elif len(parts) == 3:
+            times[parts[0]] = (int(parts[1]) + int(parts[2])) // 2
+    os.makedirs(OUT, exist_ok=True)
+    out = []
+    for i in range(frames):
+        n = f"{i:02d}"
+        raw = os.path.join(OUT, f"{prefix}-{n}.raw")
+        adb("pull", f"/sdcard/hero_{n}.raw", raw, check=False)
+        if not os.path.exists(raw):
+            continue
+        data = open(raw, "rb").read()
+        os.remove(raw)
+        width, height = int.from_bytes(data[0:4], "little"), int.from_bytes(data[4:8], "little")
+        pixels = data[len(data) - width * height * 4:]  # header is 12 or 16 bytes depending on the release
+        path = os.path.join(OUT, f"{prefix}-{n}.png")
+        Image.frombytes("RGBA", (width, height), pixels).convert("RGB").save(path, optimize=False, compress_level=1)
+        out.append((path, (times.get(n, launch_ns) - launch_ns) / 1e9))
+    print("  logcat CashflowHero:")
+    for line in adb("logcat", "-d", "-v", "time", "-s", "CashflowHero:I", check=False).splitlines():
+        if "CashflowHero" in line:
+            print("   ", line)
+    return out
+
+
+def band_info(path):
+    """(ink pixel count, left extent, right extent, gray crop) of the hero band of a frame. Frames may be
+    smaller than the 1080-wide screen (video); extents are returned in 1080-wide device pixels and the ink
+    count is normalised the same way."""
+    from PIL import Image
+    img = Image.open(path).convert("L")
+    scale = img.width / 1080.0
+    crop = img.crop((0, round(HERO_BAND[0] * scale), img.width, round(HERO_BAND[1] * scale)))
+    px = crop.load()
+    w, h = crop.size
+    # While the window fades in the whole number is dimmer, so "ink" is relative to the brightest pixel.
+    threshold = max(INK_MIN_LUMA // 2, 0.55 * crop.getextrema()[1])
+    cols = [False] * w
+    count = 0
+    for x in range(w):
+        for y in range(h):
+            if px[x, y] > threshold:
+                cols[x] = True
+                count += 1
+    xs = [x for x, c in enumerate(cols) if c]
+    left = round(xs[0] / scale) if xs else None
+    right = round(xs[-1] / scale) if xs else None
+    return round(count / (scale * scale)), left, right, crop
+
+
+def is_hero_frame(count, left, right):
+    """The app shows the number: enough ink, not the bright launcher wallpaper, and centred (not the launcher's
+    left-aligned date text)."""
+    return MIN_INK_PIXELS <= count <= MAX_INK_PIXELS and left is not None and left >= 150 and right <= 1000
+
+
+def extract_video_frames(video, prefix, fps=30):
+    """Decodes the screen recording into PNG frames (evenly spaced in time, `fps` per second) with ffmpeg
+    from the imageio-ffmpeg wheel. Returns [(path, seconds since the first video frame)]."""
+    import glob
+    import imageio_ffmpeg
+    ffmpeg = imageio_ffmpeg.get_ffmpeg_exe()
+    for old in glob.glob(os.path.join(OUT, f"{prefix}-*.png")):
+        os.remove(old)
+    pattern = os.path.join(OUT, f"{prefix}-%03d.png")
+    r = subprocess.run([ffmpeg, "-v", "error", "-y", "-i", video, "-vf", f"fps={fps}", "-compression_level", "1", pattern],
+                       capture_output=True, text=True)
+    if r.returncode != 0:
+        raise RuntimeError(f"ffmpeg failed: {r.stderr.strip()}")
+    paths = sorted(glob.glob(os.path.join(OUT, f"{prefix}-*.png")))
+    return [(p, i / fps) for i, p in enumerate(paths)]
+
+
+def record_launch(prefix, seconds=10):
+    """Cold-starts the app while the screen is being recorded; returns the decoded frames."""
+    sh("rm -f /sdcard/hero.mp4")
+    adb("logcat", "-c", check=False)
+    sh("am force-stop " + PKG)
+    sh(f"(screenrecord --time-limit {seconds} --bit-rate 16000000 /sdcard/hero.mp4 >/sdcard/hero_rec.log 2>&1 &)")
+    time.sleep(1.5)
+    sh(f"am start -n {PKG}/.MainActivity >/dev/null 2>&1")
+    time.sleep(seconds)
+    time.sleep(1.5)  # screenrecord finalises the file
+    os.makedirs(OUT, exist_ok=True)
+    video = os.path.join(OUT, f"{prefix}.mp4")
+    adb("pull", "/sdcard/hero.mp4", video, check=False)
+    if not os.path.exists(video) or os.path.getsize(video) < 1000:
+        print("  screenrecord log:", sh("cat /sdcard/hero_rec.log", check=False).strip())
+        return None
+    frames = extract_video_frames(video, prefix)
+    os.remove(video)  # only the PNG frames are published
+    return frames
+
+
+def mean_abs_diff(a, b):
+    from PIL import ImageChops, ImageStat
+    return ImageStat.Stat(ImageChops.difference(a, b)).mean[0]
+
+
+def make_filmstrip(infos, name):
+    from PIL import Image
+    crops = [c for _, _, _, c in infos]
+    if not crops:
+        return
+    w, h = crops[0].size
+    scale = 0.5
+    cw, ch = int(w * scale), int(h * scale)
+    sheet = Image.new("L", (cw, ch * len(crops)), 0)
+    for i, c in enumerate(crops):
+        sheet.paste(c.resize((cw, ch)), (0, i * ch))
+    sheet.save(os.path.join(OUT, name))
+
+
+def run_hero_animation():
+    print("== hero animation (real motion, animator scale 1)")
+    problems = []
+    configure(True, "1.0", None, None)
+    try:
+        # Setup with animations off (plain flow): fresh data + sample data, then stop the app.
+        set_animations("0.0")
+        launch()
+        tap_text(TEXT_SETTINGS, scroll=False)
+        tap_text(TEXT_LOAD_SAMPLE)
+        time.sleep(2.5)
+        sh(f"am force-stop {PKG}")
+        time.sleep(1)
+
+        # 1) Launch from closed with real animations. The screen is recorded (screencap is far too slow to
+        #    catch a 1.5 s animation on a CI emulator) and decoded to 30 frames per second.
+        set_animations("1.0")
+        frames = record_launch("hero-anim")
+        if not frames:
+            problems.append("hero: screenrecord produced no video")
+            frames = []
+        print("  logcat CashflowHero:")
+        for line in adb("logcat", "-d", "-v", "time", "-s", "CashflowHero:I", check=False).splitlines():
+            if "CashflowHero" in line:
+                print("   ", line)
+        time.sleep(1)
+        screenshot("hero-anim-final")
+        final = band_info(os.path.join(OUT, "hero-anim-final.png"))
+        infos = []
+        for path, t in frames:
+            count, left, right, crop = band_info(path)
+            infos.append((path, t, count, left, right, crop))
+        hero_frames = [x for x in infos if is_hero_frame(x[2], x[3], x[4])]
+        print("  frame   t(s)    ink  left right  diff-to-final")
+        for path, t, count, left, right, crop in infos:
+            if is_hero_frame(count, left, right):
+                d = mean_abs_diff(crop, final[3].resize(crop.size))
+                print(f"  {os.path.basename(path)[-7:-4]:>5} {t:6.2f} {count:6d} {left!s:>5} {right!s:>5}  {d:6.2f}")
+        if len(hero_frames) < 10:
+            problems.append(f"hero: only {len(hero_frames)} frames show the number; expected an animation burst")
+        else:
+            make_filmstrip([(p, t, c, crop) for p, t, c, l, r, crop in hero_frames[::3]], "hero-anim-filmstrip.png")
+            rights = [r for *_, r, _ in hero_frames]
+            lefts = [l for _, _, _, l, _, _ in hero_frames]
+            span_r = max(rights) - min(rights)
+            span_l = max(lefts) - min(lefts)
+            print(f"  hero frames: {len(hero_frames)}  right extent range {min(rights)}..{max(rights)} ({span_r}px)  "
+                  f"left extent range {min(lefts)}..{max(lefts)} ({span_l}px)")
+            # The TND label is static, so the right edge must not move at all (video frames are lossy and
+            # possibly downscaled, hence a little tolerance for the quantisation). The left edge is the ink of
+            # the first digit, whose shape differs from digit to digit (a '1' starts further right than a
+            # '9'), so it gets a glyph-shape allowance; the slot layout itself is fixed-width.
+            if span_r > 2:
+                problems.append(f"hero: right extent moved by {span_r}px across frames (limit 2)")
+            if span_l > 24:
+                problems.append(f"hero: left extent moved by {span_l}px across frames (limit 24 for glyph shapes)")
+            diffs = [mean_abs_diff(f[5], final[3].resize(f[5].size)) for f in hero_frames]
+            steps = [mean_abs_diff(a[5], b[5]) for a, b in zip(hero_frames, hero_frames[1:])]
+            changed_idx = [i + 1 for i, d in enumerate(steps) if d > 0.3]  # lossy video: ignore encoder noise
+            print(f"  consecutive hero frames that differ: {len(changed_idx)} of {len(hero_frames) - 1}")
+            if len(changed_idx) < 5:
+                problems.append("hero: the number did not visibly animate between frames")
+            else:
+                t_start = hero_frames[changed_idx[0] - 1][1]  # the last still frame before the first change
+                t_end = hero_frames[changed_idx[-1]][1]
+                shown_for = t_end - t_start
+                print(f"  observed: start value still shown from t={hero_frames[0][1]:.2f}s, first change after "
+                      f"t={t_start:.2f}s, last change t={t_end:.2f}s -> rolling for {shown_for:.2f}s (spec 1.5s)")
+                if not 0.9 <= shown_for <= 2.2:
+                    problems.append(f"hero: observed animation duration {shown_for:.2f}s is far from 1.5 s")
+            print(f"  first frame vs final screenshot: mean abs diff {diffs[0]:.2f}; last frame: {diffs[-1]:.2f}")
+            if diffs[0] < 6.0:
+                problems.append("hero: the first frame already shows (almost) the final value, no count-down from all nines")
+            if diffs[-1] > 3.6:  # lossy video: the final value measures ~3 against the lossless screenshot
+                problems.append("hero: the last frame does not show the final value")
+        nodes = dump_nodes() or []
+        descs = [d for _, d, _ in nodes if d.startswith("Available:")]
+        print("  hero content description:", descs)
+        if not descs:
+            problems.append("hero: no 'Available: ... dinars' content description (TalkBack)")
+
+        # 2) Return from the background: no replay, the final value is there immediately.
+        sh("input keyevent 3")  # HOME
+        time.sleep(2)
+        back = burst("hero-return", 8, relaunch=False)
+        shown = [(p, band_info(p)) for p, _ in back]
+        hero_back = [(p, i) for p, i in shown if is_hero_frame(i[0], i[1], i[2])]
+        print(f"  return from background: {len(hero_back)} of {len(back)} frames show the number")
+        if not hero_back:
+            problems.append("hero: no frame after returning from the background shows the number")
+        else:
+            ds = [mean_abs_diff(i[3], final[3]) for _, i in hero_back]
+            print("  difference of each return frame to the final frame:", " ".join(f"{d:.2f}" for d in ds))
+            # The very first frame can still be the window-open transition (the whole window is scaled), so
+            # one frame may differ; a replayed count-down would differ in many frames.
+            if sum(1 for d in ds if d > 1.0) > 1 or ds[-1] > 1.0:
+                problems.append(f"hero: after returning from the background the number differs from the final value ({ds})")
+        replayed = [l for l in adb("logcat", "-d", "-v", "time", "-s", "CashflowHero:I", check=False).splitlines() if "show action" in l]
+        print("  hero show() calls after return from background:", len(replayed))
+        if replayed:
+            problems.append("hero: the animation replayed after returning from the background")
+    except NotFound as e:
+        screenshot("hero-FAILED")
+        print("  NOT FOUND:", e)
+        problems.append(f"hero: {e}")
+    except ImportError:
+        problems.append("hero: Pillow is not installed on the runner")
+    finally:
+        set_animations("0.0")
+    if not app_alive():
+        problems.append("hero: app process is not alive")
+    problems += [f"hero: crash in log:\n{c}" for c in crash_log()]
+    return problems
+
+
 def main():
     problems = []
     try:
         for cfg in CONFIGS:
             problems += run_config(*cfg)
+        problems += run_hero_animation()
     finally:
         restore()
     if problems:

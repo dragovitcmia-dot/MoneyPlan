@@ -158,6 +158,11 @@ jobs:
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
 
+      - name: Install Pillow and ffmpeg (screenshot / screen recording analysis)
+        run: |
+          python3 -m pip install --break-system-packages pillow imageio-ffmpeg \
+            || { sudo apt-get install -y python3-pil ffmpeg && python3 -m pip install --break-system-packages imageio-ffmpeg; }
+
       - name: Install the preview APK, launch it and walk through the app
         uses: reactivecircus/android-emulator-runner@v2
         with:
