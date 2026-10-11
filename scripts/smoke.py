@@ -300,6 +300,12 @@ def band_info(path):
     return round(count / (scale * scale)), left, right, crop
 
 
+def is_hero_frame(count, left, right):
+    """The app shows the number: enough ink, not the bright launcher wallpaper, and centred (not the launcher's
+    left-aligned date text)."""
+    return MIN_INK_PIXELS <= count <= MAX_INK_PIXELS and left is not None and left >= 150 and right <= 1000
+
+
 def extract_video_frames(video, prefix, fps=30):
     """Decodes the screen recording into PNG frames (evenly spaced in time, `fps` per second) with ffmpeg
     from the imageio-ffmpeg wheel. Returns [(path, seconds since the first video frame)]."""
@@ -317,7 +323,7 @@ def extract_video_frames(video, prefix, fps=30):
     return [(p, i / fps) for i, p in enumerate(paths)]
 
 
-def record_launch(prefix, seconds=6):
+def record_launch(prefix, seconds=10):
     """Cold-starts the app while the screen is being recorded; returns the decoded frames."""
     sh("rm -f /sdcard/hero.mp4")
     adb("logcat", "-c", check=False)
@@ -389,10 +395,10 @@ def run_hero_animation():
         for path, t in frames:
             count, left, right, crop = band_info(path)
             infos.append((path, t, count, left, right, crop))
-        hero_frames = [x for x in infos if MIN_INK_PIXELS <= x[2] <= MAX_INK_PIXELS]
+        hero_frames = [x for x in infos if is_hero_frame(x[2], x[3], x[4])]
         print("  frame   t(s)    ink  left right  diff-to-final")
         for path, t, count, left, right, crop in infos:
-            if MIN_INK_PIXELS <= count <= MAX_INK_PIXELS:
+            if is_hero_frame(count, left, right):
                 d = mean_abs_diff(crop, final[3].resize(crop.size))
                 print(f"  {os.path.basename(path)[-7:-4]:>5} {t:6.2f} {count:6d} {left!s:>5} {right!s:>5}  {d:6.2f}")
         if len(hero_frames) < 10:
@@ -442,7 +448,7 @@ def run_hero_animation():
         time.sleep(2)
         back = burst("hero-return", 8, relaunch=False)
         shown = [(p, band_info(p)) for p, _ in back]
-        hero_back = [(p, i) for p, i in shown if MIN_INK_PIXELS <= i[0] <= MAX_INK_PIXELS]
+        hero_back = [(p, i) for p, i in shown if is_hero_frame(i[0], i[1], i[2])]
         print(f"  return from background: {len(hero_back)} of {len(back)} frames show the number")
         if not hero_back:
             problems.append("hero: no frame after returning from the background shows the number")
