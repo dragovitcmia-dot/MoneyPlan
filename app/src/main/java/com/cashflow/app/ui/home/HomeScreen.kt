@@ -82,6 +82,7 @@ import com.cashflow.app.engine.Transaction
 import com.cashflow.app.engine.TxKind
 import com.cashflow.app.ui.Haptics
 import com.cashflow.app.ui.components.AnimatedAmountText
+import com.cashflow.app.ui.components.AvailableCounter
 import com.cashflow.app.ui.components.AppButton
 import com.cashflow.app.ui.components.AppButtonStyle
 import com.cashflow.app.ui.components.AppCard
@@ -98,7 +99,12 @@ import java.time.format.FormatStyle
 private const val WAITING_HEADER_INDEX = 3
 
 @Composable
-fun HomeScreen(viewModel: HomeViewModel, snackbarHost: SnackbarHostState, contentPadding: PaddingValues) {
+fun HomeScreen(
+    viewModel: HomeViewModel,
+    counter: AvailableCounter,
+    snackbarHost: SnackbarHostState,
+    contentPadding: PaddingValues,
+) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { viewModel.refresh() }
 
@@ -106,7 +112,7 @@ fun HomeScreen(viewModel: HomeViewModel, snackbarHost: SnackbarHostState, conten
     if (ui == null) {
         HomeSkeleton(contentPadding) // nothing numeric until the first data emission
     } else {
-        HomeContent(ui, viewModel, snackbarHost, contentPadding)
+        HomeContent(ui, viewModel, counter, snackbarHost, contentPadding)
     }
 }
 
@@ -114,6 +120,7 @@ fun HomeScreen(viewModel: HomeViewModel, snackbarHost: SnackbarHostState, conten
 private fun HomeContent(
     ui: HomeUiState,
     viewModel: HomeViewModel,
+    counter: AvailableCounter,
     snackbarHost: SnackbarHostState,
     padding: PaddingValues,
 ) {
@@ -176,9 +183,8 @@ private fun HomeContent(
     ) {
         item(key = "hero", contentType = "hero") {
             Hero(
-                available = ui.available,
+                counter = counter,
                 waitingCount = ui.toConfirm.size,
-                haptics = haptics,
                 onChipClick = { scope.launch { listState.animateScrollToItem(WAITING_HEADER_INDEX) } },
             )
         }
@@ -242,7 +248,7 @@ private fun HomeContent(
 }
 
 @Composable
-private fun Hero(available: Long, waitingCount: Int, haptics: Haptics, onChipClick: () -> Unit) {
+private fun Hero(counter: AvailableCounter, waitingCount: Int, onChipClick: () -> Unit) {
     val negative = MaterialTheme.cashflow.negative
     val normal = MaterialTheme.colorScheme.onBackground
     Column(
@@ -256,8 +262,7 @@ private fun Hero(available: Long, waitingCount: Int, haptics: Haptics, onChipCli
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         AnimatedAmountText(
-            target = available,
-            haptics = haptics,
+            counter = counter,
             color = { value -> if (value < 0) negative else normal },
         )
         AnimatedVisibility(visible = waitingCount > 0, enter = fadeIn(), exit = fadeOut()) {

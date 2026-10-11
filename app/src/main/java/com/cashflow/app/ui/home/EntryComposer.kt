@@ -1,6 +1,8 @@
 package com.cashflow.app.ui.home
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -33,6 +35,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -51,6 +54,7 @@ import com.cashflow.app.engine.TxKind
 import com.cashflow.app.engine.WalletMode
 import com.cashflow.app.engine.WhatIfResult
 import com.cashflow.app.ui.components.AppButton
+import com.cashflow.app.ui.components.fullBleed
 import com.cashflow.app.ui.components.quantityString
 import com.cashflow.app.ui.rememberHaptics
 import com.cashflow.app.ui.settings.DateField
@@ -111,7 +115,6 @@ fun EntryComposer(
     val colors = MaterialTheme.cashflow
     val isExpense = kind == TxKind.EXPENSE
     val accentFill = if (isExpense) colors.expenseFill else colors.incomeFill
-    val headerColor = if (isExpense) colors.negative else colors.positive
 
     var form by remember { mutableStateOf(EntryFormState.initial(kind, ui.today)) }
     var tried by remember { mutableStateOf(false) }
@@ -167,12 +170,18 @@ fun EntryComposer(
             Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp).padding(bottom = 16.dp).navigationBarsPadding(),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            Text(
-                stringResource(if (isExpense) R.string.button_expense else R.string.button_income).uppercase(),
-                style = MaterialTheme.typography.headlineMedium,
-                fontWeight = FontWeight.Bold,
-                color = headerColor,
-            )
+            // Header: a band in the kind color with white bold text, like the big button on Home.
+            Box(
+                Modifier.fillMaxWidth().clip(MaterialTheme.shapes.large).background(accentFill).padding(vertical = 14.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    stringResource(if (isExpense) R.string.button_expense else R.string.button_income).uppercase(),
+                    style = MaterialTheme.typography.headlineMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = colors.buttonLabel,
+                )
+            }
 
             // Amount display
             val amountMissing = tried && FormProblem.AMOUNT_MISSING in problems
@@ -199,6 +208,7 @@ fun EntryComposer(
             }
 
             Keypad(
+                modifier = Modifier.fullBleed(24.dp),
                 onKey = { key -> form = form.copy(amountText = AmountInput.press(form.amountText, key)); haptics.tick() },
                 onBackspace = { form = form.copy(amountText = AmountInput.backspace(form.amountText)); haptics.tick() },
                 onClear = { form = form.copy(amountText = ""); haptics.confirm() },

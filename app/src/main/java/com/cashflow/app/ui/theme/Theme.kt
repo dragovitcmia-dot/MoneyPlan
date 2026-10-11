@@ -33,9 +33,11 @@ class CashflowColors(
     val expenseFill: Color,
     val incomeFill: Color,
     val buttonLabel: Color,
+    val keypadBackground: Color,
     val keyDigit: Color,
     val keyAction: Color,
-    val keyContour: Color,
+    val keyPressed: Color,
+    val keyText: Color,
 )
 
 private fun ThemePalette.extra() = CashflowColors(
@@ -46,9 +48,11 @@ private fun ThemePalette.extra() = CashflowColors(
     expenseFill = Color(expenseFill),
     incomeFill = Color(incomeFill),
     buttonLabel = Color(buttonLabel),
+    keypadBackground = Color(keypadBackground),
     keyDigit = Color(keyDigit),
     keyAction = Color(keyAction),
-    keyContour = Color(keyContour),
+    keyPressed = Color(keyPressed),
+    keyText = Color(keyText),
 )
 
 private val LocalCashflowColors = staticCompositionLocalOf { Palette.dark.extra() }
@@ -66,7 +70,7 @@ private fun ThemePalette.toDarkScheme(): ColorScheme = darkColorScheme(
     surface = Color(surface), onSurface = Color(text),
     surfaceVariant = Color(elevated), onSurfaceVariant = Color(textSecondary),
     surfaceTint = Color.Transparent,
-    outline = Color(keyContour), outlineVariant = Color(hairline),
+    outline = Color(textSecondary), outlineVariant = Color(hairline),
     error = Color(negativeText), onError = Color(onAccent),
     errorContainer = Color(errorContainer), onErrorContainer = Color(onErrorContainer),
     surfaceContainerLowest = Color(background), surfaceContainerLow = Color(surface),
@@ -84,7 +88,7 @@ private fun ThemePalette.toLightScheme(): ColorScheme = lightColorScheme(
     surface = Color(surface), onSurface = Color(text),
     surfaceVariant = Color(secondaryContainer), onSurfaceVariant = Color(textSecondary),
     surfaceTint = Color.Transparent,
-    outline = Color(keyContour), outlineVariant = Color(hairline),
+    outline = Color(textSecondary), outlineVariant = Color(hairline),
     error = Color(negativeText), onError = Color(onAccent),
     errorContainer = Color(errorContainer), onErrorContainer = Color(onErrorContainer),
     surfaceContainerLowest = Color(surface), surfaceContainerLow = Color(surface),
