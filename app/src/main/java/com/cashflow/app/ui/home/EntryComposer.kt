@@ -1,18 +1,18 @@
 package com.cashflow.app.ui.home
 
 import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
@@ -21,7 +21,6 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -34,57 +33,74 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import com.cashflow.app.R
 import com.cashflow.app.engine.AmountInput
-import com.cashflow.app.engine.EntryPlanner
+import com.cashflow.app.engine.EntryForm
+import com.cashflow.app.engine.EntryFormState
+import com.cashflow.app.engine.FormProblem
+import com.cashflow.app.engine.FormResult
 import com.cashflow.app.engine.Money
 import com.cashflow.app.engine.NewEntry
-import com.cashflow.app.engine.RecurrencePattern
+import com.cashflow.app.engine.PatternChoice
+import com.cashflow.app.engine.Timing
 import com.cashflow.app.engine.TxKind
 import com.cashflow.app.engine.WalletMode
 import com.cashflow.app.engine.WhatIfResult
 import com.cashflow.app.ui.components.AppButton
-import com.cashflow.app.ui.components.AppButtonStyle
-import com.cashflow.app.ui.components.pressScale
+import com.cashflow.app.ui.components.quantityString
 import com.cashflow.app.ui.rememberHaptics
 import com.cashflow.app.ui.settings.DateField
 import com.cashflow.app.ui.theme.cashflow
 import kotlinx.coroutines.launch
 import java.time.DayOfWeek
-import java.time.LocalDate
 import java.time.format.TextStyle
 import java.util.Locale
 
-private enum class Timing(val label: String) { NOW("Now"), PLANNED("Planned"), RECURRING("Recurring") }
+@Composable
+private fun PatternChoice.label() = stringResource(
+    when (this) {
+        PatternChoice.DAILY -> R.string.choice_daily
+        PatternChoice.WEEKLY -> R.string.choice_weekly
+        PatternChoice.EVERY_N -> R.string.choice_every_n
+        PatternChoice.MONTH_FIRST -> R.string.choice_month_first
+        PatternChoice.MONTH_LAST -> R.string.choice_month_last
+        PatternChoice.MONTH_DAY -> R.string.choice_month_day
+    },
+)
 
-private enum class PatternChoice(val label: String) {
-    DAILY("Every day"),
-    WEEKLY("Weekly"),
-    EVERY_N("Every N days"),
-    MONTH_FIRST("First of month"),
-    MONTH_LAST("Last of month"),
-    MONTH_DAY("Day of month"),
-}
+@Composable
+private fun Timing.label() = stringResource(
+    when (this) {
+        Timing.NOW -> R.string.timing_now
+        Timing.LATER -> R.string.timing_later
+        Timing.REPEATS -> R.string.timing_repeats
+    },
+)
 
-private fun choicesFor(kind: TxKind): List<PatternChoice> =
-    if (kind == TxKind.INCOME) {
-        listOf(PatternChoice.DAILY, PatternChoice.WEEKLY, PatternChoice.MONTH_FIRST, PatternChoice.MONTH_LAST, PatternChoice.MONTH_DAY)
-    } else {
-        listOf(PatternChoice.WEEKLY, PatternChoice.EVERY_N, PatternChoice.MONTH_FIRST, PatternChoice.MONTH_LAST, PatternChoice.MONTH_DAY)
-    }
+@Composable
+private fun FormProblem.message() = stringResource(
+    when (this) {
+        FormProblem.AMOUNT_MISSING -> R.string.problem_amount
+        FormProblem.EVERY_N_INVALID -> R.string.problem_every_n
+        FormProblem.DAY_OF_MONTH_INVALID -> R.string.problem_day
+        FormProblem.END_BEFORE_START -> R.string.problem_end
+    },
+)
 
 /**
- * Shared composer for "Add expense" and "Add income". Amount via the in-app keypad, then when it
- * happens: Now (already happened), Planned (one date) or Recurring. Planned and recurring expenses
- * run through the what-if safety check before saving.
+ * Shared composer for EXPENSE and INCOME: amount on the keypad, then when it happens: Now, Later
+ * or Repeats. Every expense is run through the what-if safety check before it is saved.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun EntryComposer(
     kind: TxKind,
     ui: HomeUiState,
-    whatIf: (NewEntry) -> WhatIfResult?,
+    whatIf: suspend (NewEntry) -> WhatIfResult?,
     onSave: suspend (NewEntry) -> Unit,
     onSaved: (String) -> Unit,
     onDismiss: () -> Unit,
@@ -92,71 +108,57 @@ fun EntryComposer(
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val scope = rememberCoroutineScope()
     val haptics = rememberHaptics()
+    val colors = MaterialTheme.cashflow
+    val isExpense = kind == TxKind.EXPENSE
+    val accentFill = if (isExpense) colors.expenseFill else colors.incomeFill
+    val headerColor = if (isExpense) colors.negative else colors.positive
 
-    var amountText by remember { mutableStateOf("") }
-    var description by remember { mutableStateOf("") }
-    var timing by remember { mutableStateOf(Timing.NOW) }
-    var plannedDate by remember { mutableStateOf(ui.today.plusDays(1)) }
-    val choices = remember(kind) { choicesFor(kind) }
-    var choice by remember { mutableStateOf(choices.first()) }
-    var weekday by remember { mutableStateOf(ui.today.dayOfWeek) }
-    var everyN by remember { mutableStateOf("7") }
-    var dayOfMonth by remember { mutableStateOf(ui.today.dayOfMonth.toString()) }
-    val defaultStart = if (kind == TxKind.INCOME) ui.newSourceStart else ui.today
-    var startDate by remember { mutableStateOf(defaultStart) }
-    var hasEnd by remember { mutableStateOf(false) }
-    var endDate by remember { mutableStateOf(defaultStart.plusMonths(1)) }
+    var form by remember { mutableStateOf(EntryFormState.initial(kind, ui.today)) }
+    var tried by remember { mutableStateOf(false) }
     var saving by remember { mutableStateOf(false) }
     var warning by remember { mutableStateOf<Pair<NewEntry, WhatIfResult>?>(null) }
 
-    val amount = AmountInput.toMillimes(amountText)
-    val nValue = everyN.toIntOrNull()?.takeIf { it >= 1 }
-    val dayValue = dayOfMonth.toIntOrNull()?.takeIf { it in 1..31 }
+    val defaultText = stringResource(if (isExpense) R.string.item_expense else R.string.item_income)
+    val result = EntryForm.build(form, defaultText, ui.balanceStartDate)
+    val problems = (result as? FormResult.Invalid)?.problems.orEmpty()
+    val choices = remember(kind) { EntryForm.choicesFor(kind) }
 
-    val pattern: RecurrencePattern? = when (choice) {
-        PatternChoice.DAILY -> RecurrencePattern.Daily
-        PatternChoice.WEEKLY -> RecurrencePattern.Weekly(weekday)
-        PatternChoice.EVERY_N -> nValue?.let { RecurrencePattern.EveryNDays(it, startDate) }
-        PatternChoice.MONTH_FIRST -> RecurrencePattern.MonthFirst
-        PatternChoice.MONTH_LAST -> RecurrencePattern.MonthLast
-        PatternChoice.MONTH_DAY -> dayValue?.let { RecurrencePattern.DayOfMonth(it) }
-    }
-
-    val entry: NewEntry? = when (timing) {
-        Timing.NOW -> NewEntry.Now(kind, amount, description)
-        Timing.PLANNED -> NewEntry.Planned(kind, amount, description, plannedDate)
-        Timing.RECURRING -> pattern?.let { NewEntry.Recurring(kind, amount, description, it, startDate, endDate.takeIf { hasEnd }) }
-    }
-    val problem = entry?.let { EntryPlanner.validate(it) } ?: "Complete the schedule."
-    val canSave = entry != null && problem == null && !saving
+    val savedMessage = stringResource(
+        when {
+            form.timing == Timing.REPEATS && isExpense -> R.string.saved_repeating_expense
+            form.timing == Timing.REPEATS -> R.string.saved_repeating_income
+            isExpense -> R.string.saved_expense
+            else -> R.string.saved_income
+        },
+    )
 
     fun dismiss() {
         scope.launch { sheetState.hide() }.invokeOnCompletion { onDismiss() }
     }
 
-    fun commit(e: NewEntry) {
+    fun commit(entry: NewEntry) {
         scope.launch {
             saving = true
-            onSave(e)
+            onSave(entry)
             haptics.confirm()
-            onSaved(
-                when (e) {
-                    is NewEntry.Recurring -> if (e.kind == TxKind.EXPENSE) "Recurring expense added" else "Income source added"
-                    else -> if (e.kind == TxKind.EXPENSE) "Expense saved" else "Income saved"
-                },
-            )
+            onSaved(savedMessage)
             dismiss()
         }
     }
 
     fun onSaveClicked() {
-        val e = entry ?: return
-        // Safety check: planned and recurring expenses are tested against the next 180 days.
-        val check = if (e.kind == TxKind.EXPENSE && e !is NewEntry.Now) whatIf(e) else null
-        if (check != null && check.wouldCauseNegative) {
-            warning = e to check
-        } else {
-            commit(e)
+        val entry = (result as? FormResult.Valid)?.entry
+        if (entry == null) {
+            tried = true // show exactly which fields need attention
+            haptics.reject()
+            return
+        }
+        scope.launch {
+            saving = true
+            // Safety check: every expense is tested against the next 180 days before it is saved.
+            val check = if (entry.kind == TxKind.EXPENSE) whatIf(entry) else null
+            saving = false
+            if (check != null && check.wouldCauseNegative) warning = entry to check else commit(entry)
         }
     }
 
@@ -165,33 +167,48 @@ fun EntryComposer(
             Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp).padding(bottom = 16.dp).navigationBarsPadding(),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            Text(if (kind == TxKind.EXPENSE) "Add expense" else "Add income", style = MaterialTheme.typography.titleLarge)
+            Text(
+                stringResource(if (isExpense) R.string.button_expense else R.string.button_income).uppercase(),
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.Bold,
+                color = headerColor,
+            )
 
             // Amount display
+            val amountMissing = tried && FormProblem.AMOUNT_MISSING in problems
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.Bottom) {
                 Text(
-                    AmountInput.display(amountText),
+                    AmountInput.display(form.amountText),
                     style = MaterialTheme.typography.displayLarge,
-                    color = if (amountText.isEmpty()) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
+                    color = when {
+                        amountMissing -> colors.negative
+                        form.amountText.isEmpty() -> MaterialTheme.colorScheme.onSurfaceVariant
+                        else -> MaterialTheme.colorScheme.onSurface
+                    },
+                    maxLines = 1,
                 )
                 Text(
-                    " TND",
+                    " " + Money.CURRENCY,
                     style = MaterialTheme.typography.titleLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(bottom = 10.dp),
                 )
             }
+            if (amountMissing) {
+                Text(FormProblem.AMOUNT_MISSING.message(), style = MaterialTheme.typography.bodyMedium, color = colors.negative)
+            }
 
             Keypad(
-                onKey = { amountText = AmountInput.press(amountText, it); haptics.tick() },
-                onBackspace = { amountText = AmountInput.backspace(amountText); haptics.tick() },
+                onKey = { key -> form = form.copy(amountText = AmountInput.press(form.amountText, key)); haptics.tick() },
+                onBackspace = { form = form.copy(amountText = AmountInput.backspace(form.amountText)); haptics.tick() },
+                onClear = { form = form.copy(amountText = ""); haptics.confirm() },
             )
 
             OutlinedTextField(
-                value = description,
-                onValueChange = { description = it },
-                label = { Text("Description") },
-                placeholder = { Text(EntryPlanner.defaultDescription(kind)) },
+                value = form.description,
+                onValueChange = { form = form.copy(description = it) },
+                label = { Text(stringResource(R.string.description_label)) },
+                placeholder = { Text(defaultText) },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
             )
@@ -199,150 +216,139 @@ fun EntryComposer(
             SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
                 Timing.entries.forEachIndexed { index, t ->
                     SegmentedButton(
-                        selected = timing == t,
-                        onClick = { timing = t; haptics.tick() },
+                        selected = form.timing == t,
+                        onClick = { form = form.copy(timing = t); haptics.tick() },
                         shape = SegmentedButtonDefaults.itemShape(index, Timing.entries.size),
-                    ) { Text(t.label) }
+                        modifier = Modifier.heightIn(min = 56.dp),
+                    ) { Text(t.label()) }
                 }
             }
 
-            when (timing) {
+            when (form.timing) {
                 Timing.NOW -> Text(
-                    if (kind == TxKind.EXPENSE) "Already spent: counts today." else "Already received: counts today.",
-                    style = MaterialTheme.typography.bodySmall,
+                    stringResource(if (isExpense) R.string.now_hint_expense else R.string.now_hint_income),
+                    style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                Timing.PLANNED -> {
-                    DateField("Date", plannedDate) { plannedDate = it }
-                    if (!plannedDate.isAfter(ui.today)) {
+                Timing.LATER -> {
+                    DateField(stringResource(R.string.later_date_label), form.laterDate) { form = form.copy(laterDate = it) }
+                    if (!form.laterDate.isAfter(ui.today)) {
                         Text(
-                            "Today or earlier: it will show up in To confirm.",
-                            style = MaterialTheme.typography.bodySmall,
+                            stringResource(R.string.later_past_hint),
+                            style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
                 }
-                Timing.RECURRING -> {
+                Timing.REPEATS -> {
                     Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         for (c in choices) {
-                            FilterChip(selected = choice == c, onClick = { choice = c; haptics.tick() }, label = { Text(c.label) })
+                            FilterChip(
+                                selected = form.choice == c,
+                                onClick = { form = form.copy(choice = c); haptics.tick() },
+                                label = { Text(c.label()) },
+                                modifier = Modifier.heightIn(min = 56.dp),
+                            )
                         }
                     }
-                    when (choice) {
+                    when (form.choice) {
                         PatternChoice.WEEKLY -> Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             for (dow in DayOfWeek.entries) {
                                 FilterChip(
-                                    selected = weekday == dow,
-                                    onClick = { weekday = dow },
+                                    selected = form.weekday == dow,
+                                    onClick = { form = form.copy(weekday = dow) },
                                     label = { Text(dow.getDisplayName(TextStyle.SHORT, Locale.getDefault())) },
+                                    modifier = Modifier.heightIn(min = 56.dp),
                                 )
                             }
                         }
                         PatternChoice.EVERY_N -> OutlinedTextField(
-                            value = everyN,
-                            onValueChange = { everyN = it.filter(Char::isDigit).take(3) },
-                            label = { Text("Every N days") },
+                            value = form.everyN,
+                            onValueChange = { form = form.copy(everyN = it.filter(Char::isDigit).take(3)) },
+                            label = { Text(stringResource(R.string.every_n_label)) },
                             singleLine = true,
-                            isError = nValue == null,
+                            isError = FormProblem.EVERY_N_INVALID in problems,
+                            supportingText = { if (FormProblem.EVERY_N_INVALID in problems) Text(FormProblem.EVERY_N_INVALID.message()) },
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                             modifier = Modifier.fillMaxWidth(),
                         )
                         PatternChoice.MONTH_DAY -> OutlinedTextField(
-                            value = dayOfMonth,
-                            onValueChange = { dayOfMonth = it.filter(Char::isDigit).take(2) },
-                            label = { Text("Day of month (1-31)") },
-                            supportingText = { Text("Shorter months use their last day.") },
+                            value = form.dayOfMonth,
+                            onValueChange = { form = form.copy(dayOfMonth = it.filter(Char::isDigit).take(2)) },
+                            label = { Text(stringResource(R.string.day_of_month_label)) },
+                            supportingText = {
+                                Text(
+                                    if (FormProblem.DAY_OF_MONTH_INVALID in problems) {
+                                        FormProblem.DAY_OF_MONTH_INVALID.message()
+                                    } else {
+                                        stringResource(R.string.day_of_month_hint)
+                                    },
+                                )
+                            },
                             singleLine = true,
-                            isError = dayValue == null,
+                            isError = FormProblem.DAY_OF_MONTH_INVALID in problems,
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                             modifier = Modifier.fillMaxWidth(),
                         )
                         else -> Unit
                     }
-                    DateField("Starts", startDate) { startDate = it }
+                    DateField(stringResource(R.string.starts_label), form.startDate) { form = form.copy(startDate = it) }
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                        Text("End date", Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
-                        Switch(checked = hasEnd, onCheckedChange = { hasEnd = it })
+                        Text(stringResource(R.string.end_date_switch), Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
+                        Switch(checked = form.hasEnd, onCheckedChange = { form = form.copy(hasEnd = it) })
                     }
-                    if (hasEnd) DateField("Ends", endDate) { endDate = it }
+                    if (form.hasEnd) {
+                        DateField(stringResource(R.string.ends_label), form.endDate) { form = form.copy(endDate = it) }
+                        if (FormProblem.END_BEFORE_START in problems) {
+                            Text(FormProblem.END_BEFORE_START.message(), style = MaterialTheme.typography.bodyMedium, color = colors.negative)
+                        }
+                    }
                     if (kind == TxKind.INCOME && ui.walletMode == WalletMode.STATIC) {
                         Text(
-                            "Wallet mode is Static, so income sources are ignored until you switch back to Dynamic.",
-                            style = MaterialTheme.typography.bodySmall,
+                            stringResource(R.string.static_hint),
+                            style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
                 }
             }
 
-            if (amount > 0 && problem != null && entry != null) {
-                Text(problem, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.cashflow.negative)
-            }
-
+            // The confirm key uses the same color as the header and the big button on Home.
             AppButton(
-                text = if (saving) "Saving…" else "Save",
+                text = stringResource(if (saving) R.string.saving else R.string.action_save),
                 onClick = ::onSaveClicked,
-                enabled = canSave,
-                modifier = Modifier.fillMaxWidth().height(56.dp),
+                enabled = !saving,
+                modifier = Modifier.fillMaxWidth().heightIn(min = 64.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = accentFill, contentColor = colors.buttonLabel),
             )
         }
     }
 
-    warning?.let { (pendingEntry, result) ->
+    warning?.let { (pendingEntry, check) ->
         AlertDialog(
             onDismissRequest = { warning = null; haptics.reject() },
-            title = { Text("This would put you below zero") },
-            text = { Text(warningText(result)) },
+            title = { Text(stringResource(R.string.warning_title)) },
+            text = { Column(Modifier.verticalScroll(rememberScrollState())) { Text(warningText(check)) } },
             confirmButton = {
-                TextButton(onClick = { warning = null; commit(pendingEntry) }) { Text("Save anyway") }
+                TextButton(onClick = { warning = null; commit(pendingEntry) }) { Text(stringResource(R.string.warning_add_anyway)) }
             },
             dismissButton = {
-                TextButton(onClick = { warning = null; haptics.reject() }) { Text("Cancel") }
+                TextButton(onClick = { warning = null; haptics.reject() }) { Text(stringResource(R.string.action_cancel)) }
             },
         )
     }
 }
 
-private fun warningText(r: WhatIfResult): String = buildString {
-    r.firstNegativeDate?.let { append("Your balance would be negative from $it.") }
-    r.lowestBalanceDate?.let { append("\nLowest point: ${Money.formatDisplay(r.lowestBalance)} on $it.") }
+@Composable
+private fun warningText(r: WhatIfResult): String {
+    val unknownItem = stringResource(R.string.item_expense)
+    val lines = ArrayList<String>()
+    r.firstNegativeDate?.let { lines += stringResource(R.string.warning_negative_from, it.toString()) }
+    r.lowestBalanceDate?.let { lines += stringResource(R.string.warning_lowest, Money.formatDisplay(r.lowestBalance), it.toString()) }
     r.firstNegativePlannedExpense?.let {
-        append("\nFirst planned expense you couldn't cover: ${it.description.ifBlank { "Expense" }} on ${it.date}.")
+        lines += stringResource(R.string.warning_first_expense, it.description.ifBlank { unknownItem }, it.date.toString())
     }
     val days = r.newNegativeDays.size
-    append("\n$days day${if (days == 1) "" else "s"} would be newly negative (or worse) in the next 180 days.")
-}
-
-@Composable
-private fun Keypad(onKey: (Char) -> Unit, onBackspace: () -> Unit) {
-    val rows = listOf("123", "456", "789", ".0<")
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        for (row in rows) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                for (key in row) {
-                    KeypadKey(
-                        label = if (key == '<') "⌫" else key.toString(),
-                        onClick = { if (key == '<') onBackspace() else onKey(key) },
-                        modifier = Modifier.weight(1f),
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun KeypadKey(label: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    val source = remember { MutableInteractionSource() }
-    Surface(
-        onClick = onClick,
-        modifier = modifier.height(52.dp).pressScale(source),
-        shape = MaterialTheme.shapes.medium,
-        color = MaterialTheme.cashflow.elevated,
-        interactionSource = source,
-    ) {
-        Row(Modifier.fillMaxWidth().height(52.dp), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
-            Text(label, style = MaterialTheme.typography.titleLarge)
-        }
-    }
+    lines += quantityString(R.plurals.warning_days, days, days)
+    return lines.joinToString("\n")
 }

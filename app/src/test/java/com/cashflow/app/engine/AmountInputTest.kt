@@ -19,7 +19,7 @@ class AmountInputTest {
         assertEquals("12.5", type('1', '2', '.', '.', '5'))
     }
 
-    @Test fun at_most_three_decimals() = assertEquals("1.234", type('1', '.', '2', '3', '4', '5', '6'))
+    @Test fun at_most_two_decimals() = assertEquals("1.23", type('1', '.', '2', '3', '4', '5', '6'))
 
     @Test fun at_most_nine_integer_digits() = assertEquals("123456789", type(*"1234567890".toCharArray()))
 

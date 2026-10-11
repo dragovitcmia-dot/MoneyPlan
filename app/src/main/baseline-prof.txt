@@ -1,0 +1,3 @@
+# App code is hot at startup and while scrolling: precompile it on first install.
+HSPLcom/cashflow/app/**->**(**)**
+Lcom/cashflow/app/**;

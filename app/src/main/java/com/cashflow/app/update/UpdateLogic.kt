@@ -15,20 +15,37 @@ sealed interface UpdateState {
     data object Idle : UpdateState
     data object Checking : UpdateState
     data object UpToDate : UpdateState
-    data class UpdateAvailable(val version: String) : UpdateState
 
     /** [progress] is 0..1, or null when the server did not report a size. */
-    data class Downloading(val progress: Float?) : UpdateState
-    data object ReadyToInstall : UpdateState
+    data class Downloading(val version: String, val progress: Float?) : UpdateState
 
-    /** The user has to allow "install unknown apps" for this app first. */
-    data object NeedsInstallPermission : UpdateState
+    /** Shown before the system installer takes over: the app will close while it updates. */
+    data class Installing(val version: String) : UpdateState
+
+    /** An update exists, but the user has to allow "install unknown apps" for this app first. */
+    data class NeedsInstallPermission(val version: String) : UpdateState
+
+    /** The user was sent to the system setting; the update continues when they come back. */
+    data class WaitingForPermission(val version: String) : UpdateState
     data class Error(val message: String) : UpdateState
 }
 
 /** Pure update logic (no Android): parsing, version comparison, checksum handling. */
 object UpdateLogic {
     const val VERSION_URL = "https://github.com/Dragovitcmia-dot/MoneyPlan/releases/download/latest-debug/version.json"
+
+    /** What one tap on "Check for updates" should do next, given the published and installed builds. */
+    sealed interface Decision {
+        data object UpToDate : Decision
+        data class NeedsPermission(val info: VersionInfo) : Decision
+        data class Download(val info: VersionInfo) : Decision
+    }
+
+    fun decide(remote: VersionInfo, installedVersionCode: Long, canInstallPackages: Boolean): Decision = when {
+        !isNewer(remote.versionCode, installedVersionCode) -> Decision.UpToDate
+        !canInstallPackages -> Decision.NeedsPermission(remote)
+        else -> Decision.Download(remote)
+    }
 
     private val SHA256 = Regex("^[0-9a-fA-F]{64}$")
 

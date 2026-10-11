@@ -21,9 +21,19 @@ object Money {
         return sign + wholeText + fracText + if (withCurrency) " $CURRENCY" else ""
     }
 
-    /** What the UI shows: grouped thousands and a proper minus sign ("−1 250 TND"). */
+    /** Rounds to the nearest 0.01 TND, halves away from zero. Display only; stored values stay exact. */
+    fun roundToCents(millimes: Long): Long {
+        val abs = if (millimes < 0) -millimes else millimes
+        val rounded = (abs + 5) / 10 * 10
+        return if (millimes < 0) -rounded else rounded
+    }
+
+    /** What the UI shows: at most 2 decimals, grouped thousands and a proper minus sign ("−1 250 TND"). */
     fun formatDisplay(millimes: Long, withCurrency: Boolean = true): String =
-        format(millimes, withCurrency, grouped = true).replace('-', MINUS)
+        format(roundToCents(millimes), withCurrency, grouped = true).replace('-', MINUS)
+
+    /** Amount text for an input field: at most 2 decimals, no grouping, no currency. */
+    fun formatInput(millimes: Long): String = format(roundToCents(millimes), withCurrency = false)
 
     /** "+30 TND" for income, "−75 TND" for expenses. */
     fun formatSigned(kind: TxKind, millimes: Long): String =
@@ -36,9 +46,10 @@ object Money {
     private val AMOUNT = Regex("""^(-?)(\d+(?:\.\d{0,3})?|\.\d{1,3})$""")
 
     /** Parses user input ("12", "12.5", "12,5", "-3.250") to millimes; null if invalid. */
-    fun parse(text: String): Long? {
+    fun parse(text: String, maxDecimals: Int = 3): Long? {
         val cleaned = text.replace(Regex("[\\s\u00A0\u202F]"), "").replace(MINUS, '-').replace(',', '.')
         val match = AMOUNT.matchEntire(cleaned) ?: return null
+        if ((match.groupValues[2].substringAfter('.', "")).length > maxDecimals) return null
         val negative = match.groupValues[1].isNotEmpty()
         val parts = match.groupValues[2].split('.')
         val whole = if (parts[0].isEmpty()) 0L else parts[0].toLongOrNull() ?: return null

@@ -3,6 +3,8 @@ package com.cashflow.app.ui.theme
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ColorScheme
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.LocalMinimumInteractiveComponentSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Shapes
 import androidx.compose.material3.Typography
@@ -16,107 +18,78 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-// ---- Palette (dark-first) ------------------------------------------------------------------
-private val DarkBackground = Color(0xFF0B0D10)
-private val DarkSurface = Color(0xFF14171C)
-private val DarkElevated = Color(0xFF1B1F26)
-private val DarkHairline = Color(0xFF262B33)
-private val DarkText = Color(0xFFF2F4F7)
-private val DarkTextSecondary = Color(0xFF8A93A0)
-
-private val Mint = Color(0xFF3DDC97)
-private val MintOnLight = Color(0xFF0B8A5A) // darkened for contrast on white
-val Negative = Color(0xFFFF5C6C)
-
-private val LightBackground = Color(0xFFF6F7F9)
-private val LightSurface = Color(0xFFFFFFFF)
-private val LightHairline = Color(0xFFE3E6EB)
-private val LightText = Color(0xFF14171C)
-private val LightTextSecondary = Color(0xFF5B6573)
-
-/** Colors the Material scheme has no slot for. */
+/** Colors the Material scheme has no slot for. All values come from [Palette]. */
 @Immutable
 class CashflowColors(
     val hairline: Color,
     val elevated: Color,
+    /** Red used for text on the app's backgrounds (darker in the light theme to stay readable). */
     val negative: Color,
     val positive: Color,
+    val expenseFill: Color,
+    val incomeFill: Color,
+    val buttonLabel: Color,
+    val keyDigit: Color,
+    val keyAction: Color,
+    val keyContour: Color,
 )
 
-private val LocalCashflowColors = staticCompositionLocalOf {
-    CashflowColors(DarkHairline, DarkElevated, Negative, Mint)
-}
+private fun ThemePalette.extra() = CashflowColors(
+    hairline = Color(hairline),
+    elevated = Color(elevated),
+    negative = Color(negativeText),
+    positive = Color(accent),
+    expenseFill = Color(expenseFill),
+    incomeFill = Color(incomeFill),
+    buttonLabel = Color(buttonLabel),
+    keyDigit = Color(keyDigit),
+    keyAction = Color(keyAction),
+    keyContour = Color(keyContour),
+)
+
+private val LocalCashflowColors = staticCompositionLocalOf { Palette.dark.extra() }
 
 val MaterialTheme.cashflow: CashflowColors
     @Composable @ReadOnlyComposable get() = LocalCashflowColors.current
 
-private val DarkColors: ColorScheme = darkColorScheme(
-    primary = Mint,
-    onPrimary = DarkBackground,
-    primaryContainer = Color(0xFF14382A),
-    onPrimaryContainer = Mint,
-    secondary = DarkTextSecondary,
-    onSecondary = DarkBackground,
-    secondaryContainer = DarkElevated,
-    onSecondaryContainer = DarkText,
-    tertiary = Mint,
-    background = DarkBackground,
-    onBackground = DarkText,
-    surface = DarkSurface,
-    onSurface = DarkText,
-    surfaceVariant = DarkElevated,
-    onSurfaceVariant = DarkTextSecondary,
+private fun ThemePalette.toDarkScheme(): ColorScheme = darkColorScheme(
+    primary = Color(accent), onPrimary = Color(onAccent),
+    primaryContainer = Color(primaryContainer), onPrimaryContainer = Color(onPrimaryContainer),
+    secondary = Color(textSecondary), onSecondary = Color(onAccent),
+    secondaryContainer = Color(secondaryContainer), onSecondaryContainer = Color(onSecondaryContainer),
+    tertiary = Color(accent),
+    background = Color(background), onBackground = Color(text),
+    surface = Color(surface), onSurface = Color(text),
+    surfaceVariant = Color(elevated), onSurfaceVariant = Color(textSecondary),
     surfaceTint = Color.Transparent,
-    outline = Color(0xFF3A414B),
-    outlineVariant = DarkHairline,
-    error = Negative,
-    onError = DarkBackground,
-    errorContainer = Color(0xFF3A1A1F),
-    onErrorContainer = Negative,
-    surfaceContainerLowest = DarkBackground,
-    surfaceContainerLow = DarkSurface,
-    surfaceContainer = DarkSurface,
-    surfaceContainerHigh = DarkElevated,
-    surfaceContainerHighest = DarkElevated,
-    inverseSurface = DarkText,
-    inverseOnSurface = DarkBackground,
-    inversePrimary = MintOnLight,
+    outline = Color(keyContour), outlineVariant = Color(hairline),
+    error = Color(negativeText), onError = Color(onAccent),
+    errorContainer = Color(errorContainer), onErrorContainer = Color(onErrorContainer),
+    surfaceContainerLowest = Color(background), surfaceContainerLow = Color(surface),
+    surfaceContainer = Color(surface), surfaceContainerHigh = Color(elevated), surfaceContainerHighest = Color(elevated),
+    inverseSurface = Color(inverseSurface), inverseOnSurface = Color(inverseOnSurface), inversePrimary = Color(inverseAccent),
 )
 
-private val LightColors: ColorScheme = lightColorScheme(
-    primary = MintOnLight,
-    onPrimary = Color.White,
-    primaryContainer = Color(0xFFD7F5E6),
-    onPrimaryContainer = Color(0xFF064D33),
-    secondary = LightTextSecondary,
-    onSecondary = Color.White,
-    secondaryContainer = Color(0xFFEDEFF3),
-    onSecondaryContainer = LightText,
-    tertiary = MintOnLight,
-    background = LightBackground,
-    onBackground = LightText,
-    surface = LightSurface,
-    onSurface = LightText,
-    surfaceVariant = Color(0xFFEDEFF3),
-    onSurfaceVariant = LightTextSecondary,
+private fun ThemePalette.toLightScheme(): ColorScheme = lightColorScheme(
+    primary = Color(accent), onPrimary = Color(onAccent),
+    primaryContainer = Color(primaryContainer), onPrimaryContainer = Color(onPrimaryContainer),
+    secondary = Color(textSecondary), onSecondary = Color(onAccent),
+    secondaryContainer = Color(secondaryContainer), onSecondaryContainer = Color(onSecondaryContainer),
+    tertiary = Color(accent),
+    background = Color(background), onBackground = Color(text),
+    surface = Color(surface), onSurface = Color(text),
+    surfaceVariant = Color(secondaryContainer), onSurfaceVariant = Color(textSecondary),
     surfaceTint = Color.Transparent,
-    outline = Color(0xFFB4BBC6),
-    outlineVariant = LightHairline,
-    error = Negative,
-    onError = Color.White,
-    errorContainer = Color(0xFFFFDDE0),
-    onErrorContainer = Color(0xFF7A0F1B),
-    surfaceContainerLowest = LightSurface,
-    surfaceContainerLow = LightSurface,
-    surfaceContainer = LightSurface,
-    surfaceContainerHigh = LightSurface,
-    surfaceContainerHighest = Color(0xFFEDEFF3),
-    inverseSurface = DarkSurface,
-    inverseOnSurface = DarkText,
-    inversePrimary = Mint,
+    outline = Color(keyContour), outlineVariant = Color(hairline),
+    error = Color(negativeText), onError = Color(onAccent),
+    errorContainer = Color(errorContainer), onErrorContainer = Color(onErrorContainer),
+    surfaceContainerLowest = Color(surface), surfaceContainerLow = Color(surface),
+    surfaceContainer = Color(surface), surfaceContainerHigh = Color(surface), surfaceContainerHighest = Color(secondaryContainer),
+    inverseSurface = Color(inverseSurface), inverseOnSurface = Color(inverseOnSurface), inversePrimary = Color(inverseAccent),
 )
 
 private val CashflowShapes = Shapes(
@@ -127,41 +100,45 @@ private val CashflowShapes = Shapes(
     extraLarge = RoundedCornerShape(28.dp),
 )
 
-/** System font everywhere, with tabular figures so amounts line up and don't jitter while counting. */
-private fun TextStyle.tabular() = copy(fontFeatureSettings = "tnum")
+/** System font; tabular figures so amounts line up; nothing smaller than 16sp. */
+private fun style(size: Int, weight: FontWeight = FontWeight.Normal, letterSpacing: TextUnit = 0.sp) = TextStyle(
+    fontSize = size.sp,
+    lineHeight = (size * 1.3f).sp,
+    fontWeight = weight,
+    letterSpacing = letterSpacing,
+    fontFeatureSettings = "tnum",
+)
 
-private val CashflowTypography: Typography = Typography().let { base ->
-    Typography(
-        displayLarge = base.displayLarge.copy(fontSize = 56.sp, lineHeight = 64.sp, fontWeight = FontWeight.SemiBold, letterSpacing = (-1).sp).tabular(),
-        displayMedium = base.displayMedium.copy(fontWeight = FontWeight.SemiBold).tabular(),
-        displaySmall = base.displaySmall.tabular(),
-        headlineLarge = base.headlineLarge.copy(fontWeight = FontWeight.SemiBold).tabular(),
-        headlineMedium = base.headlineMedium.copy(fontWeight = FontWeight.SemiBold).tabular(),
-        headlineSmall = base.headlineSmall.copy(fontWeight = FontWeight.SemiBold).tabular(),
-        titleLarge = base.titleLarge.copy(fontWeight = FontWeight.SemiBold).tabular(),
-        titleMedium = base.titleMedium.copy(fontWeight = FontWeight.SemiBold).tabular(),
-        titleSmall = base.titleSmall.tabular(),
-        bodyLarge = base.bodyLarge.tabular(),
-        bodyMedium = base.bodyMedium.tabular(),
-        bodySmall = base.bodySmall.tabular(),
-        labelLarge = base.labelLarge.tabular(),
-        labelMedium = base.labelMedium.tabular(),
-        labelSmall = base.labelSmall.tabular(),
-    )
-}
+private val CashflowTypography = Typography(
+    displayLarge = style(56, FontWeight.SemiBold, (-1).sp),
+    displayMedium = style(44, FontWeight.SemiBold),
+    displaySmall = style(36, FontWeight.SemiBold),
+    headlineLarge = style(32, FontWeight.SemiBold),
+    headlineMedium = style(28, FontWeight.SemiBold),
+    headlineSmall = style(24, FontWeight.SemiBold),
+    titleLarge = style(22, FontWeight.SemiBold),
+    titleMedium = style(18, FontWeight.SemiBold),
+    titleSmall = style(16, FontWeight.Medium),
+    bodyLarge = style(18),
+    bodyMedium = style(16),
+    bodySmall = style(16),
+    labelLarge = style(16, FontWeight.Medium),
+    labelMedium = style(16, FontWeight.Medium),
+    labelSmall = style(16, FontWeight.Medium),
+)
 
-/** No dynamic color: the palette above is the brand. Follows the system light/dark setting. */
+/** No dynamic color: the palette is the brand. Follows the system light/dark setting. */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CashflowTheme(content: @Composable () -> Unit) {
     val dark = isSystemInDarkTheme()
-    val extra = if (dark) {
-        CashflowColors(DarkHairline, DarkElevated, Negative, Mint)
-    } else {
-        CashflowColors(LightHairline, LightSurface, Negative, MintOnLight)
-    }
-    CompositionLocalProvider(LocalCashflowColors provides extra) {
+    val palette = if (dark) Palette.dark else Palette.light
+    CompositionLocalProvider(
+        LocalCashflowColors provides palette.extra(),
+        LocalMinimumInteractiveComponentSize provides 56.dp, // touch targets of at least 56dp
+    ) {
         MaterialTheme(
-            colorScheme = if (dark) DarkColors else LightColors,
+            colorScheme = if (dark) palette.toDarkScheme() else palette.toLightScheme(),
             typography = CashflowTypography,
             shapes = CashflowShapes,
             content = content,

@@ -1,4 +1,147 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Cashflow</string>
+
+    <!-- Navigation -->
+    <string name="nav_home">Home</string>
+    <string name="nav_settings">Settings</string>
+
+    <!-- Home -->
+    <string name="available_label">Available</string>
+    <plurals name="waiting_chip">
+        <item quantity="one">%d waiting for you</item>
+        <item quantity="other">%d waiting for you</item>
+    </plurals>
+    <string name="next_expense_label">Next expense</string>
+    <string name="no_upcoming_expenses">No expenses coming up</string>
+    <string name="today">Today</string>
+    <string name="tomorrow">Tomorrow</string>
+    <plurals name="in_days">
+        <item quantity="one">in %d day</item>
+        <item quantity="other">in %d days</item>
+    </plurals>
+    <string name="button_expense">EXPENSE</string>
+    <string name="button_income">INCOME</string>
+    <string name="waiting_header">Waiting for you</string>
+    <string name="caught_up">All caught up</string>
+    <string name="hint_skip">← Skip</string>
+    <string name="hint_confirm">Confirm →</string>
+    <string name="action_confirm">Confirm</string>
+    <string name="action_skip">Skip</string>
+    <string name="action_cancel">Cancel</string>
+    <string name="action_ok">OK</string>
+    <string name="action_save">Save</string>
+    <string name="action_undo">Undo</string>
+    <string name="confirmed_item">Confirmed %1$s</string>
+    <string name="skipped_item">Skipped %1$s</string>
+    <string name="item_expense">Expense</string>
+    <string name="item_income">Income</string>
+    <string name="edit_confirm_title">Confirm %1$s</string>
+    <string name="edit_confirm_hint">Change the amount if it was different.</string>
+    <string name="amount_label">Amount (TND)</string>
+    <string name="amount_error">Type an amount above zero</string>
+    <string name="amount_error_decimals">Type an amount with up to 2 decimals</string>
+
+    <!-- Add expense / income -->
+    <string name="description_label">What was it for? (optional)</string>
+    <string name="timing_now">Now</string>
+    <string name="timing_later">Later</string>
+    <string name="timing_repeats">Repeats</string>
+    <string name="now_hint_expense">You already spent this. It counts today.</string>
+    <string name="now_hint_income">You already received this. It counts today.</string>
+    <string name="later_date_label">Date</string>
+    <string name="later_past_hint">Today or earlier: it will show up under “Waiting for you”.</string>
+    <string name="choice_daily">Every day</string>
+    <string name="choice_weekly">Every week</string>
+    <string name="choice_every_n">Every few days</string>
+    <string name="choice_month_first">First day of the month</string>
+    <string name="choice_month_last">Last day of the month</string>
+    <string name="choice_month_day">A day of the month</string>
+    <string name="every_n_label">Every how many days?</string>
+    <string name="day_of_month_label">Day of the month (1 to 31)</string>
+    <string name="day_of_month_hint">Short months use their last day.</string>
+    <string name="starts_label">Starts</string>
+    <string name="ends_label">Ends</string>
+    <string name="end_date_switch">Stop on a date</string>
+    <string name="static_hint">“Add my income automatically” is off in Settings, so regular income is ignored until you switch it on.</string>
+    <string name="problem_amount">Type an amount first.</string>
+    <string name="problem_every_n">Type how many days, for example 7.</string>
+    <string name="problem_day">Type a day from 1 to 31.</string>
+    <string name="problem_end">The end date must not be before the start date.</string>
+    <string name="saving">Saving…</string>
+    <string name="saved_expense">Expense saved</string>
+    <string name="saved_income">Income saved</string>
+    <string name="saved_repeating_expense">Repeating expense added</string>
+    <string name="saved_repeating_income">Regular income added</string>
+    <string name="backspace_description">Delete the last digit</string>
+    <string name="warning_title">This would take your money below zero</string>
+    <string name="warning_negative_from">Your money would be below zero from %1$s.</string>
+    <string name="warning_lowest">Lowest point: %1$s on %2$s.</string>
+    <string name="warning_first_expense">First payment you could not cover: %1$s on %2$s.</string>
+    <plurals name="warning_days">
+        <item quantity="one">%d day would be below zero (or lower) in the next 6 months.</item>
+        <item quantity="other">%d days would be below zero (or lower) in the next 6 months.</item>
+    </plurals>
+    <string name="warning_add_anyway">Add anyway</string>
+
+    <!-- Settings -->
+    <string name="settings_title">Settings</string>
+    <string name="auto_income_title">Add my income automatically</string>
+    <string name="auto_income_on">Your regular income is added on its days.</string>
+    <string name="auto_income_off">Off: only what you type in changes your money.</string>
+    <string name="money_started_label">Money I started with (TND)</string>
+    <string name="started_on_label">I started on</string>
+    <string name="remind_label">Remind me at</string>
+    <string name="field_value_format">%1$s: %2$s</string>
+    <string name="regular_income_title">Regular income</string>
+    <string name="regular_income_empty">Nothing here yet.</string>
+    <string name="add_regular_income">Add regular income</string>
+    <string name="edit_regular_income">Change regular income</string>
+    <string name="source_name_label">Name</string>
+    <string name="source_how_often">How often</string>
+    <string name="source_ask_time">Ask me at</string>
+    <string name="delete_regular_income">Delete this regular income</string>
+    <string name="delete_title">Delete “%1$s”?</string>
+    <string name="delete_body">This removes it and the entries that are still to come. Entries you already confirmed or skipped stay in your history.</string>
+    <string name="action_delete">Delete</string>
+    <string name="amount_and_schedule">%1$s · %2$s</string>
+    <string name="sched_daily">Every day</string>
+    <string name="sched_weekly">Every %1$s</string>
+    <string name="sched_month_day">Day %1$d of each month</string>
+    <string name="sched_first">First day of each month</string>
+    <string name="sched_last">Last day of each month</string>
+    <string name="sched_every_n">Every %1$d days</string>
+
+    <!-- App updates -->
+    <string name="updates_title">App updates</string>
+    <string name="version_line">Version %1$s</string>
+    <string name="check_updates">Check for updates</string>
+    <string name="checking">Looking for a new version…</string>
+    <string name="up_to_date">You’re up to date</string>
+    <string name="downloading_version">Downloading version %1$s…</string>
+    <string name="installing_version">Installing version %1$s…</string>
+    <string name="install_notice">The app will close to finish updating. Open it again afterwards.</string>
+    <string name="permission_title">Allow updates</string>
+    <string name="permission_body">To install an update, Android needs your OK first. On the next screen, turn on “Allow from this source” for Cashflow, then come back here. The update will carry on by itself.</string>
+    <string name="permission_continue">Continue</string>
+    <string name="permission_not_now">Not now</string>
+    <string name="waiting_permission">Waiting for you to allow it…</string>
+    <string name="update_error_no_internet">No internet connection.</string>
+    <string name="update_error_timeout">The server took too long to answer.</string>
+    <string name="update_error_invalid">The update information could not be read.</string>
+    <string name="update_error_server">The server answered with error %1$d.</string>
+    <string name="update_error_checksum">The download was damaged, so it was thrown away. Please try again.</string>
+    <string name="update_error_cut">The download stopped early. Please try again.</string>
+    <string name="update_error_install">The update could not be installed (%1$s).</string>
+    <string name="update_cancelled">Update cancelled.</string>
+    <string name="update_error_generic">The update did not work. Please try again.</string>
+    <string name="update_file_gone">The downloaded update is gone. Please try again.</string>
+
+    <!-- Debug tools -->
+    <string name="debug_title">Debug</string>
+    <string name="debug_load_sample">Load sample data</string>
+    <string name="debug_clear_all">Clear all data</string>
+    <string name="clear_title">Erase everything?</string>
+    <string name="clear_body">This erases all your entries, repeating items and settings on this phone. It cannot be undone.</string>
+    <string name="clear_confirm">Erase everything</string>
 </resources>

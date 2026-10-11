@@ -112,4 +112,22 @@ class WhatIfTest {
         e.whatIf(listOf(planned(d(2026, 10, 13), 500)))
         assertEquals(before, e.forecast(today, today.plusDays(30)))
     }
+
+    @Test fun a_now_expense_is_checked_like_any_other() {
+        // "Now" expenses are CONFIRMED today: they must trigger the warning too when they empty the balance.
+        val big = EntryPlanner.transactionFor(NewEntry.Now(TxKind.EXPENSE, tnd(130), "Shopping"), today)!!
+        val r = engine().whatIf(listOf(big))
+        assertTrue(r.wouldCauseNegative)
+        assertEquals(today, r.firstNegativeDate)
+        assertEquals(tnd(-30), r.lowestBalance)
+        val small = EntryPlanner.transactionFor(NewEntry.Now(TxKind.EXPENSE, tnd(30), "Snack"), today)!!
+        assertFalse(engine().whatIf(listOf(small)).wouldCauseNegative)
+    }
+
+    @Test fun a_now_expense_that_only_worsens_an_already_negative_future_is_flagged() {
+        val future = planned(d(2026, 10, 20), 130, id = 1) // already negative from Oct 20
+        val now = EntryPlanner.transactionFor(NewEntry.Now(TxKind.EXPENSE, tnd(10), "x"), today)!!
+        val r = engine(listOf(future)).whatIf(listOf(now))
+        assertTrue(r.wouldCauseNegative)
+    }
 }

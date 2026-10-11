@@ -4,6 +4,7 @@ import android.app.Application
 import com.cashflow.app.data.AppDatabase
 import com.cashflow.app.data.LedgerRepository
 import com.cashflow.app.engine.BalanceEngine
+import com.cashflow.app.ui.UiPrefs
 import com.cashflow.app.update.UpdateManager
 import java.time.LocalDate
 
@@ -15,6 +16,8 @@ class CashflowApp : Application() {
     }
 
     val updateManager: UpdateManager by lazy { UpdateManager(this) }
+
+    val uiPrefs: UiPrefs by lazy { UiPrefs(this) }
 
     val repository: LedgerRepository by lazy { LedgerRepository(AppDatabase.create(this)) }
 

@@ -1,5 +1,6 @@
 package com.cashflow.app.ui.home
 
+import androidx.compose.runtime.Immutable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.cashflow.app.EngineFactory
@@ -13,18 +14,24 @@ import com.cashflow.app.engine.Transaction
 import com.cashflow.app.engine.WalletMode
 import com.cashflow.app.engine.WhatIfResult
 import com.cashflow.app.engine.whatIf
+import com.cashflow.app.ui.UiPrefs
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.time.Duration
 import java.time.LocalDate
 import java.time.LocalDateTime
 
+@Immutable
 data class HomeUiState(
     /** The single headline figure. */
     val available: Long,
@@ -35,12 +42,14 @@ data class HomeUiState(
     val walletMode: WalletMode,
     /** Default start date for a new recurring income source. */
     val newSourceStart: LocalDate,
+    val balanceStartDate: LocalDate,
 )
 
 class HomeViewModel(
     private val repository: LedgerRepository,
     engineFactory: EngineFactory,
     private val clock: () -> LocalDate,
+    private val prefs: UiPrefs,
 ) : ViewModel() {
     private val today = MutableStateFlow(clock())
 
@@ -62,8 +71,18 @@ class HomeViewModel(
             today = day,
             walletMode = settings.walletMode,
             newSourceStart = RuleMaintenance.newSourceStartDate(settings, day),
+            balanceStartDate = settings.balanceStartDate,
         )
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+    }.flowOn(Dispatchers.Default) // the engine runs off the main thread
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    /** Whether the "← Skip / Confirm →" hints on the cards are still shown. */
+    val swipeHintVisible: StateFlow<Boolean> = prefs.swipeHintDismissed
+        .map { !it }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, !prefs.swipeHintDismissed.value)
+
+    /** Call after a completed swipe (not after a TalkBack action): the hints fade away for good. */
+    fun onSwipeCompleted() = prefs.markSwipeUsed()
 
     init {
         // Catch up on start, then again right after every midnight while the process is alive.
@@ -101,9 +120,9 @@ class HomeViewModel(
     }
 
     /** "What if I save this?" against the current data; null if there is no data yet. */
-    fun whatIf(entry: NewEntry): WhatIfResult? {
-        val e = engine ?: return null
-        return EntryPlanner.transactionFor(entry, e.today)?.let { e.whatIf(newTransactions = listOf(it)) }
+    suspend fun whatIf(entry: NewEntry): WhatIfResult? = withContext(Dispatchers.Default) {
+        val e = engine ?: return@withContext null
+        EntryPlanner.transactionFor(entry, e.today)?.let { e.whatIf(newTransactions = listOf(it)) }
             ?: EntryPlanner.ruleFor(entry)?.let { e.whatIf(newRule = it) }
     }
 

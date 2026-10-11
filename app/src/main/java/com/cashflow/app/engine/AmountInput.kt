@@ -1,9 +1,9 @@
 package com.cashflow.app.engine
 
-/** Pure logic behind the in-app numeric keypad: digits, one decimal point, up to 3 decimals. */
+/** Pure logic behind the in-app numeric keypad: digits, one decimal point, up to 2 decimals. */
 object AmountInput {
     const val MAX_INTEGER_DIGITS = 9
-    const val MAX_DECIMALS = 3
+    const val MAX_DECIMALS = 2
 
     /** Applies a key ('0'..'9' or '.') to the text typed so far; invalid presses are ignored. */
     fun press(current: String, key: Char): String {

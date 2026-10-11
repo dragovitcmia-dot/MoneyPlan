@@ -2,6 +2,7 @@ package com.cashflow.app.engine
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class MoneyTest {
@@ -75,8 +76,63 @@ class MoneyTest {
     }
 
     @Test fun grouped_display_round_trips_through_parse() {
-        for (v in listOf(0L, 999L, 1_000L, 1_250_000L, -75_500L, 12_345_678_500L)) {
+        for (v in listOf(0L, 990L, 1_000L, 1_250_000L, -75_500L, 12_345_678_500L)) {
             assertEquals(v, Money.parse(Money.formatDisplay(v, withCurrency = false)))
         }
+    }
+
+    // ---- display is rounded to at most 2 decimals (half up); stored values stay exact ---------
+
+    @Test fun display_rounds_half_up_to_two_decimals() {
+        assertEquals("12.35 TND", Money.formatDisplay(12_345))
+        assertEquals("12.34 TND", Money.formatDisplay(12_344))
+        assertEquals("1.01 TND", Money.formatDisplay(1_005))
+        assertEquals("1 TND", Money.formatDisplay(999))
+        assertEquals("1 TND", Money.formatDisplay(995))
+        assertEquals("0.99 TND", Money.formatDisplay(994))
+        assertEquals("75.5 TND", Money.formatDisplay(75_500))
+        assertEquals("75 TND", Money.formatDisplay(75_004))
+        assertEquals("75.01 TND", Money.formatDisplay(75_005))
+    }
+
+    @Test fun display_rounding_is_symmetric_for_negatives_and_never_shows_minus_zero() {
+        assertEquals("\u221212.35 TND", Money.formatDisplay(-12_345))
+        assertEquals("\u221212.34 TND", Money.formatDisplay(-12_344))
+        assertEquals("0 TND", Money.formatDisplay(-4))
+        assertEquals("0 TND", Money.formatDisplay(4))
+        assertEquals("\u22120.01 TND", Money.formatDisplay(-5))
+    }
+
+    @Test fun display_never_shows_more_than_two_decimals() {
+        for (v in listOf(1L, 7L, 12L, 123L, 1_234L, 12_345L, 123_456L, -98_765L, 5_555_555L)) {
+            val text = Money.formatDisplay(v, withCurrency = false)
+            val decimals = text.substringAfter('.', "").length
+            assertTrue("$text has $decimals decimals", decimals <= 2)
+        }
+    }
+
+    @Test fun whole_numbers_show_no_decimals_after_rounding() {
+        assertEquals("3 TND", Money.formatDisplay(2_996))
+        assertEquals("1\u00A0000 TND", Money.formatDisplay(999_999))
+    }
+
+    @Test fun rounding_helper_and_input_text() {
+        assertEquals(12_350L, Money.roundToCents(12_345))
+        assertEquals(-12_350L, Money.roundToCents(-12_345))
+        assertEquals(12_340L, Money.roundToCents(12_344))
+        assertEquals("12.35", Money.formatInput(12_345))
+        assertEquals("12.5", Money.formatInput(12_500))
+        assertEquals("1250", Money.formatInput(1_250_000))
+    }
+
+    @Test fun signed_display_is_rounded_too() {
+        assertEquals("+12.35 TND", Money.formatSigned(TxKind.INCOME, 12_345))
+        assertEquals("\u221212.35 TND", Money.formatSigned(TxKind.EXPENSE, 12_345))
+    }
+
+    @Test fun parse_can_limit_decimals() {
+        assertEquals(12_340L, Money.parse("12.34", maxDecimals = 2))
+        assertNull(Money.parse("12.345", maxDecimals = 2))
+        assertEquals(12_345L, Money.parse("12.345"))
     }
 }
