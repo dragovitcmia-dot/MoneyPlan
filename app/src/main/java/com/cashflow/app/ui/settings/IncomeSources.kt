@@ -35,6 +35,9 @@ import com.cashflow.app.engine.Money
 import com.cashflow.app.engine.RecurrencePattern
 import com.cashflow.app.engine.RecurringRule
 import com.cashflow.app.engine.TxKind
+import com.cashflow.app.ui.components.AppButton
+import com.cashflow.app.ui.components.AppButtonStyle
+import com.cashflow.app.ui.components.SectionCard
 import java.time.DayOfWeek
 import java.time.LocalTime
 import java.time.format.TextStyle
@@ -75,8 +78,7 @@ internal fun IncomeSourcesSection(viewModel: SettingsViewModel) {
     var editing by remember { mutableStateOf<RecurringRule?>(null) }
     var adding by remember { mutableStateOf(false) }
 
-    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        HorizontalDivider()
+    SectionCard {
         Text("Income sources", style = MaterialTheme.typography.titleMedium)
         if (sources.isEmpty()) {
             Text("No income sources yet.", style = MaterialTheme.typography.bodyMedium)
@@ -87,7 +89,7 @@ internal fun IncomeSourcesSection(viewModel: SettingsViewModel) {
                     Column(Modifier.weight(1f)) {
                         Text(source.description, style = MaterialTheme.typography.bodyLarge)
                         Text(
-                            "${Money.format(source.amount)} · ${scheduleSummary(source.pattern)}",
+                            "${Money.formatDisplay(source.amount)} · ${scheduleSummary(source.pattern)}",
                             style = MaterialTheme.typography.bodySmall,
                         )
                     }
@@ -98,7 +100,7 @@ internal fun IncomeSourcesSection(viewModel: SettingsViewModel) {
                 }
             }
         }
-        OutlinedButton(onClick = { adding = true }, modifier = Modifier.fillMaxWidth()) { Text("Add income source") }
+        AppButton("Add income source", onClick = { adding = true }, modifier = Modifier.fillMaxWidth(), style = AppButtonStyle.Outlined)
     }
 
     if (adding) {

@@ -45,4 +45,38 @@ class MoneyTest {
             assertEquals(v, Money.parse(Money.format(v, withCurrency = false)))
         }
     }
+
+    @Test fun grouped_format_uses_no_break_spaces() {
+        val nb = "\u00A0"
+        assertEquals("1${nb}250 TND", Money.format(1_250_000, grouped = true))
+        assertEquals("75 TND", Money.format(75_000, grouped = true))
+        assertEquals("999 TND", Money.format(999_000, grouped = true))
+        assertEquals("1${nb}000 TND", Money.format(1_000_000, grouped = true))
+        assertEquals("12${nb}345${nb}678.5 TND", Money.format(12_345_678_500, grouped = true))
+    }
+
+    @Test fun display_format_groups_and_uses_a_proper_minus() {
+        val nb = "\u00A0"
+        assertEquals("\u22121${nb}250 TND", Money.formatDisplay(-1_250_000))
+        assertEquals("\u221213 TND", Money.formatDisplay(-13_000))
+        assertEquals("0 TND", Money.formatDisplay(0))
+        assertEquals("599 TND", Money.formatDisplay(599_000))
+    }
+
+    @Test fun signed_format_for_cards() {
+        assertEquals("+30 TND", Money.formatSigned(TxKind.INCOME, 30_000))
+        assertEquals("\u221275 TND", Money.formatSigned(TxKind.EXPENSE, 75_000))
+    }
+
+    @Test fun parse_accepts_grouped_and_typographic_input() {
+        assertEquals(1_250_000L, Money.parse("1\u00A0250"))
+        assertEquals(1_250_000L, Money.parse("1 250"))
+        assertEquals(-1_250_500L, Money.parse("\u22121\u00A0250.5"))
+    }
+
+    @Test fun grouped_display_round_trips_through_parse() {
+        for (v in listOf(0L, 999L, 1_000L, 1_250_000L, -75_500L, 12_345_678_500L)) {
+            assertEquals(v, Money.parse(Money.formatDisplay(v, withCurrency = false)))
+        }
+    }
 }

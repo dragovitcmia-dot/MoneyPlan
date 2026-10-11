@@ -26,6 +26,9 @@ interface TransactionDao {
     @Query("UPDATE transactions SET status = :status WHERE id = :id")
     suspend fun setStatus(id: Long, status: TxStatus)
 
+    @Query("UPDATE transactions SET amount = :amount WHERE id = :id")
+    suspend fun setAmount(id: Long, amount: Long)
+
     @Query("DELETE FROM transactions WHERE id IN (:ids)")
     suspend fun deleteByIds(ids: List<Long>)
 

@@ -16,14 +16,14 @@ import java.time.temporal.ChronoUnit
  */
 class BalanceEngine(
     val settings: AppSettings,
-    transactions: List<Transaction>,
+    val transactions: List<Transaction>,
     val today: LocalDate,
 ) {
     private val start = settings.balanceStartDate
 
     private fun isSourceIncome(tx: Transaction) = tx.source == TxSource.RECURRING && tx.kind == TxKind.INCOME
 
-    private val ledger: List<Transaction> = transactions.filter {
+    private val ledger: List<Transaction> = this.transactions.filter {
         !(settings.walletMode == WalletMode.STATIC && isSourceIncome(it) && it.status == TxStatus.PENDING)
     }
     private val byDate: Map<LocalDate, List<Transaction>> = ledger.groupBy { it.date }
