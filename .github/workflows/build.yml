@@ -97,7 +97,7 @@ jobs:
         run: |
           APK=app/build/outputs/apk/preview/app-preview.apk
           BT=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
-          "$BT/apksigner" verify --print-certs "$APK" | tee apksigner.txt
+          "$BT/apksigner" verify --verbose --print-certs "$APK" 2>&1 | tee apksigner.txt || true
           CERT=$(sed -n 's/^Signer.* certificate SHA-256 digest: //p' apksigner.txt | head -1 | tr 'A-F' 'a-f')
           KS=$(keytool -list -keystore app/debug.keystore -storepass android 2>/dev/null | sed -n 's/^Certificate fingerprint (SHA-256): //p' | tr -d ':' | tr 'A-F' 'a-f')
           echo "APK signing certificate sha256: $CERT"
@@ -110,6 +110,7 @@ jobs:
           if echo "$BADGING" | grep -q "application-debuggable"; then DEBUGGABLE=yes; fi
           echo "debuggable: $DEBUGGABLE"
           echo "::notice title=APK verification::cert=$CERT keystore=$KS debuggable=$DEBUGGABLE versionCode=$VC versionName=$VN"
+          echo "::notice title=apksigner output::$(head -c 1500 apksigner.txt | sed ':a;N;$!ba;s/%/%25/g;s/\r//g;s/\n/%0A/g')"
           [ -n "$CERT" ] && [ "$CERT" = "$KS" ] || { echo "signing certificate does not match debug.keystore"; exit 1; }
           [ "$DEBUGGABLE" = "no" ] || { echo "APK is debuggable"; exit 1; }
           if [ "$GITHUB_REF" = "refs/heads/main" ] && [ "$VC" != "$GITHUB_RUN_NUMBER" ]; then
