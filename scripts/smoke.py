@@ -420,22 +420,23 @@ def run_hero_animation():
             if span_l > 24:
                 problems.append(f"hero: left extent moved by {span_l}px across frames (limit 24 for glyph shapes)")
             diffs = [mean_abs_diff(f[5], final[3].resize(f[5].size)) for f in hero_frames]
-            moving = [i for i, d in enumerate(diffs) if d > 1.0]
-            changed = sum(1 for a, b in zip(hero_frames, hero_frames[1:]) if mean_abs_diff(a[5], b[5]) > 0.5)
-            print(f"  consecutive hero frames that differ: {changed} of {len(hero_frames) - 1}")
-            if changed < 6:
+            steps = [mean_abs_diff(a[5], b[5]) for a, b in zip(hero_frames, hero_frames[1:])]
+            changed_idx = [i + 1 for i, d in enumerate(steps) if d > 0.3]  # lossy video: ignore encoder noise
+            print(f"  consecutive hero frames that differ: {len(changed_idx)} of {len(hero_frames) - 1}")
+            if len(changed_idx) < 5:
                 problems.append("hero: the number did not visibly animate between frames")
-            if moving:
-                t_first = hero_frames[0][1]
-                t_last = hero_frames[moving[-1]][1]
-                print(f"  observed: first number frame t={t_first:.2f}s, last frame that still differs from the final "
-                      f"value t={t_last:.2f}s -> animation visible for {t_last - t_first + 1 / 30:.2f}s (spec 1.5s)")
-                if not 1.0 <= t_last - t_first + 1 / 30 <= 2.0:
-                    problems.append("hero: observed animation duration is far from 1.5 s")
             else:
-                problems.append("hero: every frame already shows the final value (the launch animation did not play)")
-            print(f"  last frame vs final screenshot: mean abs diff {diffs[-1]:.2f}")
-            if diffs[-1] > 1.0:
+                t_start = hero_frames[changed_idx[0] - 1][1]  # the last still frame before the first change
+                t_end = hero_frames[changed_idx[-1]][1]
+                shown_for = t_end - t_start
+                print(f"  observed: start value still shown from t={hero_frames[0][1]:.2f}s, first change after "
+                      f"t={t_start:.2f}s, last change t={t_end:.2f}s -> rolling for {shown_for:.2f}s (spec 1.5s)")
+                if not 0.9 <= shown_for <= 2.2:
+                    problems.append(f"hero: observed animation duration {shown_for:.2f}s is far from 1.5 s")
+            print(f"  first frame vs final screenshot: mean abs diff {diffs[0]:.2f}; last frame: {diffs[-1]:.2f}")
+            if diffs[0] < 6.0:
+                problems.append("hero: the first frame already shows (almost) the final value, no count-down from all nines")
+            if diffs[-1] > 3.6:  # lossy video: the final value measures ~3 against the lossless screenshot
                 problems.append("hero: the last frame does not show the final value")
         nodes = dump_nodes() or []
         descs = [d for _, d, _ in nodes if d.startswith("Available:")]

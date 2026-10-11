@@ -21,6 +21,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
@@ -64,6 +65,8 @@ import kotlin.math.roundToLong
  * while it spins.
  */
 private const val TAG = "CashflowHero"
+private const val MAX_STARTUP_WAIT_MILLIS = 800L
+private const val STEADY_FRAME_NANOS = 40_000_000L
 
 @Stable
 class HeroOdometer {
@@ -86,6 +89,22 @@ class HeroOdometer {
     /** The animated value in cents (signed). Read only in draw code. */
     fun currentCents(): Double =
         OdometerTiming.valueAt(fromCents, toCents, timeFraction.toDouble() * OdometerTiming.DURATION_MILLIS / 1000.0)
+
+    /**
+     * The first frames of a cold start are slow (class loading, first layout). An animation started inside
+     * them would lose its first part to one long frame, so the start value is shown still until frames
+     * are arriving normally again (at most [MAX_STARTUP_WAIT_MILLIS]).
+     */
+    private suspend fun awaitSteadyFrames() {
+        val begin = SystemClock.uptimeMillis()
+        var last = withFrameNanos { it }
+        var calm = 0
+        while (calm < 3 && SystemClock.uptimeMillis() - begin < MAX_STARTUP_WAIT_MILLIS) {
+            val now = withFrameNanos { it }
+            calm = if (now - last < STEADY_FRAME_NANOS) calm + 1 else 0
+            last = now
+        }
+    }
 
     /**
      * Shows [targetMillis]: snaps, counts down from all nines (launch) or rolls from the current value
@@ -112,6 +131,7 @@ class HeroOdometer {
             return
         }
 
+        if (action == HeroAction.LAUNCH_COUNTDOWN) awaitSteadyFrames()
         val steps = RouletteTicks.stepCount(start * 10, target * 10)
         coroutineScope {
             val ticker = launch {
