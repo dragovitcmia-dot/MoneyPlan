@@ -159,17 +159,31 @@ def crash_log():
     return hits
 
 
+def launch():
+    """Cold-starts the app with cleared data. Android can kill a process that is started while the previous
+    task is still being removed ("remove task" race right after `pm clear`), so pause after clearing and
+    retry the launch if the UI does not appear."""
+    for attempt in range(1, 4):
+        sh(f"am force-stop {PKG}")
+        if attempt == 1:
+            sh(f"pm clear {PKG}")
+            adb("logcat", "-c", check=False)
+        time.sleep(3)
+        sh(f"monkey -p {PKG} -c android.intent.category.LAUNCHER 1")
+        try:
+            find(TEXT_SETTINGS, scroll=False, timeout=20)
+            return
+        except NotFound as e:
+            print(f"  launch attempt {attempt} did not show the UI: {e}")
+            diagnostics()
+    raise NotFound("the app never showed its UI after 3 launch attempts")
+
+
 def run_config(name, night, font, size, density):
     print(f"== {name}: night={night} font={font} size={size or 'default'}")
     configure(night, font, size, density)
-    sh(f"am force-stop {PKG}")
-    sh(f"pm clear {PKG}")
-    adb("logcat", "-c", check=False)
-    sh(f"monkey -p {PKG} -c android.intent.category.LAUNCHER 1")
-    time.sleep(3)
     try:
-        # A cold start (new resolution, cleared data, software rendering) can be slow: allow 30 s here.
-        find(TEXT_SETTINGS, scroll=False, timeout=30)
+        launch()
         tap_text(TEXT_SETTINGS, scroll=False)
         tap_text(TEXT_LOAD_SAMPLE)  # scrolls down to the debug section
         time.sleep(2.5)
