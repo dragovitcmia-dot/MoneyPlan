@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.cashflow.app.EngineFactory
 import com.cashflow.app.data.LedgerRepository
 import com.cashflow.app.engine.NextExpense
+import com.cashflow.app.engine.Transaction
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -18,8 +19,10 @@ import java.time.LocalDate
 import java.time.LocalDateTime
 
 data class HomeUiState(
-    val currentBalance: Long,
-    val balanceAfterPending: Long,
+    /** The single headline figure. */
+    val available: Long,
+    /** PENDING items dated today or earlier, oldest first. */
+    val toConfirm: List<Transaction>,
     val nextExpense: NextExpense?,
 )
 
@@ -36,7 +39,7 @@ class HomeViewModel(
         today,
     ) { settings, transactions, day ->
         val engine = engineFactory.create(settings, transactions, day)
-        HomeUiState(engine.currentBalance(), engine.balanceAfterPending(), engine.nextExpense())
+        HomeUiState(engine.available(), engine.toConfirm(), engine.nextExpense())
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     init {
@@ -56,6 +59,14 @@ class HomeViewModel(
             repository.runMaintenance(day)
             today.value = day
         }
+    }
+
+    fun confirm(id: Long) {
+        viewModelScope.launch { repository.confirm(id) }
+    }
+
+    fun skip(id: Long) {
+        viewModelScope.launch { repository.skip(id) }
     }
 
     private fun millisUntilNextDay(): Long {

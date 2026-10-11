@@ -125,3 +125,32 @@ class RecurrenceTest {
         assertTrue(runCatching { RecurrencePattern.EveryNDays(0, d(2026, 1, 1)) }.isFailure)
     }
 }
+
+class IncomePatternTest {
+    private fun src(p: RecurrencePattern, start: java.time.LocalDate) = incomeSource(p, start)
+    private fun occ(r: RecurringRule, from: java.time.LocalDate, to: java.time.LocalDate) = Recurrence.occurrences(r, from, to)
+
+    @Test fun daily_hits_every_day_from_its_start_date() {
+        val dates = occ(src(RecurrencePattern.Daily, d(2026, 10, 11)), d(2026, 10, 1), d(2026, 10, 14))
+        assertEquals(listOf(11, 12, 13, 14).map { d(2026, 10, it) }, dates)
+    }
+
+    @Test fun weekly_income() {
+        val dates = occ(src(RecurrencePattern.Weekly(DayOfWeek.FRIDAY), d(2026, 10, 1)), d(2026, 10, 1), d(2026, 10, 31))
+        assertEquals(listOf(2, 9, 16, 23, 30).map { d(2026, 10, it) }, dates)
+    }
+
+    @Test fun month_first_and_last_income() {
+        val first = occ(src(RecurrencePattern.MonthFirst, d(2026, 10, 1)), d(2026, 10, 1), d(2026, 12, 31))
+        assertEquals(listOf(d(2026, 10, 1), d(2026, 11, 1), d(2026, 12, 1)), first)
+        val last = occ(src(RecurrencePattern.MonthLast, d(2027, 1, 1)), d(2027, 1, 1), d(2027, 3, 31))
+        assertEquals(listOf(d(2027, 1, 31), d(2027, 2, 28), d(2027, 3, 31)), last)
+    }
+
+    @Test fun day_of_month_income_clamps_to_month_end() {
+        val dates = occ(src(RecurrencePattern.DayOfMonth(31), d(2028, 1, 1)), d(2028, 1, 1), d(2028, 4, 30))
+        assertEquals(listOf(d(2028, 1, 31), d(2028, 2, 29), d(2028, 3, 31), d(2028, 4, 30)), dates)
+        val feb = occ(src(RecurrencePattern.DayOfMonth(30), d(2027, 2, 1)), d(2027, 2, 1), d(2027, 2, 28))
+        assertEquals(listOf(d(2027, 2, 28)), feb)
+    }
+}

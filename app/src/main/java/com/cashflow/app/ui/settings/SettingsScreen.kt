@@ -2,6 +2,10 @@ package com.cashflow.app.ui.settings
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Switch
+import androidx.compose.ui.Alignment
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -35,6 +39,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.cashflow.app.data.LedgerRepository
 import com.cashflow.app.debug.DebugSection
 import com.cashflow.app.engine.Money
+import com.cashflow.app.engine.WalletMode
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.ZoneOffset
@@ -68,6 +73,27 @@ fun SettingsScreen(
         ) {
             if (current != null) {
                 key(generation) {
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text("Dynamic wallet", style = MaterialTheme.typography.titleMedium)
+                            Text(
+                                if (current.walletMode == WalletMode.DYNAMIC) {
+                                    "Income sources add money on schedule."
+                                } else {
+                                    "Static: income sources are ignored; only logged transactions change the balance."
+                                },
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                        }
+                        Switch(
+                            checked = current.walletMode == WalletMode.DYNAMIC,
+                            onCheckedChange = { dynamic ->
+                                viewModel.update {
+                                    it.copy(walletMode = if (dynamic) WalletMode.DYNAMIC else WalletMode.STATIC)
+                                }
+                            },
+                        )
+                    }
                     AmountField(
                         label = "Starting balance (TND)",
                         initial = current.startingBalance,
@@ -79,23 +105,13 @@ fun SettingsScreen(
                         value = current.balanceStartDate,
                         onPick = { d -> viewModel.update { it.copy(balanceStartDate = d) } },
                     )
-                    AmountField(
-                        label = "Daily income (TND)",
-                        initial = current.dailyIncomeAmount,
-                        allowNegative = false,
-                        onValid = { v -> viewModel.update { it.copy(dailyIncomeAmount = v) } },
-                    )
-                    TimeField(
-                        label = "Daily income time",
-                        value = current.dailyIncomeTime,
-                        onPick = { t -> viewModel.update { it.copy(dailyIncomeTime = t) } },
-                    )
                     TimeField(
                         label = "Reminder time",
                         value = current.reminderTime,
                         onPick = { t -> viewModel.update { it.copy(reminderTime = t) } },
                     )
                 }
+                IncomeSourcesSection(viewModel)
                 DebugSection(repository) { viewModel.reload { generation++ } }
             }
         }
@@ -152,7 +168,7 @@ private fun DateField(label: String, value: LocalDate, onPick: (LocalDate) -> Un
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun TimeField(label: String, value: LocalTime, onPick: (LocalTime) -> Unit) {
+internal fun TimeField(label: String, value: LocalTime, onPick: (LocalTime) -> Unit) {
     var open by remember { mutableStateOf(false) }
     OutlinedButton(onClick = { open = true }, modifier = Modifier.fillMaxWidth()) {
         Text("$label: ${value.format(TimeFormat)}")

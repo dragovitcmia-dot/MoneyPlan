@@ -8,7 +8,7 @@ import androidx.room.TypeConverters
 
 @Database(
     entities = [TransactionEntity::class, RecurringRuleEntity::class, SettingsEntity::class],
-    version = 1,
+    version = 2,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)
@@ -19,6 +19,9 @@ abstract class AppDatabase : RoomDatabase() {
 
     companion object {
         fun create(context: Context): AppDatabase =
-            Room.databaseBuilder(context.applicationContext, AppDatabase::class.java, "cashflow.db").build()
+            Room.databaseBuilder(context.applicationContext, AppDatabase::class.java, "cashflow.db")
+                // Step 2 only: no real user data exists yet. Real migrations start with the next release.
+                .fallbackToDestructiveMigration()
+                .build()
     }
 }

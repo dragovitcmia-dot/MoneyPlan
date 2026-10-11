@@ -24,19 +24,21 @@ jobs:
       - name: Unit tests and debug APK
         run: ./gradlew testDebugUnitTest assembleDebug --stacktrace
 
-      - name: Print test summary and Room schema
+      - name: Print test summary
         if: always()
         run: |
           python3 - <<'PY'
           import glob, xml.etree.ElementTree as ET
+          total = 0
           for f in sorted(glob.glob("app/build/test-results/testDebugUnitTest/*.xml")):
               r = ET.parse(f).getroot()
+              total += int(r.get("tests"))
               print("SUITE", r.get("name"), "tests=%s failures=%s errors=%s skipped=%s" % (r.get("tests"), r.get("failures"), r.get("errors"), r.get("skipped")))
               for c in r.findall("testcase"):
-                  bad = c.find("failure") is not None or c.find("error") is not None
-                  print("  ", "FAIL" if bad else "pass", c.get("name"))
+                  if c.find("failure") is not None or c.find("error") is not None:
+                      print("  FAIL", c.get("name"))
+          print("TOTAL", total)
           PY
-          for f in app/schemas/*/*.json; do echo "=== $f"; cat "$f"; done || true
 
       - name: Upload test reports
         if: always()

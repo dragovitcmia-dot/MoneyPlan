@@ -11,6 +11,7 @@ import com.cashflow.app.engine.Transaction
 import com.cashflow.app.engine.TxKind
 import com.cashflow.app.engine.TxSource
 import com.cashflow.app.engine.TxStatus
+import com.cashflow.app.engine.WalletMode
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.LocalTime
@@ -41,11 +42,10 @@ data class TransactionEntity(
     val source: TxSource,
     val recurringRuleId: Long?,
     val occurrenceDate: LocalDate?,
-    val autoApplied: Boolean,
     val isPlanned: Boolean,
 )
 
-enum class PatternType { WEEKLY, EVERY_N_DAYS, MONTH_FIRST, MONTH_LAST, DAY_OF_MONTH }
+enum class PatternType { DAILY, WEEKLY, EVERY_N_DAYS, MONTH_FIRST, MONTH_LAST, DAY_OF_MONTH }
 
 @Entity(tableName = "recurring_rules")
 data class RecurringRuleEntity(
@@ -60,6 +60,8 @@ data class RecurringRuleEntity(
     val anchorDate: LocalDate?,
     val startDate: LocalDate,
     val endDate: LocalDate?,
+    val enabled: Boolean,
+    val confirmMinutes: Int,
 )
 
 /** Single-row table (id is always 1). Times are minutes after midnight. */
@@ -68,32 +70,35 @@ data class SettingsEntity(
     @PrimaryKey val id: Int = 1,
     val startingBalance: Long,
     val balanceStartDate: LocalDate,
-    val dailyIncomeAmount: Long,
-    val dailyIncomeMinutes: Int,
+    val walletMode: WalletMode,
     val reminderMinutes: Int,
 )
 
 fun TransactionEntity.toDomain() = Transaction(
     id = id, date = date, amount = amount, kind = kind, description = description,
     status = status, source = source, recurringRuleId = recurringRuleId,
-    occurrenceDate = occurrenceDate, autoApplied = autoApplied, isPlanned = isPlanned,
+    occurrenceDate = occurrenceDate, isPlanned = isPlanned,
 )
 
 fun Transaction.toEntity() = TransactionEntity(
     id = id, date = date, amount = amount, kind = kind, description = description,
     status = status, source = source, recurringRuleId = recurringRuleId,
-    occurrenceDate = occurrenceDate, autoApplied = autoApplied, isPlanned = isPlanned,
+    occurrenceDate = occurrenceDate, isPlanned = isPlanned,
 )
 
 fun RecurringRuleEntity.toDomain(): RecurringRule {
     val pattern = when (patternType) {
+        PatternType.DAILY -> RecurrencePattern.Daily
         PatternType.WEEKLY -> RecurrencePattern.Weekly(DayOfWeek.of(patternValue!!))
         PatternType.EVERY_N_DAYS -> RecurrencePattern.EveryNDays(patternValue!!, anchorDate!!)
         PatternType.MONTH_FIRST -> RecurrencePattern.MonthFirst
         PatternType.MONTH_LAST -> RecurrencePattern.MonthLast
         PatternType.DAY_OF_MONTH -> RecurrencePattern.DayOfMonth(patternValue!!)
     }
-    return RecurringRule(id, amount, kind, description, pattern, startDate, endDate)
+    return RecurringRule(
+        id, amount, kind, description, pattern, startDate, endDate, enabled,
+        LocalTime.ofSecondOfDay(confirmMinutes * 60L),
+    )
 }
 
 fun RecurringRule.toEntity(): RecurringRuleEntity {
@@ -101,27 +106,29 @@ fun RecurringRule.toEntity(): RecurringRuleEntity {
     var value: Int? = null
     var anchor: LocalDate? = null
     when (val p = pattern) {
+        RecurrencePattern.Daily -> type = PatternType.DAILY
         is RecurrencePattern.Weekly -> { type = PatternType.WEEKLY; value = p.dayOfWeek.value }
         is RecurrencePattern.EveryNDays -> { type = PatternType.EVERY_N_DAYS; value = p.n; anchor = p.anchorDate }
         RecurrencePattern.MonthFirst -> type = PatternType.MONTH_FIRST
         RecurrencePattern.MonthLast -> type = PatternType.MONTH_LAST
         is RecurrencePattern.DayOfMonth -> { type = PatternType.DAY_OF_MONTH; value = p.day }
     }
-    return RecurringRuleEntity(id, amount, kind, description, type, value, anchor, startDate, endDate)
+    return RecurringRuleEntity(
+        id, amount, kind, description, type, value, anchor, startDate, endDate, enabled,
+        confirmTime.hour * 60 + confirmTime.minute,
+    )
 }
 
 fun SettingsEntity.toDomain() = AppSettings(
     startingBalance = startingBalance,
     balanceStartDate = balanceStartDate,
-    dailyIncomeAmount = dailyIncomeAmount,
-    dailyIncomeTime = LocalTime.ofSecondOfDay(dailyIncomeMinutes * 60L),
+    walletMode = walletMode,
     reminderTime = LocalTime.ofSecondOfDay(reminderMinutes * 60L),
 )
 
 fun AppSettings.toEntity() = SettingsEntity(
     startingBalance = startingBalance,
     balanceStartDate = balanceStartDate,
-    dailyIncomeAmount = dailyIncomeAmount,
-    dailyIncomeMinutes = dailyIncomeTime.hour * 60 + dailyIncomeTime.minute,
+    walletMode = walletMode,
     reminderMinutes = reminderTime.hour * 60 + reminderTime.minute,
 )

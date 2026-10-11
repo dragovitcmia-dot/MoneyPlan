@@ -7,6 +7,7 @@ import com.cashflow.app.engine.Transaction
 import com.cashflow.app.engine.TxKind
 import com.cashflow.app.engine.TxSource
 import com.cashflow.app.engine.TxStatus
+import com.cashflow.app.engine.WalletMode
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.LocalTime
@@ -25,9 +26,20 @@ object ReferenceScenario {
     val settings = AppSettings(
         startingBalance = 180_000,
         balanceStartDate = startDate,
-        dailyIncomeAmount = 30_000,
-        dailyIncomeTime = LocalTime.NOON,
+        walletMode = WalletMode.DYNAMIC,
         reminderTime = LocalTime.NOON,
+    )
+
+    /** One DAILY income source of 30; it applies from the day after [startDate]. */
+    val dailyIncomeSource = RecurringRule(
+        id = 2,
+        amount = 30_000,
+        kind = TxKind.INCOME,
+        description = "Daily income",
+        pattern = RecurrencePattern.Daily,
+        startDate = startDate.plusDays(1),
+        enabled = true,
+        confirmTime = LocalTime.NOON,
     )
 
     /** (month, day, TND) of every non-Sunday-rule expense. */

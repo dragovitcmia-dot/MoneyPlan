@@ -6,7 +6,10 @@ import java.time.LocalTime
 
 enum class TxKind { EXPENSE, INCOME }
 enum class TxStatus { PENDING, CONFIRMED, SKIPPED }
-enum class TxSource { MANUAL, RECURRING, DAILY_INCOME }
+enum class TxSource { MANUAL, RECURRING }
+
+/** DYNAMIC: income sources feed the balance. STATIC: they are ignored; only logged transactions count. */
+enum class WalletMode { DYNAMIC, STATIC }
 
 /** All amounts are Long millimes (1 TND = 1000). */
 data class Transaction(
@@ -23,7 +26,6 @@ data class Transaction(
      * row's [date] is edited, so a moved occurrence is not regenerated.
      */
     val occurrenceDate: LocalDate? = null,
-    val autoApplied: Boolean = false,
     /** false = immediate expense, created already CONFIRMED. */
     val isPlanned: Boolean = true,
 ) {
@@ -33,6 +35,8 @@ data class Transaction(
 }
 
 sealed interface RecurrencePattern {
+    data object Daily : RecurrencePattern
+
     data class Weekly(val dayOfWeek: DayOfWeek) : RecurrencePattern
 
     /** Every [n] days, in phase with [anchorDate] (which may lie before the rule's startDate). */
@@ -59,8 +63,12 @@ data class RecurringRule(
     val kind: TxKind,
     val description: String,
     val pattern: RecurrencePattern,
+    /** Also the lower bound for generation: editing/enabling moves it to today so nothing is backfilled. */
     val startDate: LocalDate,
     val endDate: LocalDate? = null,
+    val enabled: Boolean = true,
+    /** Stored only; used by the notifications step. */
+    val confirmTime: LocalTime = LocalTime.NOON,
 ) {
     init {
         require(amount > 0) { "amount must be positive, was $amount" }
@@ -83,20 +91,11 @@ data class RecurringRule(
 data class AppSettings(
     val startingBalance: Long,
     val balanceStartDate: LocalDate,
-    val dailyIncomeAmount: Long,
-    val dailyIncomeTime: LocalTime = LocalTime.NOON,
+    val walletMode: WalletMode = WalletMode.DYNAMIC,
     val reminderTime: LocalTime = LocalTime.NOON,
 ) {
-    init {
-        require(dailyIncomeAmount >= 0) { "dailyIncomeAmount must be >= 0" }
-    }
-
     companion object {
-        fun default(today: LocalDate) = AppSettings(
-            startingBalance = 0,
-            balanceStartDate = today,
-            dailyIncomeAmount = 0,
-        )
+        fun default(today: LocalDate) = AppSettings(startingBalance = 0, balanceStartDate = today)
     }
 }
 
@@ -104,9 +103,9 @@ data class DayForecast(
     val date: LocalDate,
     /** Balance at the start of the day, daily income already added (except on the start day). */
     val opening: Long,
-    /** Daily income credited into [opening] (0 on the start day). */
+    /** Income-source income credited into [opening]. */
     val income: Long,
-    /** One-off income dated this day, credited after [opening]. */
+    /** Other (manual) income dated this day, credited after [opening]. */
     val extraIncome: Long,
     val expenses: Long,
     /** opening + extraIncome - expenses. */
