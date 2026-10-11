@@ -22,7 +22,24 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
 
       - name: Unit tests and debug APK
-        run: ./gradlew testDebugUnitTest assemblePreview --stacktrace
+        run: |
+          set -o pipefail
+          ./gradlew testDebugUnitTest assemblePreview --stacktrace 2>&1 | tee gradle.log
+
+      - name: Gradle failure summary
+        if: failure()
+        run: |
+          python3 - <<'PY'
+          import re
+          t = open("gradle.log", errors="replace").read()
+          out = []
+          m = re.search(r"\* What went wrong:\n(.*?)\n\* Try:", t, re.S)
+          if m:
+              out.append(m.group(1).strip())
+          out += [l for l in t.splitlines() if l.startswith("e: ") or " error: " in l][:30]
+          msg = "\n".join(out)[:3500].replace("%", "%25").replace("\r", "").replace("\n", "%0A")
+          print("::error title=Gradle failure::" + msg)
+          PY
 
       - name: Print test summary
         if: always()
