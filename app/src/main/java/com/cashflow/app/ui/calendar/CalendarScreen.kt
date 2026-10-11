@@ -178,18 +178,17 @@ fun CalendarScreen(
                 Modifier.fillMaxWidth().padding(horizontal = 12.dp),
                 horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterHorizontally),
                 verticalArrangement = Arrangement.spacedBy(4.dp),
-                itemVerticalAlignment = Alignment.CenterVertically,
             ) {
-                IconButton(onClick = { scope.launch { pager.animateScrollToPage((pager.currentPage - 1).coerceAtLeast(0)) } }) {
+                IconButton(onClick = { scope.launch { pager.animateScrollToPage((pager.currentPage - 1).coerceAtLeast(0)) } }, modifier = Modifier.align(Alignment.CenterVertically)) {
                     Icon(Icons.Filled.KeyboardArrowLeft, contentDescription = stringResource(R.string.calendar_previous_month))
                 }
                 Text(
                     title,
                     style = MaterialTheme.typography.titleLarge,
                     textAlign = TextAlign.Center,
-                    modifier = Modifier.semantics { heading() }.padding(horizontal = 4.dp),
+                    modifier = Modifier.align(Alignment.CenterVertically).semantics { heading() }.padding(horizontal = 4.dp),
                 )
-                IconButton(onClick = { scope.launch { pager.animateScrollToPage((pager.currentPage + 1).coerceAtMost(MonthPages.COUNT - 1)) } }) {
+                IconButton(onClick = { scope.launch { pager.animateScrollToPage((pager.currentPage + 1).coerceAtMost(MonthPages.COUNT - 1)) } }, modifier = Modifier.align(Alignment.CenterVertically)) {
                     Icon(Icons.Filled.KeyboardArrowRight, contentDescription = stringResource(R.string.calendar_next_month))
                 }
                 AppButton(
@@ -200,6 +199,7 @@ fun CalendarScreen(
                         goToMonth(YearMonth.from(today))
                     },
                     style = AppButtonStyle.Tonal,
+                    modifier = Modifier.align(Alignment.CenterVertically),
                 )
             }
 
