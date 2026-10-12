@@ -97,6 +97,8 @@ fun AppButton(
     textStyle: TextStyle? = null,
     /** Label colour of the Tonal / Outlined styles (e.g. red for a destructive action). */
     contentColor: Color? = null,
+    /** A custom corner shape (default: the usual pill). */
+    shape: androidx.compose.ui.graphics.Shape? = null,
 ) {
     val source = remember { MutableInteractionSource() }
     val m = modifier.pressScale(source).heightIn(min = 56.dp)
@@ -107,6 +109,7 @@ fun AppButton(
         ) { Text(text, textAlign = TextAlign.Center, style = textStyle ?: LocalTextStyle.current) }
         AppButtonStyle.Tonal -> FilledTonalButton(
             onClick, m, enabled = enabled, elevation = null, interactionSource = source,
+            shape = shape ?: ButtonDefaults.filledTonalShape,
             colors = if (contentColor != null) ButtonDefaults.filledTonalButtonColors(contentColor = contentColor) else ButtonDefaults.filledTonalButtonColors(),
         ) {
             Text(text, textAlign = TextAlign.Center)

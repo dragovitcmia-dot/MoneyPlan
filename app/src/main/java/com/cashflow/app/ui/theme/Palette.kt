@@ -55,16 +55,20 @@ object Palette {
      */
     const val DAY_NUMBER_ALPHA = 0.55f
 
+    /**
+     * The dark theme is NEUTRAL: every gray has R = G = B, with no blue cast. The background and the numpad band are
+     * the same near-black, so the Add wizard is one piece; surfaces are slightly lighter grays.
+     */
     val dark = ThemePalette(
-        background = 0xFF0B0D10, surface = 0xFF14171C, elevated = 0xFF1B1F26, hairline = 0xFF262B33,
-        text = 0xFFF2F4F7, textSecondary = 0xFF8A93A0,
-        accent = 0xFF3DDC97, onAccent = 0xFF0B0D10,
+        background = 0xFF050505, surface = 0xFF121212, elevated = 0xFF1A1A1A, hairline = 0xFF2A2A2A,
+        text = 0xFFF2F2F2, textSecondary = 0xFF9A9A9A,
+        accent = 0xFF3DDC97, onAccent = 0xFF050505,
         primaryContainer = 0xFF14382A, onPrimaryContainer = 0xFF3DDC97,
         negativeText = 0xFFFF5C6C, errorContainer = 0xFF3A1A1F, onErrorContainer = 0xFFFF5C6C,
-        secondaryContainer = 0xFF1B1F26, onSecondaryContainer = 0xFFF2F4F7,
+        secondaryContainer = 0xFF1A1A1A, onSecondaryContainer = 0xFFF2F2F2,
         expenseFill = EXPENSE_RED, incomeFill = INCOME_GREEN, buttonLabel = KIND_LABEL,
-        keypadBackground = 0xFF010101, keyDigit = 0xFF2D2D2F, keyAction = 0xFF171719, keyPressed = 0xFF474749, keyText = 0xFFFFFFFF,
-        inverseSurface = 0xFFF2F4F7, inverseOnSurface = 0xFF0B0D10, inverseAccent = 0xFF087A4F,
+        keypadBackground = 0xFF050505, keyDigit = 0xFF2D2D2F, keyAction = 0xFF171719, keyPressed = 0xFF474749, keyText = 0xFFFFFFFF,
+        inverseSurface = 0xFFF2F2F2, inverseOnSurface = 0xFF050505, inverseAccent = 0xFF087A4F,
         dayNegativeFill = 0xFF3A1A1F, daySelectedFill = 0xFF1D2A27, badge = 0xFFFFB020, cellIncome = 0xFF3DDC97,
     )
 

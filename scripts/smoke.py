@@ -24,6 +24,8 @@ CONFIGS = [
     ("dark-font2", True, "2.0", None, None),
     ("light-font1.3", False, "1.3", None, None),
     ("dark-320dp", True, "1.0", "640x1136", "320"),
+    # A real phone: 720 px wide at 320 dpi (360 dp), dark theme.
+    ("dark-720", True, "1.0", "720x1560", "320"),
 ]
 
 
@@ -44,11 +46,11 @@ DESC_NEXT_MONTH = S["calendar_next_month"]
 DESC_PREV_MONTH = S["calendar_previous_month"]
 
 # Configurations that also walk through Calendar, day sheet, item edit, Upcoming and Repeating payments.
-CALENDAR_CONFIGS = {"dark-normal", "light-normal", "dark-font2", "dark-320dp"}
+CALENDAR_CONFIGS = {"dark-normal", "light-normal", "dark-font2", "dark-320dp", "dark-720"}
 # Configurations that also screenshot the bottom of Settings.
-SETTINGS_BOTTOM_CONFIGS = {"dark-normal", "dark-font2"}
+SETTINGS_BOTTOM_CONFIGS = {"dark-normal", "dark-font2", "dark-720"}
 # The configuration that also switches "Accept my income automatically" on and checks what that does.
-AUTO_ACCEPT_CONFIG = "dark-normal"
+AUTO_ACCEPT_CONFIG = "dark-720"
 SAMPLE_MONTH = (2026, 11)  # the reference scenario's interesting month
 
 
@@ -531,6 +533,49 @@ def auto_accept_flow(name):
     return problems
 
 
+def wizard_walk(name):
+    """Opens EXPENSE, walks the wizard (amount, name with the keyboard, when, repeating), then leaves it through the
+    Discard question. Every step is photographed as it is reached, so a later failure still leaves the earlier shots."""
+    try:
+        tap_text(TEXT_EXPENSE)
+        find("1", scroll=False, last=True)
+        time.sleep(1)
+        screenshot(f"{name}-composer")
+        for digit in ("1", "0"):
+            tap_text(digit, last=True, scroll=False)
+        time.sleep(0.5)
+        screenshot(f"{name}-composer-typed")
+        tap_text(S["wizard_next"], scroll=False)
+        time.sleep(1.5)
+        screenshot(f"{name}-wizard-name")
+        sh("input text Coffee")
+        time.sleep(0.8)
+        screenshot(f"{name}-wizard-name-typed")
+        sh("input keyevent 66")  # Enter: Done moves on
+        time.sleep(1.5)
+        screenshot(f"{name}-wizard-when")
+        tap_text(S["timing_repeats"], scroll=False)
+        time.sleep(1)
+        screenshot(f"{name}-wizard-when-repeat")
+        sh("input keyevent 4")  # system Back: must ask, not close
+        time.sleep(1.2)
+        screenshot(f"{name}-wizard-discard")
+        find(S["wizard_keep_going"], scroll=False, timeout=8)
+        tap_text(S["wizard_discard"], scroll=False)
+        time.sleep(1.2)
+    except NotFound as e:
+        screenshot(f"{name}-wizard-FAILED")
+        print("  wizard walk:", e)
+        for _ in range(3):
+            sh("input keyevent 4")
+            time.sleep(1)
+            try:
+                tap_text(S["wizard_discard"], scroll=False, timeout=3)
+            except NotFound:
+                pass
+        raise
+
+
 def run_config(name, night, font, size, density):
     print(f"== {name}: night={night} font={font} size={size or 'default'}")
     configure(night, font, size, density)
@@ -558,16 +603,7 @@ def run_config(name, night, font, size, density):
         find(S["action_reject"], scroll=False, timeout=8)
         sh("input keyevent 4")
         time.sleep(1.2)
-        tap_text(TEXT_EXPENSE)
-        find("1", scroll=True, last=True)
-        time.sleep(1)
-        screenshot(f"{name}-composer")
-        for digit in ("1", "0"):
-            tap_text(digit, last=True)
-        time.sleep(0.5)
-        screenshot(f"{name}-composer-typed")
-        sh("input keyevent 4")  # back: closes the composer
-        time.sleep(1.5)
+        wizard_walk(name)
         if name in CALENDAR_CONFIGS:
             today = device_now().date()
             extra += calendar_flow(name, today)
@@ -869,7 +905,7 @@ def run_hero_animation():
 
 def main():
     problems = []
-    only = os.environ.get("SMOKE_CONFIGS", "dark-normal").split(",")  # best effort: one configuration by default
+    only = os.environ.get("SMOKE_CONFIGS", "dark-720").split(",")  # best effort: one configuration by default
     try:
         for cfg in CONFIGS:
             if cfg[0] in only or "all" in only:

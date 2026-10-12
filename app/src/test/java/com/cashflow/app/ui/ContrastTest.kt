@@ -74,7 +74,7 @@ class ContrastTest {
     }
 
     @Test fun keypad_uses_the_measured_samsung_style_colors() {
-        assertEquals(0xFF010101L, Palette.dark.keypadBackground)
+        assertEquals(0xFF050505L, Palette.dark.keypadBackground)
         assertEquals(0xFF2D2D2FL, Palette.dark.keyDigit)
         assertEquals(0xFF171719L, Palette.dark.keyAction)
         assertEquals(0xFF474749L, Palette.dark.keyPressed)
@@ -130,5 +130,39 @@ class ContrastTest {
         assertEquals(0xFF808080L, blend(0xFFFFFFFF, 0xFF000000, 0.5f) and 0xFFFFFFFFL)
         assertEquals(0xFFFFFFFFL, blend(0xFFFFFFFF, 0xFF000000, 1f))
         assertEquals(0xFF000000L, blend(0xFFFFFFFF, 0xFF000000, 0f))
+    }
+
+    private fun neutral(c: Long) = ((c shr 16) and 0xFF) == ((c shr 8) and 0xFF) && ((c shr 8) and 0xFF) == (c and 0xFF)
+
+    @Test fun the_dark_theme_has_no_blue_cast() {
+        val d = Palette.dark
+        for ((name, color) in listOf(
+            "background" to d.background, "surface" to d.surface, "elevated" to d.elevated, "hairline" to d.hairline,
+            "text" to d.text, "secondary text" to d.textSecondary, "secondary container" to d.secondaryContainer,
+            "on secondary container" to d.onSecondaryContainer, "numpad band" to d.keypadBackground,
+            "inverse surface" to d.inverseSurface, "inverse on surface" to d.inverseOnSurface,
+        )) {
+            assertTrue("$name 0x${color.toString(16)} is not a neutral gray", neutral(color))
+        }
+    }
+
+    @Test fun the_numpad_band_merges_with_the_dark_background_and_surfaces_step_up_in_brightness() {
+        val d = Palette.dark
+        assertEquals(0xFF050505L, d.background)
+        assertEquals(d.background, d.keypadBackground)
+        assertEquals(0xFF121212L, d.surface)
+        assertEquals(0xFF1A1A1AL, d.elevated)
+        assertTrue(Contrast.luminance(d.surface) > Contrast.luminance(d.background))
+        assertTrue(Contrast.luminance(d.elevated) > Contrast.luminance(d.surface))
+        // the keys still stand out from the (now black) band
+        assertTrue(Contrast.ratio(d.keyDigit, d.keypadBackground) >= 1.15)
+    }
+
+    @Test fun the_light_theme_is_unchanged() {
+        val l = Palette.light
+        assertEquals(0xFFF6F7F9L, l.background)
+        assertEquals(0xFFFFFFFFL, l.surface)
+        assertEquals(0xFFE9E9ECL, l.keypadBackground)
+        assertEquals(0xFF14171CL, l.text)
     }
 }

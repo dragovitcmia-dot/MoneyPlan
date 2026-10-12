@@ -157,26 +157,36 @@ data class CalendarCellContent(val dayNumber: Int, val lines: List<CellLine?>) {
     }
 }
 
-/** Sizes of a calendar cell, decided from the room the grid has and the text scale. */
+/**
+ * Sizes of a calendar cell, decided from the height of its row and the text scale. A cell is a day-number row at the
+ * top plus three EQUAL slots (expenses, one-time income, balance) that fill the rest of the height; each text sits
+ * in the middle of its slot, so the cell is used from top to bottom.
+ */
 data class CellMetrics(
     /** Height of one week row (dp). */
     val rowHeightDp: Float,
-    /** Size of the day number and of the money lines (sp). */
+    /** Height of the day-number row at the top (dp). */
+    val dayRowDp: Float,
+    /** Height of each of the three equal slots (dp). */
+    val slotDp: Float,
     val daySp: Float,
+    /** Size of the balance (the biggest line). */
+    val balanceSp: Float,
+    /** Size of the expense and income lines. */
     val moneySp: Float,
-    /** The rows need more room than there is even at the smallest text size, so the screen scrolls. */
+    /** The rows need more room than there is even at the smallest text size, so the grid area scrolls. */
     val scrolls: Boolean,
 )
 
 /**
- * One fixed cell layout at every font scale and row count. Every cell is the day number plus three money lines; when
- * room is short the TEXT gets smaller (down to [MIN_SP]) instead of lines disappearing. A pure function of its inputs:
- * nothing depends on a first measurement or on earlier navigation.
+ * One fixed cell layout at every font scale and row count. When room is short the TEXT gets smaller (down to
+ * [MIN_SP]) instead of lines disappearing. A pure function of its inputs: nothing depends on a first measurement.
  */
 object CalendarCellLayout {
     const val MIN_SP = 8f
     const val DAY_SP = 11f
-    const val MONEY_SP = 13f
+    const val BALANCE_SP = 16f
+    const val MONEY_SP = 12f
 
     /** Line height as a multiple of the text size. */
     const val LINE = 1.15f
@@ -184,22 +194,34 @@ object CalendarCellLayout {
     /** Space above, between and below the lines (dp). */
     const val PAD_DP = 4f
 
-    /** Lines in a cell: the day number and the three money slots. */
-    const val LINES = 1 + CalendarCellContent.SLOTS
+    /** Slots in a cell: expenses, one-time income, balance. */
+    const val SLOTS = CalendarCellContent.SLOTS
 
-    /** The height (dp) four lines need at text size [sp] (a text size in sp grows with [fontScale]). */
-    fun neededHeightDp(sp: Float, fontScale: Float): Float = LINES * sp * LINE * fontScale + PAD_DP
+    private fun scaleOf(fontScale: Float) = if (fontScale <= 0f) 1f else fontScale
 
-    fun metrics(availableHeightDp: Float, rows: Int, fontScale: Float): CellMetrics {
-        val scale = if (fontScale <= 0f) 1f else fontScale
-        val perRow = if (rows <= 0) 0f else availableHeightDp / rows
-        // The biggest size at which four lines fit in the row.
-        val fits = (perRow - PAD_DP) / (LINES * LINE * scale)
+    /** Height of the day-number row (dp) at text scale [fontScale]. */
+    fun dayRowDp(fontScale: Float): Float = DAY_SP * LINE * scaleOf(fontScale)
+
+    /** The height (dp) a cell needs when its three slots are as small as the smallest text allows. */
+    fun neededHeightDp(fontScale: Float): Float = PAD_DP + dayRowDp(fontScale) + SLOTS * MIN_SP * LINE * scaleOf(fontScale)
+
+    /** Metrics for [rows] rows sharing [availableHeightDp]. */
+    fun metrics(availableHeightDp: Float, rows: Int, fontScale: Float): CellMetrics =
+        forRow(if (rows <= 0) 0f else availableHeightDp / rows, fontScale)
+
+    /** Metrics for one row [rowHeightDp] tall. */
+    fun forRow(rowHeightDp: Float, fontScale: Float): CellMetrics {
+        val scale = scaleOf(fontScale)
+        val dayRow = dayRowDp(scale)
+        val slot = (rowHeightDp - PAD_DP - dayRow) / SLOTS
+        // The biggest text size at which one line fits its slot.
+        val fits = slot / (LINE * scale)
         if (fits < MIN_SP) {
-            // Not even the smallest size fits: keep it readable and let the screen scroll.
-            return CellMetrics(neededHeightDp(MIN_SP, scale), MIN_SP, MIN_SP, scrolls = true)
+            // Not even the smallest size fits: keep it readable and let the grid area scroll.
+            val minSlot = MIN_SP * LINE * scale
+            return CellMetrics(neededHeightDp(scale), dayRow, minSlot, DAY_SP, MIN_SP, MIN_SP, scrolls = true)
         }
-        return CellMetrics(perRow, minOf(DAY_SP, fits), minOf(MONEY_SP, fits), scrolls = false)
+        return CellMetrics(rowHeightDp, dayRow, slot, DAY_SP, minOf(BALANCE_SP, fits), minOf(MONEY_SP, fits), scrolls = false)
     }
 
     /**
