@@ -98,7 +98,7 @@ object Upcoming {
             .map { (key, list) -> UpcomingGroup(key, list.sortedWith(compareBy<UpcomingRow> { it.tx.date }.thenBy { it.tx.id })) }
             .sortedBy { order(it.key) }
 
-        val dailyTotal = if (engine.settings.walletMode == WalletMode.DYNAMIC && filter != UpcomingFilter.EXPENSES) {
+        val dailyTotal = if (filter != UpcomingFilter.EXPENSES) {
             rules.filter {
                 it.enabled && it.kind == TxKind.INCOME && it.pattern == RecurrencePattern.Daily &&
                     (it.endDate == null || !it.endDate.isBefore(today))

@@ -3,6 +3,7 @@ package com.cashflow.app
 import android.app.Application
 import com.cashflow.app.data.AppDatabase
 import com.cashflow.app.data.LedgerRepository
+import com.cashflow.app.data.SharedPrefsAutoAccept
 import com.cashflow.app.engine.BalanceEngine
 import com.cashflow.app.ui.UiPrefs
 import com.cashflow.app.update.UpdateManager
@@ -22,7 +23,7 @@ class CashflowApp : Application() {
 
     val uiPrefs: UiPrefs by lazy { UiPrefs(this) }
 
-    val repository: LedgerRepository by lazy { LedgerRepository(AppDatabase.create(this)) }
+    val repository: LedgerRepository by lazy { LedgerRepository(AppDatabase.create(this), SharedPrefsAutoAccept(this)) }
 
     /** The balance engine is injected as a factory so view models never construct it directly. */
     val engineFactory: EngineFactory = EngineFactory(::BalanceEngine)

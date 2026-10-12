@@ -71,6 +71,7 @@ fun UpcomingScreen(
 ) {
     val model by upcoming.model.collectAsStateWithLifecycle()
     val filter by upcoming.filter.collectAsStateWithLifecycle()
+    val today by upcoming.today.collectAsStateWithLifecycle()
     val showHint by home.swipeHintVisible.collectAsStateWithLifecycle()
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { upcoming.refreshDay() }
 
@@ -158,6 +159,7 @@ fun UpcomingScreen(
             actions = actions,
             onDismiss = { editing = null },
             onEditSeries = { editingSeries = tx.recurringRuleId },
+            today = today,
         )
     }
     editingSeries?.let { ruleId ->

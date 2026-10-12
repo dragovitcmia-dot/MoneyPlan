@@ -4,15 +4,19 @@ import java.time.LocalDate
 import java.time.temporal.ChronoUnit
 
 /**
- * Pure balance model of the user's spreadsheet. One instance is an immutable snapshot of
- * (settings, transactions, today); create a new one when any of them changes.
+ * Pure balance model. One instance is an immutable snapshot of (settings, transactions, today); create a new
+ * one when any of them changes.
  *
- * Day semantics: the starting balance is the opening balance of balanceStartDate. Income-source
- * income is added to the day's opening; closing = opening + other income - expenses. SKIPPED rows
- * have no effect anywhere. Nothing is ever confirmed automatically: PENDING rows stay PENDING until
- * the user answers, and only CONFIRMED rows count toward [currentBalance].
+ * The core rule: nothing is added or deducted unless the user accepts it.
+ *  - **Available** = starting balance + accepted (CONFIRMED) income - accepted expenses dated up to today.
+ *    PENDING and SKIPPED rows never change it, overdue or not.
+ *  - **History** (days before today): start + accepted items dated up to and including that day.
+ *  - **Forecast** (today and later): today's opening is Available minus the PENDING expenses dated before today
+ *    (assumed still to be paid, so they count as due today); overdue PENDING income is NOT counted. Then every
+ *    PENDING item (income and expenses) is applied on its own date. Accepted items dated after today (which
+ *    can only come from moving an accepted item) are applied on their date too.
  *
- * In [WalletMode.STATIC] pending income-source rows are ignored everywhere.
+ * Rows dated before [AppSettings.balanceStartDate] are outside the ledger and ignored everywhere.
  */
 class BalanceEngine(
     val settings: AppSettings,
@@ -20,38 +24,26 @@ class BalanceEngine(
     val today: LocalDate,
 ) {
     private val start = settings.balanceStartDate
-
-    private fun isSourceIncome(tx: Transaction) = tx.source == TxSource.RECURRING && tx.kind == TxKind.INCOME
-
-    private val ledger: List<Transaction> = this.transactions.filter {
-        !(settings.walletMode == WalletMode.STATIC && isSourceIncome(it) && it.status == TxStatus.PENDING)
-    }
+    private val ledger: List<Transaction> = this.transactions.filter { it.date >= start }
     private val byDate: Map<LocalDate, List<Transaction>> = ledger.groupBy { it.date }
 
-    /** Confirmed money only, up to and including today. */
-    fun currentBalance(): Long {
+    /** Accepted money only, up to and including today. */
+    fun available(): Long {
         var balance = settings.startingBalance
         for (tx in ledger) {
-            if (tx.status != TxStatus.CONFIRMED || tx.date < start || tx.date > today) continue
-            balance += signed(tx)
+            if (tx.status == TxStatus.CONFIRMED && tx.date <= today) balance += signed(tx)
         }
         return balance
     }
 
-    /**
-     * The headline figure: balance if every PENDING item dated today or earlier were settled as
-     * planned (pending expenses spent, pending incomes received). Equals today's forecast closing.
-     */
-    fun available(): Long = simulate(today).lastOrNull()?.closing ?: settings.startingBalance
-
-    /** PENDING items dated today or earlier, oldest first: what the user still has to answer. */
+    /** PENDING items dated today or earlier, oldest first: what the user can accept or reject. */
     fun toConfirm(): List<Transaction> =
-        ledger.filter { it.status == TxStatus.PENDING && it.date >= start && it.date <= today }
+        ledger.filter { it.status == TxStatus.PENDING && it.date <= today }
             .sortedWith(compareBy<Transaction> { it.date }.thenBy { it.id })
 
     fun toConfirmCount(): Int = toConfirm().size
 
-    /** Day-by-day forecast; days before balanceStartDate are not part of the ledger. */
+    /** Day-by-day history and forecast; days before balanceStartDate are not part of the ledger. */
     fun forecast(fromDate: LocalDate, toDate: LocalDate): List<DayForecast> =
         simulate(toDate).filter { it.date >= fromDate }
 
@@ -79,27 +71,45 @@ class BalanceEngine(
     private fun simulate(to: LocalDate): List<DayForecast> {
         if (to < start) return emptyList()
         val days = ArrayList<DayForecast>()
-        var previousClosing = settings.startingBalance
+        var balance = settings.startingBalance // closing of the previous day
         var date = start
         while (!date.isAfter(to)) {
             val items = byDate[date].orEmpty()
             var income = 0L
-            var extra = 0L
             var expenses = 0L
+            var accepted = 0L
+            var pending = 0L
             for (tx in items) {
                 if (tx.status == TxStatus.SKIPPED) continue
-                when {
-                    tx.kind == TxKind.EXPENSE -> expenses += tx.amount
-                    isSourceIncome(tx) -> income += tx.amount
-                    else -> extra += tx.amount
+                if (tx.kind == TxKind.INCOME) income += tx.amount else expenses += tx.amount
+                if (tx.status == TxStatus.CONFIRMED) accepted += signed(tx) else pending += signed(tx)
+            }
+            val opening: Long
+            val closing: Long
+            when {
+                date.isBefore(today) -> { // history: accepted items only
+                    opening = balance
+                    closing = opening + accepted
+                }
+                date == today -> { // Available (accepted items up to today) minus what is overdue and still to be paid
+                    opening = balance + accepted - overdueExpenses()
+                    closing = opening + pending
+                }
+                else -> { // forecast
+                    opening = balance
+                    closing = opening + pending + accepted
                 }
             }
-            val opening = previousClosing + income
-            val closing = opening + extra - expenses
-            days += DayForecast(date, opening, income, extra, expenses, closing, items)
-            previousClosing = closing
+            days += DayForecast(date, opening, income, expenses, closing, items)
+            balance = closing
             date = date.plusDays(1)
         }
         return days
     }
+
+    private val overdue: Long by lazy {
+        ledger.filter { it.kind == TxKind.EXPENSE && it.status == TxStatus.PENDING && it.date < today }.sumOf { it.amount }
+    }
+
+    private fun overdueExpenses() = overdue
 }

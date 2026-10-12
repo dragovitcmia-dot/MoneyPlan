@@ -11,7 +11,12 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SwipeToDismissBox
 import androidx.compose.material3.SwipeToDismissBoxValue
@@ -35,6 +40,7 @@ import com.cashflow.app.engine.Transaction
 import com.cashflow.app.engine.TxKind
 import com.cashflow.app.ui.Haptics
 import com.cashflow.app.ui.components.AppCard
+import com.cashflow.app.ui.components.SwipeHint
 import com.cashflow.app.ui.theme.cashflow
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
@@ -73,8 +79,8 @@ fun WaitingCard(
     LaunchedEffect(state.targetValue) {
         if (state.targetValue != SwipeToDismissBoxValue.Settled) haptics.tick() // threshold reached
     }
-    val confirmLabel = stringResource(R.string.action_confirm)
-    val skipLabel = stringResource(R.string.action_skip)
+    val acceptLabel = stringResource(R.string.action_accept)
+    val rejectLabel = stringResource(R.string.action_reject)
 
     SwipeToDismissBox(
         state = state,
@@ -82,19 +88,19 @@ fun WaitingCard(
         backgroundContent = {
             val direction = state.dismissDirection
             val color = when (direction) {
-                SwipeToDismissBoxValue.StartToEnd -> MaterialTheme.colorScheme.primary
-                SwipeToDismissBoxValue.EndToStart -> MaterialTheme.cashflow.hairline
+                SwipeToDismissBoxValue.StartToEnd -> MaterialTheme.cashflow.incomeFill
+                SwipeToDismissBoxValue.EndToStart -> MaterialTheme.cashflow.expenseFill
                 SwipeToDismissBoxValue.Settled -> Color.Transparent
             }
             Box(
-                Modifier.fillMaxSize().clip(MaterialTheme.shapes.large).background(color).padding(horizontal = 24.dp),
+                Modifier.fillMaxSize().clip(MaterialTheme.shapes.large).background(color).padding(horizontal = 28.dp),
                 contentAlignment = if (direction == SwipeToDismissBoxValue.StartToEnd) Alignment.CenterStart else Alignment.CenterEnd,
             ) {
                 when (direction) {
                     SwipeToDismissBoxValue.StartToEnd ->
-                        Text(confirmLabel, color = MaterialTheme.colorScheme.onPrimary, style = MaterialTheme.typography.titleMedium)
+                        Icon(Icons.Filled.Check, contentDescription = acceptLabel, tint = MaterialTheme.cashflow.buttonLabel, modifier = Modifier.size(36.dp))
                     SwipeToDismissBoxValue.EndToStart ->
-                        Text(skipLabel, color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.titleMedium)
+                        Icon(Icons.Filled.Close, contentDescription = rejectLabel, tint = MaterialTheme.cashflow.buttonLabel, modifier = Modifier.size(36.dp))
                     SwipeToDismissBoxValue.Settled -> Unit
                 }
             }
@@ -105,8 +111,8 @@ fun WaitingCard(
             Modifier.fillMaxWidth().semantics {
                 // TalkBack users cannot swipe the card: they get the same two actions from the actions menu.
                 customActions = listOf(
-                    CustomAccessibilityAction(confirmLabel) { onConfirm(false); true },
-                    CustomAccessibilityAction(skipLabel) { onSkip(false); true },
+                    CustomAccessibilityAction(acceptLabel) { onConfirm(false); true },
+                    CustomAccessibilityAction(rejectLabel) { onSkip(false); true },
                 )
             },
             onClick = onOpen,
@@ -135,12 +141,7 @@ fun WaitingCard(
                     )
                 }
                 footer?.invoke()
-                AnimatedVisibility(visible = showHint, enter = fadeIn(), exit = fadeOut()) {
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        Text(stringResource(R.string.hint_skip), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Text(stringResource(R.string.hint_confirm), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                }
+                AnimatedVisibility(visible = showHint, enter = fadeIn(), exit = fadeOut()) { SwipeHint() }
             }
         }
     }

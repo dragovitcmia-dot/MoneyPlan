@@ -28,7 +28,7 @@ fun BalanceEngine.whatIf(
     val end = today.plusDays(horizonDays.toLong())
     val before = forecast(today, end).associate { it.date to it.closing }
 
-    val ruleRows = if (newRule != null && RuleMaintenance.isActive(newRule, settings.walletMode)) {
+    val ruleRows = if (newRule != null && RuleMaintenance.isActive(newRule)) {
         RuleMaintenance.materialize(newRule, emptyList(), today).filter { !it.date.isAfter(end) }
     } else {
         emptyList()

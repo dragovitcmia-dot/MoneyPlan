@@ -103,4 +103,29 @@ class ItemEditsTest {
         assertEquals(0L, engineAfter.forecast(target.date, target.date).single().expenses)
         assertNull(engineAfter.nextExpense()?.takeIf { it.transactionId == target.id })
     }
+
+    // ---- who can be accepted or rejected ----------------------------------------------------
+
+    @Test fun only_pending_items_dated_today_or_earlier_can_be_answered() {
+        val today = d(2026, 10, 14)
+        assertTrue(ItemEdits.canAnswer(tx(d(2026, 10, 14), 5), today))
+        assertTrue(ItemEdits.canAnswer(tx(d(2026, 10, 1), 5), today))
+        assertFalse(ItemEdits.canAnswer(tx(d(2026, 10, 15), 5), today)) // future: cannot be accepted or rejected
+        assertFalse(ItemEdits.canAnswer(tx(d(2026, 10, 12), 5, status = TxStatus.CONFIRMED), today))
+        assertFalse(ItemEdits.canAnswer(tx(d(2026, 10, 12), 5, status = TxStatus.SKIPPED), today))
+    }
+
+    @Test fun a_future_item_stays_editable_movable_and_deletable() {
+        val future = tx(d(2026, 12, 1), 5, id = 3)
+        val moved = ItemEdits.edit(future, tnd(6), "x", d(2026, 12, 5))
+        assertEquals(d(2026, 12, 5), moved.date)
+        assertEquals(DeleteOutcome.Remove(3), ItemEdits.delete(future))
+    }
+
+    @Test fun moving_a_waiting_item_into_the_future_removes_the_answer_buttons() {
+        val today = d(2026, 10, 14)
+        val waiting = tx(d(2026, 10, 12), 5, id = 4)
+        assertTrue(ItemEdits.canAnswer(waiting, today))
+        assertFalse(ItemEdits.canAnswer(ItemEdits.edit(waiting, waiting.amount, "", d(2026, 10, 20)), today))
+    }
 }

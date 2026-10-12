@@ -29,43 +29,15 @@ class RuleMaintenanceTest {
         return src to rows
     }
 
-    // ---- activity / wallet mode ------------------------------------------------------------
+    // ---- activity ----------------------------------------------------------------------------
 
-    @Test fun static_mode_deactivates_income_sources_but_not_expense_rules() {
+    @Test fun a_series_is_active_exactly_while_it_is_switched_on() {
         val src = incomeSource(start = start)
         val exp = rule(RecurrencePattern.Daily, start)
-        assertTrue(RuleMaintenance.isActive(src, WalletMode.DYNAMIC))
-        assertFalse(RuleMaintenance.isActive(src, WalletMode.STATIC))
-        assertTrue(RuleMaintenance.isActive(exp, WalletMode.STATIC))
-        assertFalse(RuleMaintenance.isActive(src.copy(enabled = false), WalletMode.DYNAMIC))
-    }
-
-    @Test fun static_mode_gives_no_income_contribution_and_preserves_sources() {
-        val src = incomeSource(start = d(2026, 10, 11))
-        val rows = RuleMaintenance.materialize(src, emptyList(), start)
-        val dynamic = BalanceEngine(settings(start, 100), rows, d(2026, 10, 15))
-        val static = BalanceEngine(settings(start, 100, WalletMode.STATIC), rows, d(2026, 10, 15))
-        assertEquals(tnd(100 + 5 * 30), dynamic.available())
-        assertEquals(tnd(100), static.available())
-        assertTrue(static.forecast(start, d(2026, 12, 31)).all { it.closing == tnd(100) && it.income == 0L })
-        assertEquals(0, static.toConfirmCount())
-        // Switching mode changes nothing about the source itself.
-        assertTrue(src.enabled)
-        assertEquals(src, src.copy())
-    }
-
-    @Test fun static_mode_still_counts_logged_transactions() {
-        val rows = listOf(tx(d(2026, 10, 12), 40, status = TxStatus.CONFIRMED), tx(d(2026, 10, 13), 5, TxKind.INCOME, TxStatus.CONFIRMED))
-        val e = BalanceEngine(settings(start, 100, WalletMode.STATIC), rows, d(2026, 10, 14))
-        assertEquals(tnd(65), e.currentBalance())
-        assertEquals(tnd(65), e.available())
-    }
-
-    @Test fun enabling_in_static_mode_generates_nothing_until_dynamic() {
-        val src = incomeSource(start = d(2026, 10, 11), enabled = false)
-        val change = RuleMaintenance.enable(src, emptyList(), WalletMode.STATIC, today)
-        assertTrue(change.rule.enabled)
-        assertTrue(change.inserts.isEmpty())
+        assertTrue(RuleMaintenance.isActive(src))
+        assertTrue(RuleMaintenance.isActive(exp))
+        assertFalse(RuleMaintenance.isActive(src.copy(enabled = false)))
+        assertFalse(RuleMaintenance.isActive(exp.copy(enabled = false)))
     }
 
     // ---- disable ---------------------------------------------------------------------------
@@ -93,7 +65,7 @@ class RuleMaintenanceTest {
 
     @Test fun enabling_generates_from_today_forward_and_never_backfills() {
         val src = incomeSource(start = d(2026, 10, 11), enabled = false)
-        val change = RuleMaintenance.enable(src, emptyList(), WalletMode.DYNAMIC, today)
+        val change = RuleMaintenance.enable(src, emptyList(), today)
         val dates = change.inserts.map { it.date }
         assertEquals(today, dates.min())
         assertEquals(today.plusDays(Recurrence.HORIZON_DAYS), dates.max())
@@ -106,7 +78,7 @@ class RuleMaintenanceTest {
     @Test fun enabling_keeps_existing_rows_and_does_not_duplicate() {
         val src = incomeSource(start = d(2026, 10, 11), enabled = false)
         val existing = listOf(row(src, d(2026, 10, 18), TxStatus.PENDING, 1), row(src, d(2026, 10, 21), TxStatus.CONFIRMED, 2))
-        val change = RuleMaintenance.enable(src, existing, WalletMode.DYNAMIC, today)
+        val change = RuleMaintenance.enable(src, existing, today)
         assertTrue(change.inserts.none { it.date == d(2026, 10, 21) })
         assertEquals(change.inserts.size, change.inserts.map { it.date }.toSet().size)
         assertTrue(change.deleteIds.isEmpty())
@@ -114,7 +86,7 @@ class RuleMaintenanceTest {
 
     @Test fun enabling_a_future_start_date_is_kept() {
         val src = incomeSource(start = d(2026, 11, 1), enabled = false)
-        val change = RuleMaintenance.enable(src, emptyList(), WalletMode.DYNAMIC, today)
+        val change = RuleMaintenance.enable(src, emptyList(), today)
         assertEquals(d(2026, 11, 1), change.rule.startDate)
         assertEquals(d(2026, 11, 1), change.inserts.minOf { it.date })
     }
@@ -124,7 +96,7 @@ class RuleMaintenanceTest {
     @Test fun editing_amount_replaces_only_pending_future_occurrences() {
         val (src, rows) = scenario()
         val edited = src.copy(amount = tnd(50))
-        val change = RuleMaintenance.edit(src, edited, rows, WalletMode.DYNAMIC, today)
+        val change = RuleMaintenance.edit(src, edited, rows, today)
         assertEquals((21..25).map { it.toLong() }, change.deleteIds.sorted())
         assertTrue(change.inserts.all { it.amount == tnd(50) && it.status == TxStatus.PENDING })
         // Regenerated from today: today's pending row (Oct 20) exists, so the first new row is Oct 21.
@@ -137,7 +109,7 @@ class RuleMaintenanceTest {
     @Test fun editing_the_schedule_regenerates_future_rows_on_the_new_schedule() {
         val (src, rows) = scenario()
         val weekly = src.copy(pattern = RecurrencePattern.Weekly(DayOfWeek.MONDAY))
-        val change = RuleMaintenance.edit(src, weekly, rows, WalletMode.DYNAMIC, today)
+        val change = RuleMaintenance.edit(src, weekly, rows, today)
         assertEquals((21..25).map { it.toLong() }, change.deleteIds.sorted())
         assertTrue(change.inserts.all { it.date.dayOfWeek == DayOfWeek.MONDAY && it.date > today })
         assertEquals(d(2026, 10, 26), change.inserts.minOf { it.date })
@@ -145,13 +117,13 @@ class RuleMaintenanceTest {
 
     @Test fun editing_does_not_resurrect_past_occurrences() {
         val (src, rows) = scenario()
-        val change = RuleMaintenance.edit(src, src.copy(amount = tnd(31)), rows, WalletMode.DYNAMIC, today)
+        val change = RuleMaintenance.edit(src, src.copy(amount = tnd(31)), rows, today)
         assertTrue(change.inserts.none { it.date < today })
     }
 
     @Test fun editing_only_the_confirm_time_touches_no_rows() {
         val (src, rows) = scenario()
-        val change = RuleMaintenance.edit(src, src.copy(confirmTime = java.time.LocalTime.of(18, 30)), rows, WalletMode.DYNAMIC, today)
+        val change = RuleMaintenance.edit(src, src.copy(confirmTime = java.time.LocalTime.of(18, 30)), rows, today)
         assertTrue(change.deleteIds.isEmpty())
         assertTrue(change.inserts.isEmpty())
         assertEquals(java.time.LocalTime.of(18, 30), change.rule.confirmTime)
@@ -159,16 +131,9 @@ class RuleMaintenanceTest {
 
     @Test fun editing_a_disabled_source_touches_no_rows() {
         val src = incomeSource(start = d(2026, 10, 11), enabled = false)
-        val change = RuleMaintenance.edit(src, src.copy(amount = tnd(99)), emptyList(), WalletMode.DYNAMIC, today)
+        val change = RuleMaintenance.edit(src, src.copy(amount = tnd(99)), emptyList(), today)
         assertTrue(change.deleteIds.isEmpty() && change.inserts.isEmpty())
         assertEquals(tnd(99), change.rule.amount)
-    }
-
-    @Test fun editing_in_static_mode_deletes_but_does_not_materialize() {
-        val (src, rows) = scenario()
-        val change = RuleMaintenance.edit(src, src.copy(amount = tnd(50)), rows, WalletMode.STATIC, today)
-        assertEquals((21..25).map { it.toLong() }, change.deleteIds.sorted())
-        assertTrue(change.inserts.isEmpty())
     }
 
     // ---- new sources -----------------------------------------------------------------------

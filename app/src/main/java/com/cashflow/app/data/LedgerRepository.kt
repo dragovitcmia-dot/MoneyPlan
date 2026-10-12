@@ -4,6 +4,7 @@ import androidx.room.withTransaction
 import com.cashflow.app.engine.AppSettings
 import com.cashflow.app.engine.DeleteOutcome
 import com.cashflow.app.engine.ItemEdits
+import com.cashflow.app.engine.applyAutoIncome
 import com.cashflow.app.engine.RecurringRule
 import com.cashflow.app.engine.RuleChange
 import com.cashflow.app.engine.RuleMaintenance
@@ -11,22 +12,25 @@ import com.cashflow.app.engine.Transaction
 import com.cashflow.app.engine.TxStatus
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import java.time.LocalDate
+import java.time.LocalDateTime
 
 /**
  * Single access point over Room. All decisions (what to materialize, what to delete on a rule
  * change) come from the pure engine; this class loads rows, asks the engine, and writes the result.
  * Nothing here ever confirms a transaction on its own: only [confirm] / [skip] / [undo] change status.
  */
-class LedgerRepository(private val db: AppDatabase) {
+class LedgerRepository(private val db: AppDatabase, private val autoAccept: AutoAcceptStore) {
     private val txDao = db.transactionDao()
     private val ruleDao = db.recurringRuleDao()
     private val settingsDao = db.settingsDao()
 
     /** Null until the first [runMaintenance] has created the settings row. */
-    val settings: Flow<AppSettings?> = settingsDao.observe().map { it?.toDomain() }
+    val settings: Flow<AppSettings?> =
+        combine(settingsDao.observe(), autoAccept.enabled) { entity, auto -> entity?.toDomain(auto) }
 
     // Row mapping can touch thousands of rows, so it runs off the main thread.
     val transactions: Flow<List<Transaction>> =
@@ -40,24 +44,51 @@ class LedgerRepository(private val db: AppDatabase) {
     }
 
     suspend fun updateSettings(settings: AppSettings, today: LocalDate) {
+        autoAccept.set(settings.autoAcceptIncome)
         db.withTransaction {
             settingsDao.upsert(settings.toEntity())
             maintain(today)
+        }
+        // Turning the switch on, or moving the "Remind me at" time, may make waiting income acceptable now.
+        applyAutoAccept(LocalDateTime.now())
+    }
+
+    /**
+     * Accepts the waiting income of repeating income series when "accept my income automatically" is on
+     * (see [applyAutoIncome]). Run on app start, on every foreground and when the setting changes.
+     */
+    suspend fun applyAutoAccept(now: LocalDateTime) {
+        db.withTransaction {
+            val settings = settingsDao.get()?.toDomain(autoAccept.enabled.value) ?: return@withTransaction
+            if (!settings.autoAcceptIncome) return@withTransaction
+            val changed = applyAutoIncome(now, txDao.pendingRecurringIncome().map { it.toDomain() }, settings)
+            if (changed.isNotEmpty()) txDao.setStatusForIds(changed.map { it.id }, TxStatus.CONFIRMED)
         }
     }
 
     // ---- answering pending rows --------------------------------------------------------------
 
-    suspend fun confirm(id: Long) = txDao.setStatus(id, TxStatus.CONFIRMED)
-    suspend fun skip(id: Long) = txDao.setStatus(id, TxStatus.SKIPPED)
+    /** Accepts a PENDING row dated today or earlier; anything else (a future row, an answered one) is left alone. */
+    suspend fun confirm(id: Long, today: LocalDate) {
+        if (answerable(id, today)) txDao.setStatus(id, TxStatus.CONFIRMED)
+    }
 
-    /** Confirms with a different amount: only this row changes (recurring rules are untouched). */
-    suspend fun confirmWithAmount(id: Long, amount: Long) {
+    /** Rejects a PENDING row dated today or earlier. */
+    suspend fun skip(id: Long, today: LocalDate) {
+        if (answerable(id, today)) txDao.setStatus(id, TxStatus.SKIPPED)
+    }
+
+    /** Accepts with a different amount: only this row changes (recurring rules are untouched). */
+    suspend fun confirmWithAmount(id: Long, amount: Long, today: LocalDate) {
         db.withTransaction {
+            if (!answerable(id, today)) return@withTransaction
             txDao.setAmount(id, amount)
             txDao.setStatus(id, TxStatus.CONFIRMED)
         }
     }
+
+    private suspend fun answerable(id: Long, today: LocalDate): Boolean =
+        txDao.get(id)?.toDomain()?.let { ItemEdits.canAnswer(it, today) } ?: false
 
     /** Back to PENDING; [restoreAmount] puts back the amount an edited confirm had replaced. */
     suspend fun undo(id: Long, restoreAmount: Long? = null) {
@@ -70,10 +101,18 @@ class LedgerRepository(private val db: AppDatabase) {
     // ---- single items (calendar day sheet, Upcoming) ----------------------------------------------
 
     /** Changes only this row; a generated occurrence keeps its occurrenceDate, so it is never regenerated. */
-    suspend fun updateItem(id: Long, amount: Long, description: String, date: LocalDate, status: TxStatus? = null) {
+    suspend fun updateItem(
+        id: Long,
+        amount: Long,
+        description: String,
+        date: LocalDate,
+        status: TxStatus? = null,
+        today: LocalDate = LocalDate.now(),
+    ) {
         db.withTransaction {
             txDao.updateItem(id, amount, description.trim(), date)
-            if (status != null) txDao.setStatus(id, status)
+            // An item dated in the future cannot be accepted or rejected yet.
+            if (status != null && !date.isAfter(today)) txDao.setStatus(id, status)
         }
     }
 
@@ -105,7 +144,7 @@ class LedgerRepository(private val db: AppDatabase) {
                 maintain(today)
             } else {
                 val old = ruleDao.get(rule.id)?.toDomain() ?: return@withTransaction
-                val change = RuleMaintenance.edit(old, rule, rowsOf(old.id), mode(), today)
+                val change = RuleMaintenance.edit(old, rule, rowsOf(old.id), today)
                 apply(change)
             }
         }
@@ -116,7 +155,7 @@ class LedgerRepository(private val db: AppDatabase) {
             val rule = ruleDao.get(id)?.toDomain() ?: return@withTransaction
             if (rule.enabled == enabled) return@withTransaction
             val rows = rowsOf(id)
-            apply(if (enabled) RuleMaintenance.enable(rule, rows, mode(), today) else RuleMaintenance.disable(rule, rows, today))
+            apply(if (enabled) RuleMaintenance.enable(rule, rows, today) else RuleMaintenance.disable(rule, rows, today))
         }
     }
 
@@ -150,6 +189,7 @@ class LedgerRepository(private val db: AppDatabase) {
 
     /** Wipes everything and re-creates default settings. */
     suspend fun clearAll(today: LocalDate) {
+        autoAccept.set(false)
         db.withTransaction {
             txDao.deleteAll()
             ruleDao.deleteAll()
@@ -160,8 +200,6 @@ class LedgerRepository(private val db: AppDatabase) {
 
     // ---- internals ---------------------------------------------------------------------------
 
-    private suspend fun mode() = (settingsDao.get() ?: error("settings missing")).walletMode
-
     private suspend fun rowsOf(ruleId: Long) = txDao.rowsForRule(ruleId).map { it.toDomain() }
 
     private suspend fun apply(change: RuleChange) {
@@ -171,11 +209,10 @@ class LedgerRepository(private val db: AppDatabase) {
     }
 
     private suspend fun maintain(today: LocalDate) {
-        val settings = settingsDao.get()?.toDomain()
-            ?: AppSettings.default(today).also { settingsDao.upsert(it.toEntity()) }
+        settingsDao.get() ?: settingsDao.upsert(AppSettings.default(today).toEntity())
         for (entity in ruleDao.getAll()) {
             val rule = entity.toDomain()
-            if (!RuleMaintenance.isActive(rule, settings.walletMode)) continue
+            if (!RuleMaintenance.isActive(rule)) continue
             val missing = RuleMaintenance.materialize(rule, rowsOf(rule.id), today)
             if (missing.isNotEmpty()) txDao.insertAll(missing.map { it.toEntity() })
         }

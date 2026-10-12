@@ -15,11 +15,10 @@ class CalendarSummaryTest {
     private fun month(
         rows: List<Transaction>,
         rules: List<RecurringRule> = emptyList(),
-        mode: WalletMode = WalletMode.DYNAMIC,
         balance: Long = 100,
         ym: YearMonth = YearMonth.of(2026, 10),
     ): MonthSummary {
-        val engine = BalanceEngine(settings(start, balance, mode), rows, today)
+        val engine = BalanceEngine(settings(start, balance), rows, today)
         return CalendarSummaries.month(engine, rules, ym, DayOfWeek.MONDAY)
     }
 
@@ -66,14 +65,6 @@ class CalendarSummaryTest {
         assertFalse(tuesday.hasIncome)
         // The daily income still counts in the closing balance.
         assertEquals(m.day(d(2026, 10, 12))!!.closing + tnd(30), tuesday.closing)
-    }
-
-    @Test fun static_mode_hides_pending_income_source_rows_everywhere() {
-        val weekly = incomeSource(RecurrencePattern.Weekly(DayOfWeek.MONDAY), d(2026, 10, 2), amount = 50, id = 3)
-        val rows = RuleMaintenance.materialize(weekly, emptyList(), today)
-        val day = month(rows, listOf(weekly), WalletMode.STATIC).day(d(2026, 10, 12))!!
-        assertEquals(0L, day.shownIncome)
-        assertTrue(day.items.isEmpty())
     }
 
     @Test fun negative_flag_follows_the_closing_balance() {
@@ -141,6 +132,23 @@ class CalendarSummaryTest {
         assertNull(CalendarSummaries.firstShortDay(fine))
     }
 
+    @Test fun past_cells_show_history_and_later_cells_show_the_forecast() {
+        // Today is Oct 10, balance 100 from Oct 1. Oct 5: an accepted 30 expense and a pending 20 expense.
+        val rows = listOf(
+            tx(d(2026, 10, 5), 30, status = TxStatus.CONFIRMED, id = 1),
+            tx(d(2026, 10, 5), 20, id = 2),
+            tx(d(2026, 10, 12), 10, id = 3),
+        )
+        val m = month(rows)
+        assertEquals(tnd(100), m.day(d(2026, 10, 4))!!.closing)
+        assertEquals(tnd(70), m.day(d(2026, 10, 5))!!.closing) // history: accepted items only
+        assertEquals(tnd(70), m.day(d(2026, 10, 9))!!.closing)
+        // Today: Available 70 minus the overdue pending 20 = 50; then the pending 10 on Oct 12.
+        assertEquals(tnd(50), m.day(d(2026, 10, 10))!!.closing)
+        assertEquals(tnd(40), m.day(d(2026, 10, 12))!!.closing)
+        assertTrue(m.day(d(2026, 10, 9))!!.isPast)
+    }
+
     @Test fun a_day_summary_exposes_the_rows_of_the_day_for_the_sheet() {
         val rule = rule(RecurrencePattern.Weekly(DayOfWeek.MONDAY), d(2026, 10, 12), id = 7)
         val rows = RuleMaintenance.materialize(rule, emptyList(), today).map { it.copy(id = it.date.dayOfMonth.toLong()) }
@@ -175,6 +183,14 @@ class CompactAmountTest {
     @Test fun signed_text_uses_plus_and_minus() {
         assertEquals("-75", CompactAmount.signed(TxKind.EXPENSE, tnd(75)))
         assertEquals("+30", CompactAmount.signed(TxKind.INCOME, tnd(30)))
+    }
+
+    @Test fun balances_are_compact_and_signed_only_when_negative() {
+        assertEquals("135", CompactAmount.balance(tnd(135)))
+        assertEquals("-10", CompactAmount.balance(-tnd(10)))
+        assertEquals("0", CompactAmount.balance(0))
+        assertEquals("1.2k", CompactAmount.balance(tnd(1200)))
+        assertEquals("-1.2k", CompactAmount.balance(-tnd(1200)))
     }
 
     @Test fun negative_input_is_formatted_by_magnitude() {

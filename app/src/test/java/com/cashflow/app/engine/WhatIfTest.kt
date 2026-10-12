@@ -11,8 +11,8 @@ class WhatIfTest {
     private val start = d(2026, 10, 10)
     private val today = d(2026, 10, 10)
 
-    private fun engine(txs: List<Transaction> = emptyList(), balance: Long = 100, mode: WalletMode = WalletMode.DYNAMIC) =
-        BalanceEngine(settings(start, balance, mode), txs, today)
+    private fun engine(txs: List<Transaction> = emptyList(), balance: Long = 100) =
+        BalanceEngine(settings(start, balance), txs, today)
 
     private fun planned(date: java.time.LocalDate, amount: Long, id: Long = 0, kind: TxKind = TxKind.EXPENSE) =
         tx(date, amount, kind, id = id)
@@ -98,12 +98,11 @@ class WhatIfTest {
         assertFalse(engine().whatIf(listOf(farAway), horizonDays = 30).wouldCauseNegative)
     }
 
-    @Test fun a_new_income_rule_is_inert_in_static_mode() {
-        val rule = incomeSource(start = d(2026, 10, 11), amount = 1000)
-        val dyn = engine(balance = 0).whatIf(newRule = rule)
-        val sta = engine(balance = 0, mode = WalletMode.STATIC).whatIf(newRule = rule)
-        assertTrue(dyn.lowestBalance >= 0)
-        assertEquals(0L, sta.lowestBalance)
+    @Test fun a_switched_off_rule_is_inert() {
+        val rule = incomeSource(start = d(2026, 10, 11), amount = 1000, enabled = false)
+        assertEquals(0L, engine(balance = 0).whatIf(newRule = rule).lowestBalance)
+        val on = incomeSource(start = d(2026, 10, 11), amount = 1000)
+        assertTrue(engine(balance = 0).whatIf(newRule = on).lowestBalance >= 0)
     }
 
     @Test fun the_engine_itself_is_not_modified() {

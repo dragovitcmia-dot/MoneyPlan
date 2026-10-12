@@ -68,8 +68,9 @@ private fun RecurrencePattern.toKind() = when (this) {
 
 /**
  * Add or change a whole series: a regular income (INCOME) or a repeating payment (EXPENSE).
- * Saving regenerates only the entries that are still waiting in the future. An income can be deleted;
- * a repeating payment can be stopped (it ends today, its waiting future entries are removed).
+ * Saving regenerates only the entries that are still waiting in the future (accepted and rejected ones are never
+ * touched). The optional end date removes the waiting entries after it, and brings them back if it is removed or
+ * moved later. "Stop repeating" ends the series today.
  */
 @Composable
 internal fun RuleDialog(
@@ -77,7 +78,6 @@ internal fun RuleDialog(
     initial: RecurringRule?,
     newStart: LocalDate,
     onSave: (RecurringRule) -> Unit,
-    onDelete: (() -> Unit)?,
     onStop: (() -> Unit)?,
     onDismiss: () -> Unit,
 ) {
@@ -89,10 +89,9 @@ internal fun RuleDialog(
     var weekday by remember { mutableStateOf((initial?.pattern as? RecurrencePattern.Weekly)?.dayOfWeek ?: DayOfWeek.MONDAY) }
     var dayText by remember { mutableStateOf(((initial?.pattern as? RecurrencePattern.DayOfMonth)?.day ?: 1).toString()) }
     var everyNText by remember { mutableStateOf(((initial?.pattern as? RecurrencePattern.EveryNDays)?.n ?: 7).toString()) }
-    var hasEnd by remember { mutableStateOf(isExpense && initial?.endDate != null) }
+    var hasEnd by remember { mutableStateOf(initial?.endDate != null) }
     var endDate by remember { mutableStateOf(initial?.endDate ?: LocalDate.now().plusMonths(1)) }
     var confirmTime by remember { mutableStateOf(initial?.confirmTime ?: LocalTime.NOON) }
-    var confirmDelete by remember { mutableStateOf(false) }
     var confirmStop by remember { mutableStateOf(false) }
 
     val amount = Money.parse(amountText)?.takeIf { it > 0 }
@@ -105,22 +104,14 @@ internal fun RuleDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
-            Text(
-                stringResource(
-                    when {
-                        isExpense -> R.string.edit_repeating_title
-                        initial == null -> R.string.add_regular_income
-                        else -> R.string.edit_regular_income
-                    },
-                ),
-            )
+            Text(stringResource(R.string.edit_repeating_title))
         },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 LabeledTextField(
                     value = name,
                     onValueChange = { name = it },
-                    label = { Text(stringResource(if (isExpense) R.string.repeating_name_label else R.string.source_name_label)) },
+                    label = { Text(stringResource(R.string.repeating_name_label)) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
@@ -133,7 +124,7 @@ internal fun RuleDialog(
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     modifier = Modifier.fillMaxWidth(),
                 )
-                Text(stringResource(R.string.source_how_often), style = MaterialTheme.typography.labelLarge)
+                Text(stringResource(R.string.how_often_label), style = MaterialTheme.typography.labelLarge)
                 for (option in options) {
                     Row(
                         Modifier.fillMaxWidth().heightIn(min = 56.dp).clickable { schedule = option },
@@ -179,19 +170,20 @@ internal fun RuleDialog(
                         modifier = Modifier.fillMaxWidth(),
                     )
                 }
-                if (isExpense) {
-                    Row(Modifier.fillMaxWidth().heightIn(min = 56.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Text(stringResource(R.string.repeating_ends_switch), Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
-                        Switch(checked = hasEnd, onCheckedChange = { hasEnd = it })
+                // Optional end date: a date picker plus "No end date".
+                DateField(
+                    label = stringResource(R.string.end_date_label),
+                    value = endDate,
+                    onPick = { endDate = it; hasEnd = true },
+                    display = if (hasEnd) null else stringResource(R.string.no_end_date),
+                )
+                if (hasEnd) {
+                    TextButton(onClick = { hasEnd = false }, modifier = Modifier.heightIn(min = 56.dp)) {
+                        Text(stringResource(R.string.no_end_date), style = MaterialTheme.typography.titleSmall)
                     }
-                    if (hasEnd) DateField(stringResource(R.string.repeating_ends_label), endDate) { endDate = it }
-                } else {
-                    TimeField(label = stringResource(R.string.source_ask_time), value = confirmTime, onPick = { confirmTime = it })
                 }
-                if (onDelete != null) {
-                    TextButton(onClick = { confirmDelete = true }, modifier = Modifier.heightIn(min = 56.dp)) {
-                        Text(stringResource(R.string.delete_regular_income), color = MaterialTheme.colorScheme.error)
-                    }
+                if (!isExpense) {
+                    TimeField(label = stringResource(R.string.remind_label), value = confirmTime, onPick = { confirmTime = it })
                 }
                 if (onStop != null) {
                     TextButton(onClick = { confirmStop = true }, modifier = Modifier.heightIn(min = 56.dp)) {
@@ -222,7 +214,7 @@ internal fun RuleDialog(
                             description = name.trim(),
                             pattern = pattern,
                             startDate = initial?.startDate ?: newStart,
-                            endDate = if (isExpense) endDate.takeIf { hasEnd } else initial?.endDate,
+                            endDate = endDate.takeIf { hasEnd },
                             enabled = initial?.enabled ?: true,
                             confirmTime = confirmTime,
                         ),
@@ -235,15 +227,6 @@ internal fun RuleDialog(
         },
     )
 
-    if (confirmDelete && onDelete != null) {
-        AlertDialog(
-            onDismissRequest = { confirmDelete = false },
-            title = { Text(stringResource(R.string.delete_title, initial?.description.orEmpty())) },
-            text = { Column(Modifier.verticalScroll(rememberScrollState())) { Text(stringResource(R.string.delete_body)) } },
-            confirmButton = { TextButton(onClick = { confirmDelete = false; onDelete() }, modifier = Modifier.heightIn(min = 56.dp)) { Text(stringResource(R.string.action_delete)) } },
-            dismissButton = { TextButton(onClick = { confirmDelete = false }, modifier = Modifier.heightIn(min = 56.dp)) { Text(stringResource(R.string.action_cancel)) } },
-        )
-    }
     if (confirmStop && onStop != null) {
         AlertDialog(
             onDismissRequest = { confirmStop = false },

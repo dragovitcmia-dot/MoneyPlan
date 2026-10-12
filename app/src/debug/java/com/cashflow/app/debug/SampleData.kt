@@ -9,5 +9,6 @@ suspend fun LedgerRepository.loadReferenceScenario(today: LocalDate) {
     insertTransactions(ReferenceScenario.oneOffExpenses)
     insertRule(ReferenceScenario.sundayRule.copy(id = 0))
     insertRule(ReferenceScenario.dailyIncomeSource.copy(id = 0))
+    insertRule(ReferenceScenario.endingIncomeSource.copy(id = 0))
     updateSettings(ReferenceScenario.settings, today) // also materializes the rules
 }

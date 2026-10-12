@@ -5,7 +5,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** Nothing is ever confirmed automatically; confirm / skip / undo are the only ways rows change. */
+/** Nothing is accepted automatically (income auto-accept aside, see AutoAcceptTest); accept / reject / undo are the only ways rows change. */
 class StrictConfirmationTest {
     private val start = d(2026, 10, 10)
     private val cfg = settings(start, 100)
@@ -21,10 +21,12 @@ class StrictConfirmationTest {
         // The app was closed for days: maintenance on this launch only *creates* rows (as PENDING).
         val rows = RuleMaintenance.materialize(source, emptyList(), today) + tx(d(2026, 10, 12), 40, id = 1)
         assertTrue(rows.all { it.status == TxStatus.PENDING })
-        assertEquals(tnd(100), e(today, rows).currentBalance())
+        assertEquals(tnd(100), e(today, rows).available())
         // 10 income days (Oct 11..20) and the expense are all still waiting to be confirmed.
         assertEquals(11, e(today, rows).toConfirmCount())
-        assertEquals(tnd(100 + 10 * 30 - 40), e(today, rows).available())
+        // Forecast today: 100, minus the overdue pending expense (40), plus today's own pending income (30).
+        // The nine overdue pending incomes are not counted.
+        assertEquals(tnd(100 - 40 + 30), e(today, rows).forecast(today, today).single().closing)
     }
 
     @Test fun to_confirm_is_oldest_first_and_includes_income_and_expenses() {
@@ -50,13 +52,11 @@ class StrictConfirmationTest {
         assertEquals(1, engine.toConfirmCount())
     }
 
-    @Test fun confirming_an_expense_moves_it_into_current_balance_and_keeps_available() {
+    @Test fun accepting_an_expense_lowers_available_by_exactly_its_amount() {
         val rows = listOf(tx(d(2026, 10, 12), 40, id = 1))
         val before = e(d(2026, 10, 14), rows)
         val after = e(d(2026, 10, 14), rows.with(1, TxStatus.CONFIRMED))
-        assertEquals(tnd(100), before.currentBalance())
-        assertEquals(tnd(60), before.available())
-        assertEquals(tnd(60), after.currentBalance())
+        assertEquals(tnd(100), before.available())
         assertEquals(tnd(60), after.available())
         assertEquals(1, before.toConfirmCount())
         assertEquals(0, after.toConfirmCount())
@@ -65,14 +65,12 @@ class StrictConfirmationTest {
     @Test fun confirming_income_raises_current_balance() {
         val rows = listOf(tx(d(2026, 10, 12), 30, TxKind.INCOME, source = TxSource.RECURRING, id = 1))
         val after = e(d(2026, 10, 14), rows.with(1, TxStatus.CONFIRMED))
-        assertEquals(tnd(130), after.currentBalance())
         assertEquals(tnd(130), after.available())
     }
 
     @Test fun skipping_removes_the_effect_from_both_figures() {
         val rows = listOf(tx(d(2026, 10, 12), 40, id = 1), tx(d(2026, 10, 12), 30, TxKind.INCOME, id = 2))
         val skipped = e(d(2026, 10, 14), rows.with(1, TxStatus.SKIPPED).with(2, TxStatus.SKIPPED))
-        assertEquals(tnd(100), skipped.currentBalance())
         assertEquals(tnd(100), skipped.available())
         assertEquals(0, skipped.toConfirmCount())
     }
@@ -81,9 +79,8 @@ class StrictConfirmationTest {
         val rows = listOf(tx(d(2026, 10, 12), 40, id = 1))
         val confirmed = rows.with(1, TxStatus.CONFIRMED)
         val undone = confirmed.with(1, TxStatus.PENDING)
-        assertEquals(tnd(60), e(d(2026, 10, 14), confirmed).currentBalance())
-        assertEquals(tnd(100), e(d(2026, 10, 14), undone).currentBalance())
-        assertEquals(tnd(60), e(d(2026, 10, 14), undone).available())
+        assertEquals(tnd(60), e(d(2026, 10, 14), confirmed).available())
+        assertEquals(tnd(100), e(d(2026, 10, 14), undone).available())
         assertEquals(1, e(d(2026, 10, 14), undone).toConfirmCount())
         val skippedThenUndone = rows.with(1, TxStatus.SKIPPED).with(1, TxStatus.PENDING)
         assertEquals(1, e(d(2026, 10, 14), skippedThenUndone).toConfirmCount())

@@ -33,6 +33,7 @@ def strings():
 
 
 S = strings()
+S_FORMAT_BALANCE = S["cal_desc_balance"].replace("%1$s", "{}")
 TEXT_SETTINGS = S["nav_settings"]
 TEXT_HOME = S["nav_home"]
 TEXT_LOAD_SAMPLE = S["debug_load_sample"]
@@ -47,8 +48,8 @@ DESC_PREV_MONTH = S["calendar_previous_month"]
 CALENDAR_CONFIGS = {"dark-normal", "light-normal", "dark-font2", "dark-320dp"}
 # Configurations that also screenshot the bottom of Settings.
 SETTINGS_BOTTOM_CONFIGS = {"dark-normal", "dark-font2"}
-# Configurations that also switch "Add my income automatically" off to look at the dimmed income list.
-INCOME_OFF_CONFIGS = {"dark-normal", "light-normal"}
+# The configuration that also switches "Accept my income automatically" on and checks what that does.
+AUTO_ACCEPT_CONFIG = "dark-normal"
 SAMPLE_MONTH = (2026, 11)  # the reference scenario's interesting month
 
 
@@ -139,6 +140,28 @@ def tap_text(text, **kw):
     x1, y1, x2, y2 = find(text, **kw)
     sh(f"input tap {(x1 + x2) // 2} {(y1 + y2) // 2}")
     time.sleep(0.8)
+
+
+def tap_text_midscreen(text, attempts=8):
+    """Scrolls until `text` is in the middle band of the screen (clear of the bottom bar), then taps it."""
+    for _ in range(attempts):
+        nodes = dump_nodes() or []
+        hits = [b for t, d, b in nodes if t.strip() == text or d.strip() == text]
+        if hits:
+            _, h = screen_size(nodes)
+            x1, y1, x2, y2 = sorted(hits, key=lambda b: (b[1], b[0]))[0]
+            cy = (y1 + y2) // 2
+            if h * 0.15 < cy < h * 0.65:
+                sh(f"input tap {(x1 + x2) // 2} {cy}")
+                time.sleep(0.8)
+                return
+            if cy >= h * 0.65:
+                swipe_up(0.7, 0.4)
+            else:
+                swipe_down()
+        else:
+            swipe_up(0.7, 0.4)
+    raise NotFound(f"text {text!r} never reached the middle of the screen")
 
 
 def configure(night, font, size, density):
@@ -263,9 +286,57 @@ def cell_descriptions():
     return out
 
 
-def check_sample_numbers(name):
+import datetime as _dt
+
+# The reference scenario, written down independently of the app (see ReferenceScenario.kt): start Oct 10, 2026 with
+# 180 TND, one-off expenses, 75 every Sunday Oct 11 .. Dec 27, and 30 of daily income from Oct 11. Nothing is accepted
+# when the numbers are checked, so Available stays 180 and the forecast follows the rule in BalanceEngine.
+REF_START = _dt.date(2026, 10, 10)
+REF_BALANCE = 180
+REF_ONE_OFFS = {(10, 12): 128, (10, 13): 67, (10, 14): 30, (10, 15): 20, (10, 16): 20, (10, 24): 75, (10, 31): 25,
+                (11, 10): 380, (11, 12): 63, (11, 28): 220, (11, 30): 25, (12, 12): 63, (12, 31): 25}
+
+
+def ref_expenses_on(d):
+    total = REF_ONE_OFFS.get((d.month, d.day), 0) if d.year == 2026 else 0
+    if _dt.date(2026, 10, 11) <= d <= _dt.date(2026, 12, 27) and d.weekday() == 6:
+        total += 75
+    return total
+
+
+def ref_income_on(d):
+    return 30 if d >= _dt.date(2026, 10, 11) else 0  # (the 2027 freelance series is far away)
+
+
+def ref_closing(d, today):
+    """Balance at the end of day d when nothing has been accepted: history is flat; from today on, Available minus
+    the overdue pending expenses, plus every pending item on its date. Overdue pending income is not counted."""
+    if d < REF_START:
+        return None
+    if d < today:
+        return REF_BALANCE
+    overdue = sum(ref_expenses_on(REF_START + _dt.timedelta(days=i)) for i in range(max((today - REF_START).days, 0)))
+    balance = REF_BALANCE - overdue
+    day = max(today, REF_START)
+    while day <= d:
+        balance += ref_income_on(day) - ref_expenses_on(day)
+        day += _dt.timedelta(days=1)
+    return balance
+
+
+def device_now():
+    """The phone's local date and time (what the app uses)."""
+    text = sh("date '+%Y-%m-%d %H:%M'").strip()
+    return _dt.datetime.strptime(text, "%Y-%m-%d %H:%M")
+
+
+def balance_text(value):
+    sign = "\u2212" if value < 0 else ""
+    return f"{sign}{abs(value):,}".replace(",", "\u00a0")
+
+
+def check_sample_numbers(name, today):
     """Compares what the November 2026 cells say (their accessibility text) with the reference scenario."""
-    import datetime
     problems = []
     cells = cell_descriptions()
     y, m = SAMPLE_MONTH
@@ -274,28 +345,26 @@ def check_sample_numbers(name):
         if d is None:
             problems.append(f"{name}: calendar cell for {y}-{m:02d}-{day:02d} was not found")
             continue
+        date = _dt.date(y, m, day)
+        closing = ref_closing(date, today)
         short = "Money runs short" in d
-        want_short = day in (10, 12)
-        if short != want_short:
-            problems.append(f"{name}: {y}-{m:02d}-{day:02d} short={short}, expected {want_short} ({d!r})")
+        if short != (closing < 0):
+            problems.append(f"{name}: {date} short={short}, expected {closing < 0} (balance {closing}) ({d!r})")
+        want_balance = S_FORMAT_BALANCE.format(balance_text(closing))
+        if want_balance not in d:
+            problems.append(f"{name}: {date} should say {want_balance!r} but says {d!r}")
+        exp = ref_expenses_on(date)
+        if exp and f"Expenses {exp} dinars" not in d:
+            problems.append(f"{name}: {date} should say 'Expenses {exp} dinars' but says {d!r}")
+        if not exp and "Expenses" in d:
+            problems.append(f"{name}: {date} shows an expense that is not in the scenario ({d!r})")
         if "Income" in d:
-            problems.append(f"{name}: {y}-{m:02d}-{day:02d} shows income although only daily income exists ({d!r})")
-    expected = {10: 380, 12: 63, 28: 220, 30: 25}
-    for day in range(1, 31):
-        if datetime.date(y, m, day).weekday() == 6:
-            expected[day] = 75  # the Sunday rule
-    for day, amount in expected.items():
-        d = cells.get((y, m, day), "")
-        if f"Expenses {amount} dinars" not in d:
-            problems.append(f"{name}: {y}-{m:02d}-{day:02d} should say 'Expenses {amount} dinars' but says {d!r}")
-    for day in range(1, 31):
-        if day not in expected and "Expenses" in cells.get((y, m, day), ""):
-            problems.append(f"{name}: {y}-{m:02d}-{day:02d} shows an expense that is not in the scenario")
-    print(f"  calendar numbers checked against the reference scenario: {len(cells)} cells read, {len(problems)} problems")
+            problems.append(f"{name}: {date} shows income although only daily income exists ({d!r})")
+    print(f"  calendar numbers checked against the reference model (today={today}): {len(cells)} cells, {len(problems)} problems")
     return problems
 
 
-def calendar_flow(name):
+def calendar_flow(name, today):
     problems = []
     tap_text(NAV_CALENDAR, scroll=False)
     time.sleep(1.5)
@@ -303,13 +372,15 @@ def calendar_flow(name):
     go_to_month(*SAMPLE_MONTH)
     time.sleep(1)
     screenshot(f"{name}-calendar-nov")
-    problems += check_sample_numbers(name)
+    problems += check_sample_numbers(name, today)
 
-    # Day sheet of Nov 10: closes at -10, so "Short by 10 TND" and the item list.
+    # Day sheet of Nov 10: the closing balance sentence must match the reference model.
     tap_text("November 10, 2026", scroll=False, contains=True)
     time.sleep(1.2)
     screenshot(f"{name}-day-sheet")
-    find(S["day_end_short"].replace("%1$s", "10"), scroll=False, timeout=8)
+    nov10 = ref_closing(_dt.date(2026, 11, 10), today)
+    sentence = S["day_end_short" if nov10 < 0 else "day_end_have"].replace("%1$s", balance_text(abs(nov10)).replace("\u2212", ""))
+    find(sentence, scroll=False, timeout=8)
     # One item: change it.
     tap_text("Expense 11/10")
     time.sleep(1)
@@ -343,36 +414,56 @@ def calendar_flow(name):
     return problems
 
 
-def upcoming_flow(name):
+def upcoming_flow(name, today):
     problems = []
     tap_text(NAV_UPCOMING, scroll=False)
     time.sleep(1.5)
     screenshot(f"{name}-upcoming")
-    try:
-        find(S["short_by_tag"].replace("%1$s", "10"), timeout=30)
+    # A waiting item: its edit sheet has the red cross and the green check.
+    tap_text("Sunday expense", scroll=False)
+    time.sleep(1)
+    find(S["item_edit_title"], scroll=False, timeout=8)
+    find(S["action_accept"], scroll=True, timeout=15)
+    find(S["action_reject"], scroll=False, timeout=8)
+    screenshot(f"{name}-item-edit-waiting")
+    sh("input keyevent 4")
+    time.sleep(1.2)
+    nov10 = ref_closing(_dt.date(2026, 11, 10), today)
+    if nov10 < 0:
+        try:
+            find(S["short_by_tag"].replace("%1$s", balance_text(-nov10)), timeout=30)
+            screenshot(f"{name}-upcoming-short")
+        except NotFound as e:
+            problems.append(f"{name}: Upcoming has no 'Short by {-nov10} TND' row for Nov 10 ({e})")
+    else:
+        for _ in range(4):
+            swipe_up()
         screenshot(f"{name}-upcoming-short")
-    except NotFound as e:
-        problems.append(f"{name}: Upcoming has no 'Short by 10 TND' row for Nov 10 ({e})")
     return problems
 
 
 def settings_flow(name):
-    """Settings screenshots: Repeating payments (and its editor), and the bottom of the screen."""
+    """Settings screenshots: Repeating payments (with its editors), the bottom of the screen, and for one
+    configuration what "Accept my income automatically" really does."""
     problems = []
-    if name in INCOME_OFF_CONFIGS:
-        switch_text = S["auto_income_title"]
-        tap_text(switch_text, scroll=False, last=True)  # the switch has the same description as its label
-        time.sleep(1)
-        try:
-            find(S["income_not_auto"], scroll=False, timeout=8)
-            screenshot(f"{name}-settings-income-off")
-        except NotFound as e:
-            problems.append(f"{name}: switching automatic income off did not show the note ({e})")
-        tap_text(switch_text, scroll=False, last=True)  # back on
-        time.sleep(1)
     find(TEXT_REPEATING, scroll=True)
     time.sleep(0.5)
     screenshot(f"{name}-repeating")
+    # An income series with an end date is listed with its signed amount and "until <date>".
+    try:
+        find("Freelance income", scroll=True, timeout=20)
+        find("until", scroll=False, timeout=8, contains=True)
+        screenshot(f"{name}-repeating-income")
+        tap_text("Freelance income", scroll=False)
+        time.sleep(1)
+        find(S["end_date_label"], scroll=True, timeout=15, contains=True)
+        screenshot(f"{name}-repeating-income-edit")
+        sh("input keyevent 4")
+        time.sleep(1)
+    except NotFound as e:
+        problems.append(f"{name}: the ending income series is not listed with an end date ({e})")
+    scroll_to_top()
+    find(TEXT_REPEATING, scroll=True)
     tap_text("Sunday expense", scroll=True)
     time.sleep(1)
     screenshot(f"{name}-repeating-edit")
@@ -382,6 +473,52 @@ def settings_flow(name):
         for _ in range(8):
             swipe_up()
         screenshot(f"{name}-settings-bottom")
+    if name == AUTO_ACCEPT_CONFIG:
+        problems += auto_accept_flow(name)
+    return problems
+
+
+def spoken_available():
+    for _, d, _ in dump_nodes() or []:
+        m = re.match(r"Available: (.+) dinars", d)
+        if m:
+            return m.group(1).replace("\u00a0", "").replace("\u2212", "-")
+    return None
+
+
+def waiting_count():
+    for t, _, _ in dump_nodes() or []:
+        m = re.match(r"(\d+) waiting for you", t.strip())
+        if m:
+            return int(m.group(1))
+    return 0
+
+
+def auto_accept_flow(name):
+    """Turns "Accept my income automatically" on and checks, against the reference model, what was accepted."""
+    problems = []
+    now = device_now()
+    today = now.date()
+    scroll_to_top()
+    tap_text(S["auto_income_title"], scroll=False, last=True)  # the switch has the same description as its label
+    time.sleep(3)  # the catch-up runs when the setting changes
+    screenshot(f"{name}-settings-auto-on")
+    tap_text(TEXT_HOME, scroll=False)
+    time.sleep(3)
+    # Daily income of earlier days is caught up at once; today's only from the "Remind me at" time (12:00).
+    income_days = max((today - _dt.date(2026, 10, 11)).days, 0) + (1 if now.hour >= 12 and today >= _dt.date(2026, 10, 11) else 0)
+    want = str(REF_BALANCE + 30 * income_days)
+    got = spoken_available()
+    if got != want:
+        problems.append(f"{name}: after turning auto-accept on Available should be {want} but is {got}")
+    pending_expenses = sum(1 for i in range((today - REF_START).days + 1) if ref_expenses_on(REF_START + _dt.timedelta(days=i)))
+    pending_income_today = 1 if (now.hour < 12 and today >= _dt.date(2026, 10, 11)) else 0
+    want_waiting = pending_expenses + pending_income_today
+    got_waiting = waiting_count()
+    if got_waiting != want_waiting:
+        problems.append(f"{name}: waiting count should be {want_waiting} (expenses never auto-accepted) but is {got_waiting}")
+    print(f"  auto-accept: Available {got} (expected {want}), waiting {got_waiting} (expected {want_waiting})")
+    screenshot(f"{name}-home-auto-income")
     return problems
 
 
@@ -396,6 +533,22 @@ def run_config(name, night, font, size, density):
         tap_text(TEXT_HOME, scroll=False)
         time.sleep(4)  # the count-up finishes
         screenshot(f"{name}-home")
+        extra = []
+        # Nothing has been accepted: Available is the starting balance, whatever is waiting or overdue.
+        if spoken_available() != str(REF_BALANCE):
+            extra.append(f"{name}: Available should be {REF_BALANCE} while nothing is accepted, but is {spoken_available()}")
+        # Tapping a waiting card opens the accept sheet: a red cross and a green check.
+        scroll_to_top(3)
+        tap_text_midscreen("Sunday expense")
+        time.sleep(1.2)
+        screenshot(f"{name}-home-accept-sheet")
+        try:
+            find(S["action_accept"], scroll=False, timeout=6)
+        except NotFound:
+            find(S["action_accept"], scroll=True, timeout=15)  # a short screen: the sheet scrolls
+        find(S["action_reject"], scroll=False, timeout=8)
+        sh("input keyevent 4")
+        time.sleep(1.2)
         tap_text(TEXT_EXPENSE)
         find("1", scroll=True, last=True)
         time.sleep(1)
@@ -406,10 +559,10 @@ def run_config(name, night, font, size, density):
         screenshot(f"{name}-composer-typed")
         sh("input keyevent 4")  # back: closes the composer
         time.sleep(1.5)
-        extra = []
         if name in CALENDAR_CONFIGS:
-            extra += calendar_flow(name)
-            extra += upcoming_flow(name)
+            today = device_now().date()
+            extra += calendar_flow(name, today)
+            extra += upcoming_flow(name, today)
         tap_text(TEXT_SETTINGS, scroll=False)
         time.sleep(1)
         scroll_to_top()  # the tab keeps its scroll position, so a fresh look starts from the top

@@ -3,7 +3,6 @@ package com.cashflow.app.ui.items
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.cashflow.app.engine.TxKind
 import com.cashflow.app.ui.settings.RuleDialog
 import com.cashflow.app.ui.settings.SettingsViewModel
 
@@ -17,8 +16,7 @@ fun RuleEditorHost(ruleId: Long, settings: SettingsViewModel, onDismiss: () -> U
         initial = rule,
         newStart = rule.startDate,
         onSave = { settings.saveSource(it); onDismiss() },
-        onDelete = if (rule.kind == TxKind.INCOME) ({ settings.deleteSource(rule.id); onDismiss() }) else null,
-        onStop = if (rule.kind == TxKind.EXPENSE) ({ settings.stopRepeating(rule.id); onDismiss() }) else null,
+        onStop = { settings.stopRepeating(rule.id); onDismiss() },
         onDismiss = onDismiss,
     )
 }

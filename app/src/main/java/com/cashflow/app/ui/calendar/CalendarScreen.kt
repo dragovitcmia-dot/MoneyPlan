@@ -161,7 +161,8 @@ fun CalendarScreen(
         }
         val dayLine = with(density) { (16.sp * 1.3f).toDp() }
         val amountLine = with(density) { (13.sp * 1.3f).toDp() }
-        val rowHeight = dayLine + 6.dp + (if (dots) 12.dp else amountLine * 2) + 6.dp
+        // Normal size: about 92dp (day number, expense, income, and the day's balance at the bottom).
+        val rowHeight = if (dots) dayLine + 6.dp + 12.dp + 6.dp else maxOf(92.dp, dayLine + amountLine * 3 + 22.dp)
 
         Column(
             Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(
@@ -276,6 +277,7 @@ fun CalendarScreen(
             actions = actions,
             onDismiss = { editing = null },
             onEditSeries = { editingSeries = tx.recurringRuleId },
+            today = today,
         )
     }
 
@@ -433,6 +435,19 @@ private fun DayCell(
                 }
             }
         }
+        if (!dots && day.hasForecast) {
+            // The balance at the end of the day (history for past days, dimmed). Red when negative.
+            FitText(
+                CompactAmount.balance(day.closing),
+                when {
+                    day.negative -> colors.negative
+                    day.isPast -> MaterialTheme.colorScheme.onSurfaceVariant
+                    else -> MaterialTheme.colorScheme.onBackground
+                },
+                amountStyle,
+                Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(bottom = 5.dp),
+            )
+        }
         if (day.waiting > 0) {
             Box(Modifier.align(Alignment.TopEnd).padding(top = 5.dp, end = 5.dp).size(8.dp).background(colors.badge, CircleShape))
         }
@@ -451,6 +466,7 @@ private fun describe(resources: android.content.res.Resources, day: DaySummary):
     if (day.isToday) parts += resources.getString(R.string.cal_desc_today)
     if (day.hasExpenses) parts += resources.getString(R.string.cal_desc_expenses, Money.formatDisplay(day.expenses, withCurrency = false))
     if (day.hasIncome) parts += resources.getString(R.string.cal_desc_income, Money.formatDisplay(day.shownIncome, withCurrency = false))
+    if (day.hasForecast) parts += resources.getString(R.string.cal_desc_balance, Money.formatDisplay(day.closing, withCurrency = false))
     if (day.negative) parts += resources.getString(R.string.cal_desc_short)
     if (day.waiting > 0) parts += resources.getQuantityString(R.plurals.cal_desc_waiting, day.waiting, day.waiting)
     return parts.joinToString(". ")

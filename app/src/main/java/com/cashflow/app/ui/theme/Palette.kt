@@ -160,6 +160,14 @@ fun ThemePalette.graphicPairs(): List<GraphicPair> = listOf(
     GraphicPair("income dot on background", cellIncome, background),
     GraphicPair("income dot on a negative day", cellIncome, dayNegativeFill),
     GraphicPair("income dot on the selected day", cellIncome, daySelectedFill),
+    // Accept / reject icons (the INCOME green and EXPENSE red) drawn on the cards and sheets: the swipe hint and the
+    // question icons. On the coloured buttons themselves the icon is white (see the text pairs for the kind fills).
+    GraphicPair("reject cross (expense red) on surface", expenseFill, surface),
+    GraphicPair("reject cross (expense red) on background", expenseFill, background),
+    GraphicPair("accept check (income green) on surface", incomeFill, surface),
+    GraphicPair("accept check (income green) on background", incomeFill, background),
+    GraphicPair("white icon on the reject fill", buttonLabel, expenseFill),
+    GraphicPair("white icon on the accept fill", buttonLabel, incomeFill),
     GraphicPair("selection outline on background", accent, background),
     GraphicPair("selection outline on a negative day", accent, dayNegativeFill),
     GraphicPair("selection outline on the selected day", accent, daySelectedFill),
