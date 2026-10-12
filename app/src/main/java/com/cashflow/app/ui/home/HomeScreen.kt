@@ -89,7 +89,6 @@ import com.cashflow.app.ui.components.AppButtonStyle
 import com.cashflow.app.ui.components.AnswerButtons
 import com.cashflow.app.ui.components.AppCard
 import com.cashflow.app.ui.components.KindButtons
-import com.cashflow.app.ui.items.CardDate
 import com.cashflow.app.ui.items.ItemDetails
 import com.cashflow.app.ui.items.ItemEditSheet
 import com.cashflow.app.ui.items.RejectConfirmDialog
