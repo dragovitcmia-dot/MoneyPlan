@@ -24,6 +24,8 @@ CONFIGS = [
     ("dark-font2", True, "2.0", None, None),
     ("light-font1.3", False, "1.3", None, None),
     ("dark-320dp", True, "1.0", "640x1136", "320"),
+    # A real phone: 720 px wide at 320 dpi (360 dp), dark theme.
+    ("dark-720", True, "1.0", "720x1560", "320"),
 ]
 
 
@@ -44,11 +46,11 @@ DESC_NEXT_MONTH = S["calendar_next_month"]
 DESC_PREV_MONTH = S["calendar_previous_month"]
 
 # Configurations that also walk through Calendar, day sheet, item edit, Upcoming and Repeating payments.
-CALENDAR_CONFIGS = {"dark-normal", "light-normal", "dark-font2", "dark-320dp"}
+CALENDAR_CONFIGS = {"dark-normal", "light-normal", "dark-font2", "dark-320dp", "dark-720"}
 # Configurations that also screenshot the bottom of Settings.
-SETTINGS_BOTTOM_CONFIGS = {"dark-normal", "dark-font2"}
+SETTINGS_BOTTOM_CONFIGS = {"dark-normal", "dark-font2", "dark-720"}
 # The configuration that also switches "Accept my income automatically" on and checks what that does.
-AUTO_ACCEPT_CONFIG = "dark-normal"
+AUTO_ACCEPT_CONFIG = "dark-720"
 SAMPLE_MONTH = (2026, 11)  # the reference scenario's interesting month
 
 
@@ -91,6 +93,9 @@ def screen_size(nodes):
 
 def screenshot(name):
     os.makedirs(OUT, exist_ok=True)
+    for _ in range(3):  # a system "isn't responding" box would hide the app in the picture
+        if not dismiss_system_dialog(dump_nodes() or []):
+            break
     png = subprocess.run(["adb", "exec-out", "screencap", "-p"], capture_output=True).stdout
     with open(os.path.join(OUT, name + ".png"), "wb") as f:
         f.write(png)
@@ -102,14 +107,15 @@ class NotFound(Exception):
 
 
 def dismiss_system_dialog(nodes):
-    """An emulator's own "<app> isn't responding" box (seen for the launcher on slow runners) hides the app from the
-    UI dump: press Wait so the app is visible again."""
-    if any("isn't responding" in (t or "") for t, _, _ in nodes):
+    """An emulator's own "<app> isn't responding" box (seen for the launcher after the screen size changes; the
+    apostrophe may be a typographic one) hides the app: press Wait so the app is visible again."""
+    if any("responding" in (t or "").lower() for t, _, _ in nodes):
         for t, _, b in nodes:
             if (t or "").strip() == "Wait":
                 sh(f"input tap {(b[0] + b[2]) // 2} {(b[1] + b[3]) // 2}")
-                time.sleep(1)
-                return
+                time.sleep(1.5)
+                return True
+    return False
 
 
 def find(text, scroll=True, last=False, timeout=FIND_TIMEOUT, contains=False):
@@ -250,7 +256,7 @@ def launch():
 
 # ---- calendar / upcoming / settings walk-through -------------------------------------------------------
 
-MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
+MONTHS = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"]  # the app writes dates like 05 OCT 2026
 
 
 def swipe_up(fraction_from=0.75, fraction_to=0.3):
@@ -277,7 +283,7 @@ def scroll_to_top(times=10):
 def visible_month_title():
     """(year, month) of the calendar title that is on screen, or None."""
     for t, _, _ in dump_nodes() or []:
-        m = re.fullmatch(r"([A-Z][a-z]+) (\d{4})", t.strip())
+        m = re.fullmatch(r"([A-Z]{3}) (\d{4})", t.strip())
         if m and m.group(1) in MONTHS:
             return int(m.group(2)), MONTHS.index(m.group(1)) + 1
     return None
@@ -300,13 +306,13 @@ def go_to_month(year, month):
 def cell_descriptions():
     """{date: content description} of the calendar cells, scrolling the tab once to reach the lower rows."""
     out = {}
-    pattern = re.compile(r"^[A-Za-z]+, ([A-Za-z]+) (\d+), (\d{4})")
+    pattern = re.compile(r"^[A-Z]{3} (\d{2}) ([A-Z]{3}) (\d{4})")
 
     def collect():
         for _, d, _ in dump_nodes() or []:
             m = pattern.match(d)
-            if m and m.group(1) in MONTHS:
-                out[(int(m.group(3)), MONTHS.index(m.group(1)) + 1, int(m.group(2)))] = d
+            if m and m.group(2) in MONTHS:
+                out[(int(m.group(3)), MONTHS.index(m.group(2)) + 1, int(m.group(1)))] = d
 
     collect()
     swipe_up()
@@ -404,7 +410,7 @@ def calendar_flow(name, today):
     problems += check_sample_numbers(name, today)
 
     # Day sheet of Nov 10: the closing balance sentence must match the reference model.
-    tap_text("November 10, 2026", scroll=False, contains=True)
+    tap_text("10 NOV 2026", scroll=False, contains=True)
     time.sleep(1.2)
     screenshot(f"{name}-day-sheet")
     nov10 = ref_closing(_dt.date(2026, 11, 10), today)
@@ -430,7 +436,7 @@ def calendar_flow(name, today):
     time.sleep(1.2)
 
     # An item that comes from a repeating payment (Sunday Nov 8).
-    tap_text("November 8, 2026", scroll=False, contains=True)
+    tap_text("08 NOV 2026", scroll=False, contains=True)
     time.sleep(1.2)
     tap_text("Sunday expense")
     time.sleep(1)
@@ -531,9 +537,54 @@ def auto_accept_flow(name):
     return problems
 
 
+def wizard_walk(name):
+    """Opens EXPENSE, walks the wizard (amount, name with the keyboard, when, repeating), then leaves it through the
+    Discard question. Every step is photographed as it is reached, so a later failure still leaves the earlier shots."""
+    try:
+        tap_text(TEXT_EXPENSE)
+        find("1", scroll=False, last=True)
+        time.sleep(1)
+        screenshot(f"{name}-composer")
+        for digit in ("1", "0"):
+            tap_text(digit, last=True, scroll=False)
+        time.sleep(0.5)
+        screenshot(f"{name}-composer-typed")
+        tap_text(S["wizard_next"], scroll=False)
+        time.sleep(1.5)
+        screenshot(f"{name}-wizard-name")
+        sh("input text Coffee")
+        time.sleep(0.8)
+        screenshot(f"{name}-wizard-name-typed")
+        sh("input keyevent 66")  # Enter: Done moves on
+        time.sleep(1.5)
+        screenshot(f"{name}-wizard-when")
+        tap_text(S["timing_repeats"], scroll=False)
+        time.sleep(1)
+        screenshot(f"{name}-wizard-when-repeat")
+        sh("input keyevent 4")  # system Back: must ask, not close
+        time.sleep(1.2)
+        screenshot(f"{name}-wizard-discard")
+        find(S["wizard_keep_going"], scroll=False, timeout=8)
+        tap_text(S["wizard_discard"], scroll=False)
+        time.sleep(1.2)
+    except NotFound as e:
+        screenshot(f"{name}-wizard-FAILED")
+        print("  wizard walk:", e)
+        for _ in range(3):
+            sh("input keyevent 4")
+            time.sleep(1)
+            try:
+                tap_text(S["wizard_discard"], scroll=False, timeout=3)
+            except NotFound:
+                pass
+        return [f"{name}: wizard walk: {e}"]
+    return []
+
+
 def run_config(name, night, font, size, density):
     print(f"== {name}: night={night} font={font} size={size or 'default'}")
     configure(night, font, size, density)
+    time.sleep(5)  # let the launcher settle after a size change
     try:
         launch()
         tap_text(TEXT_SETTINGS, scroll=False)
@@ -558,16 +609,7 @@ def run_config(name, night, font, size, density):
         find(S["action_reject"], scroll=False, timeout=8)
         sh("input keyevent 4")
         time.sleep(1.2)
-        tap_text(TEXT_EXPENSE)
-        find("1", scroll=True, last=True)
-        time.sleep(1)
-        screenshot(f"{name}-composer")
-        for digit in ("1", "0"):
-            tap_text(digit, last=True)
-        time.sleep(0.5)
-        screenshot(f"{name}-composer-typed")
-        sh("input keyevent 4")  # back: closes the composer
-        time.sleep(1.5)
+        extra += wizard_walk(name)
         if name in CALENDAR_CONFIGS:
             today = device_now().date()
             extra += calendar_flow(name, today)
@@ -869,7 +911,7 @@ def run_hero_animation():
 
 def main():
     problems = []
-    only = os.environ.get("SMOKE_CONFIGS", "dark-normal").split(",")  # best effort: one configuration by default
+    only = os.environ.get("SMOKE_CONFIGS", "dark-720").split(",")  # best effort: one configuration by default
     try:
         for cfg in CONFIGS:
             if cfg[0] in only or "all" in only:

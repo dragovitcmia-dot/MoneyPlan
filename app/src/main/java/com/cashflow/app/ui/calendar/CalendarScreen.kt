@@ -21,7 +21,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowLeft
@@ -104,6 +104,12 @@ import java.time.temporal.WeekFields
 import java.util.Locale
 
 private val CellGap = 3.dp
+
+/** Cell highlights (today, selected, negative) are nearly square: 3 dp corners. */
+private val CellShape = RoundedCornerShape(3.dp)
+
+/** The today marker is a small rounded square, not a pill or a circle. */
+private val TodayShape = RoundedCornerShape(4.dp)
 private val GridPadding = 8.dp
 
 
@@ -197,6 +203,7 @@ fun CalendarScreen(
                         goToMonth(YearMonth.from(today))
                     },
                     style = AppButtonStyle.Tonal,
+                    shape = CellShape,
                 )
             }
             shortDay?.let { day -> ShortBanner(day) {
@@ -210,13 +217,10 @@ fun CalendarScreen(
             // money lines. When the room is short the TEXT shrinks; only when even the smallest text cannot fit does the
             // grid area (not the header) scroll. The sizes are a pure function of this area's size and the text scale.
             BoxWithConstraints(Modifier.fillMaxWidth().weight(1f)) {
-                val metrics = CalendarCellLayout.metrics(maxHeight.value, CalendarGrid.FIXED_ROWS, density.fontScale)
-                val pagerModifier = if (metrics.scrolls) {
-                    Modifier.fillMaxWidth().height(metrics.rowHeightDp.dp * CalendarGrid.FIXED_ROWS)
-                } else {
-                    Modifier.fillMaxSize()
-                }
-                Box(if (metrics.scrolls) Modifier.fillMaxSize().verticalScroll(rememberScrollState()) else Modifier.fillMaxSize()) {
+                val worst = CalendarCellLayout.metrics(maxHeight.value, CalendarGrid.FIXED_ROWS, density.fontScale)
+                val gridHeight = if (worst.scrolls) (worst.rowHeightDp * CalendarGrid.FIXED_ROWS).dp else maxHeight
+                val pagerModifier = if (worst.scrolls) Modifier.fillMaxWidth().height(gridHeight) else Modifier.fillMaxSize()
+                Box(if (worst.scrolls) Modifier.fillMaxSize().verticalScroll(rememberScrollState()) else Modifier.fillMaxSize()) {
                     HorizontalPager(
                         state = pager,
                         modifier = pagerModifier,
@@ -226,7 +230,7 @@ fun CalendarScreen(
                         MonthGrid(
                             summary = months[MonthPages.monthOf(page)],
                             selected = selected,
-                            metrics = metrics,
+                            gridHeightDp = gridHeight.value,
                             cellWidthDp = cellWidthDp,
                             fontScale = density.fontScale,
                             onDayClick = { day ->
@@ -297,7 +301,7 @@ private fun ShortBanner(day: LocalDate, onClick: () -> Unit) {
     Surface(
         onClick = onClick,
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).semantics { role = Role.Button; contentDescription = "$text. $action" },
-        shape = MaterialTheme.shapes.large,
+        shape = CellShape,
         color = MaterialTheme.colorScheme.errorContainer,
         contentColor = MaterialTheme.colorScheme.onErrorContainer,
     ) {
@@ -333,7 +337,7 @@ private fun WeekdayHeader(firstDay: java.time.DayOfWeek) {
 private fun MonthGrid(
     summary: MonthSummary?,
     selected: LocalDate?,
-    metrics: CellMetrics,
+    gridHeightDp: Float,
     cellWidthDp: Float,
     fontScale: Float,
     onDayClick: (DaySummary) -> Unit,
@@ -346,6 +350,8 @@ private fun MonthGrid(
         return
     }
     val rows = summary.weeks.size
+    // Sizes come from the actual cell height (5 or 6 rows share the grid), as a pure function of it and the text scale.
+    val metrics = CalendarCellLayout.metrics(gridHeightDp, rows, fontScale)
     val horizontalLine = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.35f)
     val verticalLine = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)
     Column(
@@ -401,9 +407,10 @@ private fun DayCell(
     // Day numbers are small and faint (the money is the content); only today's number is full contrast and bold.
     val faint = MaterialTheme.colorScheme.onSurface.copy(alpha = Palette.DAY_NUMBER_ALPHA)
     val numberColor = if (day.inMonth) faint else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
-    val dayLine = with(LocalDensity.current) { (metrics.daySp.sp * CalendarCellLayout.LINE).toDp() }
-    val moneyLine = with(LocalDensity.current) { (metrics.moneySp.sp * CalendarCellLayout.LINE).toDp() }
+    val dayRow = with(LocalDensity.current) { metrics.dayRowDp.dp }
     val dayStyle = MaterialTheme.typography.bodyMedium.copy(fontSize = metrics.daySp.sp, lineHeight = (metrics.daySp * CalendarCellLayout.LINE).sp)
+    // Highlights are nearly square (no pills anywhere on the calendar).
+    val shape = CellShape
     if (!day.inMonth) {
         // The neighbouring months' days only fill the grid; they are dimmed and not touchable.
         Box(modifier.padding(CellGap).clearAndSetSemantics {}, contentAlignment = Alignment.TopCenter) {
@@ -414,7 +421,6 @@ private fun DayCell(
     val content = remember(day) { CalendarCellContent.of(day) }
     val resources = LocalContext.current.resources
     val description = remember(day, resources) { describe(resources, day) }
-    val shape = MaterialTheme.shapes.small
     val fill = when {
         day.negative -> colors.dayNegativeFill
         selected -> colors.daySelectedFill
@@ -429,11 +435,12 @@ private fun DayCell(
             .clickable(role = Role.Button) { onClick(day) }
             .semantics { contentDescription = description; this.selected = selected },
     ) {
-        Column(Modifier.fillMaxSize().padding(top = (CalendarCellLayout.PAD_DP / 2).dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            Box(Modifier.fillMaxWidth().height(dayLine), contentAlignment = Alignment.Center) {
+        Column(Modifier.fillMaxSize().padding(top = (CalendarCellLayout.PAD_DP / 2).dp, bottom = (CalendarCellLayout.PAD_DP / 2).dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            // The day number at the top ...
+            Box(Modifier.fillMaxWidth().height(dayRow), contentAlignment = Alignment.Center) {
                 if (day.isToday) {
                     Box(
-                        Modifier.defaultMinSize(minWidth = dayLine, minHeight = dayLine).clip(CircleShape).background(MaterialTheme.colorScheme.primary),
+                        Modifier.defaultMinSize(minWidth = dayRow, minHeight = dayRow).clip(TodayShape).background(MaterialTheme.colorScheme.primary),
                         contentAlignment = Alignment.Center,
                     ) {
                         Text(
@@ -448,15 +455,18 @@ private fun DayCell(
                     Text(day.date.dayOfMonth.toString(), style = dayStyle, fontWeight = FontWeight.Normal, color = numberColor)
                 }
             }
-            for (line in content.lines) {
-                Box(Modifier.fillMaxWidth().height(moneyLine), contentAlignment = Alignment.Center) {
+            // ... then three EQUAL slots that fill the rest of the cell; each text is centred in its slot, so the
+            // expenses sit in the upper part and the balance in the lower part.
+            for ((index, line) in content.lines.withIndex()) {
+                Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
                     if (line != null) {
                         val color = when (line.kind) {
                             CellLineKind.EXPENSE -> colors.negative
                             CellLineKind.INCOME -> colors.cellIncome
                             CellLineKind.BALANCE -> if (day.negative) colors.negative else MaterialTheme.colorScheme.onSurface
                         }
-                        val size = CalendarCellLayout.fitSp(line.text, cellWidthDp, metrics.moneySp, fontScale)
+                        val max = if (index == CalendarCellContent.BALANCE_SLOT) metrics.balanceSp else metrics.moneySp
+                        val size = CalendarCellLayout.fitSp(line.text, cellWidthDp, max, fontScale)
                         Text(
                             line.text,
                             color = color,
@@ -475,7 +485,7 @@ private fun DayCell(
             }
         }
         if (day.waiting > 0) {
-            Box(Modifier.align(Alignment.TopEnd).padding(top = 3.dp, end = 3.dp).size(6.dp).background(colors.badge, CircleShape))
+            Box(Modifier.align(Alignment.TopEnd).padding(top = 3.dp, end = 3.dp).size(6.dp).background(colors.badge, TodayShape))
         }
     }
 }

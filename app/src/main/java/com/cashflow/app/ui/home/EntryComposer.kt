@@ -1,6 +1,21 @@
 package com.cashflow.app.ui.home
 
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.union
+import androidx.compose.foundation.layout.windowInsetsBottomHeight
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.ModalBottomSheetProperties
+import androidx.compose.material3.SheetValue
+import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.ui.platform.LocalConfiguration
+import com.cashflow.app.engine.DiscardGuard
+import androidx.compose.material3.SuggestionChip
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -58,8 +73,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import com.cashflow.app.R
 import com.cashflow.app.engine.AmountInput
 import com.cashflow.app.engine.AppDates
@@ -218,81 +231,104 @@ fun EntryComposer(
         }
     }
 
-    Dialog(
-        onDismissRequest = ::requestClose,
-        properties = DialogProperties(dismissOnBackPress = true, dismissOnClickOutside = false, usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
-    ) {
-        Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.surface) {
-            Column(Modifier.fillMaxSize().systemBarsPadding().imePadding()) {
-                // Header: a band in the kind color with white bold text, like the big button on Home.
-                Box(
-                    Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp).clip(MaterialTheme.shapes.large).background(accentFill).padding(vertical = 10.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(
-                        stringResource(if (isExpense) R.string.button_expense else R.string.button_income).uppercase(),
-                        style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = colors.buttonLabel,
-                    )
-                }
-                val (position, total) = EntryWizard.progress(wizard)
-                Column(Modifier.padding(horizontal = 24.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    LinearProgressIndicator(
-                        progress = { position.toFloat() / total },
-                        modifier = Modifier.fillMaxWidth(),
-                        color = accentFill,
-                        trackColor = MaterialTheme.colorScheme.surfaceVariant,
-                    )
-                    Text(
-                        stringResource(R.string.wizard_step_of, position, total),
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-
-                val problems = if (wizard.attempted) EntryWizard.problems(wizard) else emptyList()
-                Column(
-                    Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp, vertical = 12.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp),
-                ) {
-                    when (wizard.step) {
-                        WizardStep.AMOUNT -> AmountStep(form, problems) { wizard = EntryWizard.update(wizard, it) }
-                        WizardStep.NAME -> NameStep(form, isExpense, names, problems, onNext = ::goNext) { wizard = EntryWizard.update(wizard, it) }
-                        WizardStep.WHEN -> WhenStep(form, isExpense, ui.today, problems) { wizard = EntryWizard.update(wizard, it) }
-                        WizardStep.BELOW_ZERO -> BelowZeroStep(dip, accentFill, onAddAnyway = { wizard = EntryWizard.next(wizard); haptics.tick() }, onChange = { wizard = EntryWizard.change(wizard); haptics.reject() }, onCancel = { onDismiss() })
-                        WizardStep.REVIEW -> ReviewStep(form, defaultText, accentFill, ui, entry(), resultingBalance)
-                    }
-                }
-
-                if (wizard.step != WizardStep.BELOW_ZERO) {
-                    // Back and Next / Add: white bold text on the kind color.
-                    Row(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        AppButton(
-                            stringResource(if (EntryWizard.back(wizard) == null) R.string.action_cancel else R.string.wizard_back),
-                            onClick = ::goBack,
-                            modifier = Modifier.weight(1f).heightIn(min = 64.dp),
-                            style = AppButtonStyle.Outlined,
-                        )
-                        val last = wizard.step == WizardStep.REVIEW
-                        AppButton(
-                            text = stringResource(
-                                when {
-                                    saving -> R.string.saving
-                                    last && isExpense -> R.string.wizard_add_expense
-                                    last -> R.string.wizard_add_income
-                                    else -> R.string.wizard_next
-                                },
-                            ),
-                            onClick = { if (last) add() else goNext() },
-                            enabled = !saving,
-                            modifier = Modifier.weight(1f).heightIn(min = 64.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = accentFill, contentColor = colors.buttonLabel),
-                            textStyle = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-                        )
-                    }
+    // Swiping the drawer down, tapping outside and system Back never lose progress: while anything is entered, hiding
+    // is refused and the "Discard?" question is shown instead; an untouched wizard just closes.
+    val latest by rememberUpdatedState(wizard)
+    val sheetState = rememberModalBottomSheetState(
+        skipPartiallyExpanded = true,
+        confirmValueChange = { target ->
+            when {
+                target != SheetValue.Hidden -> true
+                !DiscardGuard.hasProgress(latest, initial) -> true
+                else -> {
+                    discard = DiscardState(asking = true)
+                    false
                 }
             }
+        },
+    )
+    val maxSheetHeight = (LocalConfiguration.current.screenHeightDp * 0.92f).dp
+
+    ModalBottomSheet(
+        onDismissRequest = ::requestClose,
+        sheetState = sheetState,
+        containerColor = MaterialTheme.colorScheme.background,
+        properties = ModalBottomSheetProperties(shouldDismissOnBackPress = false),
+    ) {
+        BackHandler(enabled = !discard.asking) { requestClose() }
+        Column(Modifier.fillMaxWidth().heightIn(max = maxSheetHeight)) {
+        // Header: a band in the kind color with white bold text, like the big button on Home.
+        Box(
+            Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp).clip(MaterialTheme.shapes.large).background(accentFill).padding(vertical = 10.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                stringResource(if (isExpense) R.string.button_expense else R.string.button_income).uppercase(),
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold,
+                color = colors.buttonLabel,
+            )
+        }
+        val (position, total) = EntryWizard.progress(wizard)
+        Column(Modifier.padding(horizontal = 24.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            LinearProgressIndicator(
+                progress = { position.toFloat() / total },
+                modifier = Modifier.fillMaxWidth(),
+                color = accentFill,
+                trackColor = MaterialTheme.colorScheme.surfaceVariant,
+                drawStopIndicator = {},
+            )
+            Text(
+                stringResource(R.string.wizard_step_of, position, total),
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+
+        val problems = if (wizard.attempted) EntryWizard.problems(wizard) else emptyList()
+        Column(
+            Modifier.weight(1f, fill = false).fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            when (wizard.step) {
+                WizardStep.AMOUNT -> AmountStep(form, problems) { wizard = EntryWizard.update(wizard, it) }
+                WizardStep.NAME -> NameStep(form, isExpense, names, problems, onNext = ::goNext) { wizard = EntryWizard.update(wizard, it) }
+                WizardStep.WHEN -> WhenStep(form, isExpense, ui.today, problems) { wizard = EntryWizard.update(wizard, it) }
+                WizardStep.BELOW_ZERO -> BelowZeroStep(dip, accentFill, onAddAnyway = { wizard = EntryWizard.next(wizard); haptics.tick() }, onChange = { wizard = EntryWizard.change(wizard); haptics.reject() }, onCancel = { onDismiss() })
+                WizardStep.REVIEW -> ReviewStep(form, defaultText, accentFill, ui, entry(), resultingBalance)
+            }
+        }
+
+        if (wizard.step != WizardStep.BELOW_ZERO) {
+            // Back and Next / Add: white bold text on the kind color.
+            Row(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                AppButton(
+                    stringResource(if (EntryWizard.back(wizard) == null) R.string.action_cancel else R.string.wizard_back),
+                    onClick = ::goBack,
+                    modifier = Modifier.weight(1f).heightIn(min = 64.dp),
+                    style = AppButtonStyle.Outlined,
+                )
+                val last = wizard.step == WizardStep.REVIEW
+                AppButton(
+                    text = stringResource(
+                        when {
+                            saving -> R.string.saving
+                            last && isExpense -> R.string.wizard_add_expense
+                            last -> R.string.wizard_add_income
+                            else -> R.string.wizard_next
+                        },
+                    ),
+                    onClick = { if (last) add() else goNext() },
+                    enabled = !saving,
+                    modifier = Modifier.weight(1f).heightIn(min = 64.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = accentFill, contentColor = colors.buttonLabel),
+                    textStyle = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                )
+            }
+        }
+
+            // Room for the system navigation bar, or for the keyboard when it is open: the buttons are always fully visible.
+            Box(Modifier.fillMaxWidth().windowInsetsBottomHeight(WindowInsets.ime.union(WindowInsets.navigationBars)))
         }
     }
 
@@ -376,17 +412,16 @@ private fun NameStep(
     }
     StepTitle(stringResource(R.string.wizard_name_title))
     if (frequent.isNotEmpty()) {
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        // Small chips in one row (it scrolls sideways if they ever do not fit), never stacked bricks.
+        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             for (name in frequent) {
-                FilterChip(
-                    selected = form.description.trim().equals(name, ignoreCase = true),
+                SuggestionChip(
                     onClick = {
                         change { it.copy(description = name) }
                         keyboard?.hide()
                         focusManager.clearFocus()
                     },
-                    label = { Text(name, style = MaterialTheme.typography.labelLarge) },
-                    modifier = Modifier.heightIn(min = 48.dp),
+                    label = { Text(name, style = MaterialTheme.typography.labelMedium, maxLines = 1) },
                 )
             }
         }
