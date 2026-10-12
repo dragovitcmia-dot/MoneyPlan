@@ -9,7 +9,7 @@ class SettingsLayoutTest {
     @Test fun cards_come_in_the_agreed_order_with_developer_tools_last() {
         val l = SettingsPlan.build(startingPointEditable = true, showDeveloperTools = true)
         assertEquals(
-            listOf(SettingsCard.INCOME, SettingsCard.REPEATING_PAYMENTS, SettingsCard.STARTING_POINT, SettingsCard.APP_UPDATES, SettingsCard.DEVELOPER_TOOLS),
+            listOf(SettingsCard.INCOME, SettingsCard.STARTING_POINT, SettingsCard.APP_UPDATES, SettingsCard.DEVELOPER_TOOLS),
             l.cards,
         )
     }
@@ -17,7 +17,7 @@ class SettingsLayoutTest {
     @Test fun developer_tools_can_be_removed_with_one_constant_and_the_rest_keeps_its_order() {
         val l = SettingsPlan.build(showDeveloperTools = false)
         assertEquals(
-            listOf(SettingsCard.INCOME, SettingsCard.REPEATING_PAYMENTS, SettingsCard.STARTING_POINT, SettingsCard.APP_UPDATES),
+            listOf(SettingsCard.INCOME, SettingsCard.STARTING_POINT, SettingsCard.APP_UPDATES),
             l.cards,
         )
     }
@@ -39,8 +39,8 @@ class SettingsLayoutTest {
         assertEquals(SettingsCard.DEVELOPER_TOOLS, l.cards.last())
     }
 
-    @Test fun there_is_no_regular_income_list_card_any_more() {
-        assertEquals(5, SettingsCard.entries.size)
+    @Test fun settings_has_no_income_list_and_no_repeating_payments_card() {
+        assertEquals(listOf("INCOME", "STARTING_POINT", "APP_UPDATES", "DEVELOPER_TOOLS"), SettingsCard.entries.map { it.name })
         assertEquals(SettingsCard.INCOME, SettingsPlan.build().cards.first())
     }
 }

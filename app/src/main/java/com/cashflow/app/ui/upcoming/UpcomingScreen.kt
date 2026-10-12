@@ -49,7 +49,8 @@ import com.cashflow.app.ui.components.AppCard
 import com.cashflow.app.ui.components.quantityString
 import com.cashflow.app.ui.home.HomeViewModel
 import com.cashflow.app.ui.items.ItemEditSheet
-import com.cashflow.app.ui.items.RuleEditorHost
+import com.cashflow.app.ui.items.ItemDetails
+import com.cashflow.app.ui.items.RejectConfirmDialog
 import com.cashflow.app.ui.items.WaitingCard
 import com.cashflow.app.ui.items.rememberItemActions
 import com.cashflow.app.ui.rememberHaptics
@@ -78,7 +79,7 @@ fun UpcomingScreen(
     val haptics = rememberHaptics()
     val actions = rememberItemActions(home, snackbar)
     var editing by remember { mutableStateOf<Transaction?>(null) }
-    var editingSeries by remember { mutableStateOf<Long?>(null) }
+    var changing by remember { mutableStateOf<Transaction?>(null) }
     val current = model
 
     LazyColumn(
@@ -139,7 +140,7 @@ fun UpcomingScreen(
                             },
                             onSkip = { fromSwipe ->
                                 if (fromSwipe) home.onSwipeCompleted()
-                                actions.skip(row.tx)
+                                actions.requestReject(row.tx)
                             },
                             onOpen = { editing = row.tx },
                             modifier = Modifier.animateItem(),
@@ -154,17 +155,19 @@ fun UpcomingScreen(
     }
 
     editing?.let { tx ->
-        ItemEditSheet(
+        ItemDetails(
             tx = tx,
+            home = home,
             actions = actions,
-            onDismiss = { editing = null },
-            onEditSeries = { editingSeries = tx.recurringRuleId },
             today = today,
+            onDismiss = { editing = null },
+            onEdit = { changing = tx },
         )
     }
-    editingSeries?.let { ruleId ->
-        RuleEditorHost(ruleId = ruleId, settings = settings, onDismiss = { editingSeries = null })
+    changing?.let { tx ->
+        ItemEditSheet(tx = tx, actions = actions, onDismiss = { changing = null }, today = today)
     }
+    RejectConfirmDialog(actions)
 }
 
 private val RowDate: DateTimeFormatter get() = DateTimeFormatter.ofPattern("EEE d MMM", Locale.getDefault())

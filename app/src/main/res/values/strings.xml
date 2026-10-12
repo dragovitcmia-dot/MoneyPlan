@@ -127,6 +127,50 @@
     <string name="item_deleted">Deleted %1$s</string>
     <string name="item_skipped_this_day">Rejected %1$s for this day only</string>
 
+    <!-- Reject warning -->
+    <string name="reject_title">Reject this?</string>
+    <string name="reject_body">This is permanent. It will be removed from your plan.</string>
+
+    <!-- Item details -->
+    <string name="details_title">Details</string>
+    <string name="detail_type">Type</string>
+    <string name="detail_amount">Amount</string>
+    <string name="detail_date">Date</string>
+    <string name="detail_status">Status</string>
+    <string name="detail_repeat">Repeats</string>
+    <string name="detail_one_time">Does not repeat</string>
+    <string name="detail_kind_expense">Expense</string>
+    <string name="detail_kind_income">Income</string>
+    <string name="detail_series_line">%1$s · until %2$s</string>
+    <string name="details_edit_item">Change this item</string>
+    <string name="details_future_note">This is planned for a later day. You can accept or reject it on its day.</string>
+
+    <!-- Postpone -->
+    <string name="action_postpone">Postpone</string>
+    <string name="postpone_title">Move it to a later day</string>
+    <string name="postpone_tomorrow">Tomorrow</string>
+    <string name="postpone_3_days">In 3 days</string>
+    <string name="postpone_next_week">Next week</string>
+    <string name="postpone_pick">Pick a date</string>
+    <string name="postponed_item">Moved %1$s to %2$s</string>
+    <string name="postpone_series_note">Only this day moves. The rest of the repeating payment stays as it is.</string>
+
+    <!-- Repeating payment actions on an item -->
+    <string name="series_section_title">This repeating payment</string>
+    <string name="series_edit_future">Edit this and future</string>
+    <string name="series_edit_future_title">Change this and future</string>
+    <string name="series_edit_future_body">Waiting items from today on get the new name and amount. Items you already accepted or rejected stay as they are.</string>
+    <string name="series_end">End series</string>
+    <string name="series_end_title">End “%1$s”?</string>
+    <string name="series_end_body">Choose the first day it should no longer appear. Waiting items from that day on are removed. Items you already accepted or rejected stay.</string>
+    <string name="series_end_from">Stop from</string>
+    <string name="series_delete">Delete series</string>
+    <string name="series_delete_title">Delete “%1$s” for good?</string>
+    <string name="series_delete_body">The repeating payment is removed, together with its waiting items after today. Items you already accepted or rejected stay in your history.</string>
+    <string name="series_changed">Repeating payment changed</string>
+    <string name="series_ended">Repeating payment ends on %1$s</string>
+    <string name="series_deleted">Repeating payment deleted</string>
+
     <!-- Add from a day -->
     <string name="timing_happened">Already happened</string>
     <string name="now_hint_past_expense">You spent this on %1$s. It counts on that day.</string>
@@ -163,17 +207,6 @@
 
     <!-- Settings cards -->
     <string name="income_card_title">Income</string>
-    <string name="repeating_title">Repeating payments</string>
-    <string name="repeating_empty">Nothing here yet. Add one with EXPENSE or INCOME, then choose Repeats.</string>
-    <string name="repeating_switch_description">Turn %1$s on or off</string>
-    <string name="edit_repeating_title">Change repeating payment</string>
-    <string name="repeating_name_label">Name</string>
-    <string name="repeating_until">until %1$s</string>
-    <string name="end_date_label">End date</string>
-    <string name="no_end_date">No end date</string>
-    <string name="stop_repeating">Stop repeating</string>
-    <string name="stop_title">Stop “%1$s”?</string>
-    <string name="stop_body">It stops from today. Payments still waiting in the future are removed. Payments you already answered stay in your history.</string>
     <string name="starting_title">Starting point</string>
     <string name="starting_locked_note">Clear all data to start again</string>
     <string name="developer_title">Developer tools</string>

@@ -90,6 +90,9 @@ import com.cashflow.app.ui.components.AnswerButtons
 import com.cashflow.app.ui.components.AppCard
 import com.cashflow.app.ui.components.KindButtons
 import com.cashflow.app.ui.items.CardDate
+import com.cashflow.app.ui.items.ItemDetails
+import com.cashflow.app.ui.items.ItemEditSheet
+import com.cashflow.app.ui.items.RejectConfirmDialog
 import com.cashflow.app.ui.items.WaitingCard
 import com.cashflow.app.ui.items.rememberItemActions
 import com.cashflow.app.ui.components.pressScale
@@ -137,11 +140,12 @@ private fun HomeContent(
     val showHint by viewModel.swipeHintVisible.collectAsStateWithLifecycle()
     var composerKind by rememberSaveable { mutableStateOf<String?>(null) }
     var editing by remember { mutableStateOf<Transaction?>(null) }
+    var changing by remember { mutableStateOf<Transaction?>(null) }
 
     val actions = rememberItemActions(viewModel, snackbarHost)
     fun labelOf(tx: Transaction) = actions.labelOf(tx)
     fun confirm(tx: Transaction, newAmount: Long? = null) = actions.confirm(tx, newAmount)
-    fun skip(tx: Transaction) = actions.skip(tx)
+    fun reject(tx: Transaction) = actions.requestReject(tx) // asks first: rejecting is permanent
 
     LazyColumn(
         state = listState,
@@ -185,7 +189,7 @@ private fun HomeContent(
                     },
                     onSkip = { fromSwipe ->
                         if (fromSwipe) viewModel.onSwipeCompleted()
-                        skip(tx)
+                        reject(tx)
                     },
                     onOpen = { editing = tx },
                     modifier = Modifier.animateItem(),
@@ -206,22 +210,19 @@ private fun HomeContent(
     }
 
     editing?.let { tx ->
-        EditAmountSheet(
+        ItemDetails(
             tx = tx,
-            title = labelOf(tx),
+            home = viewModel,
+            actions = actions,
+            today = ui.today,
             onDismiss = { editing = null },
-            onReject = {
-                editing = null
-                skip(tx)
-            },
-            onAccept = { amount ->
-                editing = null
-                // Unchanged (also after rounding to 2 decimals) means: keep the stored amount exactly.
-                val changed = amount != tx.amount && amount != Money.roundToCents(tx.amount)
-                confirm(tx, newAmount = amount.takeIf { changed })
-            },
+            onEdit = { changing = tx },
         )
     }
+    changing?.let { tx ->
+        ItemEditSheet(tx = tx, actions = actions, onDismiss = { changing = null }, today = ui.today)
+    }
+    RejectConfirmDialog(actions)
 }
 
 @Composable
@@ -313,42 +314,6 @@ private fun CaughtUp() {
             tint = MaterialTheme.colorScheme.outline,
         )
         Text(stringResource(R.string.caught_up), style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-    }
-}
-
-/**
- * Accept with a different amount: the field is prefilled; a changed amount updates only this row. The red
- * cross rejects the item, the green check accepts it.
- */
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun EditAmountSheet(tx: Transaction, title: String, onDismiss: () -> Unit, onReject: () -> Unit, onAccept: (Long) -> Unit) {
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    var text by remember { mutableStateOf(Money.formatInput(tx.amount)) }
-    val amount = Money.parse(text, maxDecimals = 2)?.takeIf { it > 0 }
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
-        Column(
-            Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp).padding(bottom = 24.dp).navigationBarsPadding(),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-        ) {
-            Text(stringResource(R.string.edit_confirm_title, title), style = MaterialTheme.typography.titleLarge)
-            Text(
-                tx.date.format(CardDate) + " · " + stringResource(R.string.edit_confirm_hint),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            LabeledTextField(
-                value = text,
-                onValueChange = { text = it },
-                label = { Text(stringResource(R.string.amount_label)) },
-                singleLine = true,
-                isError = amount == null,
-                supportingText = { if (amount == null) Text(stringResource(R.string.amount_error_decimals)) },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                modifier = Modifier.fillMaxWidth(),
-            )
-            AnswerButtons(onReject = onReject, onAccept = { amount?.let(onAccept) }, acceptEnabled = amount != null)
-        }
     }
 }
 

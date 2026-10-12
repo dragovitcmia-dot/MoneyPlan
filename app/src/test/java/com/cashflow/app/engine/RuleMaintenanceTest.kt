@@ -152,4 +152,37 @@ class RuleMaintenanceTest {
         // Oct 11 (Sun) 30; Oct 12 (Mon) 30+100.
         assertEquals(tnd(160), e.forecast(d(2026, 10, 12), d(2026, 10, 12)).single().closing)
     }
+
+    // ---- End series ----------------------------------------------------------------------------
+
+    @Test fun end_from_a_future_day_removes_waiting_items_from_that_day_and_keeps_the_rest() {
+        val (src, rows) = scenario()
+        val withAccepted = rows + row(src, d(2026, 10, 24), TxStatus.CONFIRMED, id = 30)
+        val change = RuleMaintenance.endFrom(src, withAccepted, d(2026, 10, 23), today)
+        assertEquals(d(2026, 10, 22), change.rule.endDate)
+        assertEquals(listOf(23L, 24L, 25L), change.deleteIds.sorted()) // the waiting ones from Oct 23 on
+        assertTrue(30L !in change.deleteIds) // an accepted row is never deleted
+        assertTrue(change.inserts.isEmpty())
+    }
+
+    @Test fun end_from_a_past_day_leaves_waiting_items_dated_today_or_earlier_for_the_user() {
+        val (src, rows) = scenario()
+        val change = RuleMaintenance.endFrom(src, rows, d(2026, 10, 18), today)
+        assertEquals(d(2026, 10, 17), change.rule.endDate)
+        assertEquals((21L..25L).toList(), change.deleteIds.sorted()) // only pending rows after today
+    }
+
+    @Test fun ending_never_extends_a_series_that_already_ends_earlier() {
+        val (src, rows) = scenario()
+        val ends = src.copy(endDate = d(2026, 10, 21))
+        assertEquals(d(2026, 10, 21), RuleMaintenance.endFrom(ends, rows, d(2026, 10, 23), today).rule.endDate)
+    }
+
+    @Test fun editing_name_and_amount_regenerates_only_waiting_future_occurrences() {
+        val (src, rows) = scenario()
+        val change = RuleMaintenance.edit(src, src.copy(amount = tnd(50), description = "New name"), rows, today)
+        assertTrue(change.deleteIds.all { id -> rows.first { it.id == id }.let { it.status == TxStatus.PENDING && it.date.isAfter(today) } })
+        assertTrue(16L !in change.deleteIds && 17L !in change.deleteIds) // accepted and rejected rows stay
+        assertTrue(change.inserts.all { it.amount == tnd(50) && it.description == "New name" && it.status == TxStatus.PENDING })
+    }
 }

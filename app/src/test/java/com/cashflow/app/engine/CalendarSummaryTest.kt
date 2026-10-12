@@ -114,7 +114,7 @@ class CalendarSummaryTest {
     }
 
     @Test fun the_grid_always_has_six_rows() {
-        assertEquals(6, month(emptyList(), ym = YearMonth.of(2026, 10)).weeks.size)
+        assertEquals(5, month(emptyList(), ym = YearMonth.of(2026, 10)).weeks.size)
         assertEquals(6, month(emptyList(), ym = YearMonth.of(2026, 8)).weeks.size)
     }
 

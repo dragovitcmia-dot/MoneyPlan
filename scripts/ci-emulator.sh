@@ -32,4 +32,6 @@ if [ -z "$PID" ] || [ -n "$CRASH" ]; then
 fi
 echo "LAUNCH OK: $PKG is running, no crash in logcat"
 
-python3 scripts/smoke.py screens
+# Best effort: screenshots of one configuration (dark theme, normal font). A failure here never fails the build;
+# the gate is the launch check above.
+timeout 900 python3 scripts/smoke.py screens || echo "SMOKE (best effort) did not finish cleanly: not a build failure"

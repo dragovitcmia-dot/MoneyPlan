@@ -38,7 +38,7 @@ internal fun scheduleSummary(p: RecurrencePattern): String = when (p) {
 
 /**
  * The "Income" card: one switch, "Accept my income automatically", and the time from which the day's income is
- * accepted ("Remind me at"). Repeating income series are listed with the other series under "Repeating payments".
+ * accepted ("Remind me at"). Repeating income is created on Home and managed from the details of one of its items.
  */
 @Composable
 internal fun IncomeCard(viewModel: SettingsViewModel, settings: AppSettings) {
