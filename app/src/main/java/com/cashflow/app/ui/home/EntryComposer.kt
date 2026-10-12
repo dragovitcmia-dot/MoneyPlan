@@ -22,6 +22,12 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.border
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.Role
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -74,6 +80,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.cashflow.app.R
+import com.cashflow.app.ui.components.selectedChipColors
 import com.cashflow.app.engine.AmountInput
 import com.cashflow.app.engine.AppDates
 import com.cashflow.app.engine.CompactAmount
@@ -459,6 +466,7 @@ private fun WhenStep(
                 onClick = { change { it.copy(timing = t) }; haptics.tick() },
                 label = { Text(t.label(form.nowDate != null), style = MaterialTheme.typography.titleMedium) },
                 modifier = Modifier.heightIn(min = 56.dp),
+                colors = selectedChipColors(),
             )
         }
     }
@@ -503,18 +511,9 @@ private fun WhenStep(
             when (form.choice) {
                 PatternChoice.WEEKLY -> {
                     Text(stringResource(R.string.wizard_weekdays_label), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        for (dow in DayOfWeek.entries) {
-                            FilterChip(
-                                selected = dow in form.weekdays,
-                                onClick = {
-                                    change { f -> f.copy(weekdays = if (dow in f.weekdays) f.weekdays - dow else f.weekdays + dow) }
-                                    haptics.tick()
-                                },
-                                label = { Text(AppDates.weekdayShort(dow)) },
-                                modifier = Modifier.heightIn(min = 48.dp),
-                            )
-                        }
+                    WeekdayGrid(form.weekdays) { dow ->
+                        change { f -> f.copy(weekdays = if (dow in f.weekdays) f.weekdays - dow else f.weekdays + dow) }
+                        haptics.tick()
                     }
                 }
                 PatternChoice.MONTH_DAY -> LabeledTextField(
@@ -669,5 +668,42 @@ private fun timingLine(form: EntryFormState): String = when (form.timing) {
         }
         if (form.hasEnd) stringResource(R.string.review_from_until, every, AppDates.format(form.startDate), AppDates.format(form.endDate))
         else stringResource(R.string.review_from, every, AppDates.format(form.startDate))
+    }
+}
+
+private val WeekdayShape = RoundedCornerShape(8.dp)
+
+/** The seven weekdays in an even grid: rows of four and three, every cell the same width and 48 dp tall. */
+@Composable
+private fun WeekdayGrid(selected: Set<DayOfWeek>, onToggle: (DayOfWeek) -> Unit) {
+    val days = DayOfWeek.entries
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        for (row in days.chunked(4)) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                for (dow in row) WeekdayCell(dow, dow in selected, { onToggle(dow) }, Modifier.weight(1f))
+                repeat(4 - row.size) { Spacer(Modifier.weight(1f)) }
+            }
+        }
+    }
+}
+
+/** Selected: accent fill with dark label. Unselected: transparent with a visible outline and a normal label. */
+@Composable
+private fun WeekdayCell(dow: DayOfWeek, selected: Boolean, onClick: () -> Unit, modifier: Modifier) {
+    val colors = MaterialTheme.colorScheme
+    Box(
+        modifier.height(48.dp).clip(WeekdayShape)
+            .background(if (selected) colors.primary else Color.Transparent)
+            .border(1.dp, if (selected) colors.primary else colors.outline, WeekdayShape)
+            .selectable(selected = selected, onClick = onClick, role = Role.Checkbox),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            AppDates.weekdayShort(dow),
+            style = MaterialTheme.typography.titleSmall,
+            color = if (selected) colors.onPrimary else colors.onSurface,
+            fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+            maxLines = 1,
+        )
     }
 }

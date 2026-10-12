@@ -165,4 +165,15 @@ class ContrastTest {
         assertEquals(0xFFE9E9ECL, l.keypadBackground)
         assertEquals(0xFF14171CL, l.text)
     }
+
+    @Test fun selected_chips_are_filled_with_the_accent_and_clearly_differ_from_unselected_ones() {
+        for ((name, p) in listOf("dark" to Palette.dark, "light" to Palette.light)) {
+            // selected: accent fill against the sheet background; unselected: transparent, outlined in the secondary text color
+            assertTrue("$name selected fill vs background", Contrast.ratio(p.accent, p.background) >= 3.0)
+            assertTrue("$name selected fill vs surface", Contrast.ratio(p.accent, p.surface) >= 3.0)
+            assertTrue("$name selected label", Contrast.ratio(p.onAccent, p.accent) >= 4.5)
+            assertTrue("$name unselected outline", Contrast.ratio(p.textSecondary, p.background) >= 3.0)
+            assertTrue("$name unselected label", Contrast.ratio(p.text, p.background) >= 4.5)
+        }
+    }
 }
