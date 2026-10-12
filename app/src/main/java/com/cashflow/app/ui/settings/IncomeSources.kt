@@ -40,8 +40,8 @@ internal fun scheduleSummary(p: RecurrencePattern): String = when (p) {
 }
 
 /**
- * The "Income" card: one switch, "Accept my income automatically", and the time from which the day's income is
- * accepted ("Remind me at"). Repeating income is created on Home and managed from the details of one of its items.
+ * The "Income" card: one switch, "Accept my income automatically" (at the reminder time set in the Notifications card).
+ * Repeating income is created on Home and managed from the details of one of its items.
  */
 @Composable
 internal fun IncomeCard(viewModel: SettingsViewModel, settings: AppSettings) {
@@ -63,10 +63,5 @@ internal fun IncomeCard(viewModel: SettingsViewModel, settings: AppSettings) {
                 onCheckedChange = { on -> viewModel.update { it.copy(autoAcceptIncome = on) } },
             )
         }
-        TimeField(
-            label = stringResource(R.string.remind_label),
-            value = settings.reminderTime,
-            onPick = { t -> viewModel.update { it.copy(reminderTime = t) } },
-        )
     }
 }

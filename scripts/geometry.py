@@ -179,6 +179,23 @@ def main():
     print("NAV ITEMS:\n  " + "\n  ".join(measured))
     notice("Geometry: bottom navigation", " | ".join(measured))
 
+    # 1b. the notification bell (top right of the main screens): a tap target of at least 48 dp each way
+    bells = [n for n in nodes if n.desc.startswith(S["bell_desc"])]
+    if not bells:
+        problems.append("the notification bell was not found")
+    else:
+        bell = clickable_of(bells[0])
+        bw, bh = bell.w / dp, bell.h / dp
+        msg = f"bell: {bw:.0f} x {bh:.0f} dp ({bell.w} x {bell.h} px) at [{bell.b[0]},{bell.b[1]}][{bell.b[2]},{bell.b[3]}], clickable={bell.clickable}, desc={bell.desc!r}"
+        print("BELL:", msg)
+        notice("Geometry: notification bell", msg)
+        if not bell.clickable:
+            problems.append("the bell is not clickable")
+        if bw < MIN_NAV_HEIGHT_DP or bh < MIN_NAV_HEIGHT_DP:
+            problems.append(f"the bell is {bw:.0f} x {bh:.0f} dp, needs >= {MIN_NAV_HEIGHT_DP} each way")
+        if bell.b[2] > W or bell.b[0] < W / 2 or bell.b[1] < 0:
+            problems.append(f"the bell is not at the top right of the screen: {bell.b}")
+
     # 2. Add Expense wizard, Amount step
     nodes, hits = wait_for(S["button_expense"])
     target = clickable_of(hits[0])

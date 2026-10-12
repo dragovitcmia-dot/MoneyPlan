@@ -41,4 +41,13 @@ object AppDates {
 
     /** "Mon, Thu" in week order starting on Monday. */
     fun weekdaysText(days: Set<DayOfWeek>): String = DayOfWeek.entries.filter { it in days }.joinToString(", ") { weekdayShort(it) }
+
+    /** The seven weekdays in the order the calendar shows them: starting at [firstDayOfWeek] (the phone's region). */
+    fun weekOrder(first: DayOfWeek = firstDayOfWeek): List<DayOfWeek> = List(7) { first.plus(it.toLong()) }
+
+    /** "M" (one letter, for the round day buttons). */
+    fun weekdayLetter(d: DayOfWeek): String = weekdayShort(d).take(1).uppercase(LOCALE)
+
+    /** "Monday" (spoken names). */
+    fun weekdayFull(d: DayOfWeek): String = d.getDisplayName(java.time.format.TextStyle.FULL, LOCALE)
 }

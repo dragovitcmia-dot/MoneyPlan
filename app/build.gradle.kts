@@ -15,7 +15,7 @@ android {
         targetSdk = 35
         // CI run number so every build can install over the previous one; 1 for local builds.
         versionCode = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 1
-        versionName = "0.6.3"
+        versionName = "0.7.0"
     }
 
     // A fixed, committed debug key: every CI build is signed identically and updates in place.
@@ -74,6 +74,14 @@ ksp {
     arg("room.schemaLocation", "$projectDir/schemas")
 }
 
+// Room writes the schema file of a database the first time it sees it. The variants' ksp tasks share one schema
+// folder, so they must not run at the same time (two writers leave an empty file: "Empty schema file").
+afterEvaluate {
+    tasks.matching { it.name.startsWith("ksp") && it.name.endsWith("Kotlin") }.toList()
+        .sortedBy { it.name }
+        .zipWithNext { first, second -> second.mustRunAfter(first) }
+}
+
 dependencies {
     val composeBom = platform("androidx.compose:compose-bom:2024.12.01")
     implementation(composeBom)
@@ -94,6 +102,8 @@ dependencies {
     implementation("androidx.room:room-runtime:$room")
     implementation("androidx.room:room-ktx:$room")
     ksp("androidx.room:room-compiler:$room")
+
+    implementation("androidx.work:work-runtime-ktx:2.9.1")
 
     testImplementation("junit:junit:4.13.2")
 }
