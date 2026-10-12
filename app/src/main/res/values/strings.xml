@@ -248,6 +248,7 @@
     <string name="sched_month_day">Day %1$d of each month</string>
     <string name="sched_first">First day of each month</string>
     <string name="sched_last">Last day of each month</string>
+    <string name="sched_yearly">Every year on %1$s</string>
     <string name="sched_every_n">Every %1$d days</string>
 
     <!-- Settings cards -->

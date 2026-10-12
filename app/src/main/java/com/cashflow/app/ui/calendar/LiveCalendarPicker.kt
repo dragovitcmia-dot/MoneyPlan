@@ -90,7 +90,8 @@ fun LiveCalendarPicker(
     }
     val title = remember(month) { month.format(DateTimeFormatter.ofPattern("LLLL yyyy", Locale.getDefault())) }
     val density = LocalDensity.current
-    val rowHeight = with(density) { (16.sp * 1.3f + 13.sp * 1.3f).toDp() } + 22.dp
+    val numbers = with(density) { (16.sp * 1.3f).toDp() + (13.sp * 1.3f).toDp() }
+    val rowHeight = numbers + 22.dp
 
     Column(modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
