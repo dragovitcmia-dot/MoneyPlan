@@ -74,6 +74,14 @@ ksp {
     arg("room.schemaLocation", "$projectDir/schemas")
 }
 
+// Room writes the schema file of a database the first time it sees it. The variants' ksp tasks share one schema
+// folder, so they must not run at the same time (two writers leave an empty file: "Empty schema file").
+afterEvaluate {
+    tasks.matching { it.name.startsWith("ksp") && it.name.endsWith("Kotlin") }.toList()
+        .sortedBy { it.name }
+        .zipWithNext { first, second -> second.mustRunAfter(first) }
+}
+
 dependencies {
     val composeBom = platform("androidx.compose:compose-bom:2024.12.01")
     implementation(composeBom)

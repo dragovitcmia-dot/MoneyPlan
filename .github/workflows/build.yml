@@ -26,6 +26,13 @@ jobs:
           set -o pipefail
           ./gradlew testDebugUnitTest assemblePreview --stacktrace 2>&1 | tee gradle.log
 
+      - name: Show the exported Room schemas
+        if: always()
+        run: |
+          for f in app/schemas/*/*.json; do
+            echo "::notice title=Room schema $f::$(tr -d '\n' < "$f" | sed 's/%/%25/g')"
+          done
+
       - name: Gradle failure summary
         if: failure()
         run: |
