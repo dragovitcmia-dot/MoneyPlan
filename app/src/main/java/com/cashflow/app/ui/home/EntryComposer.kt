@@ -1,91 +1,94 @@
 package com.cashflow.app.ui.home
 
-import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.systemBarsPadding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.Switch
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import com.cashflow.app.R
 import com.cashflow.app.engine.AmountInput
-import com.cashflow.app.engine.DipDay
+import com.cashflow.app.engine.AppDates
+import com.cashflow.app.engine.CompactAmount
+import com.cashflow.app.engine.DiscardState
+import com.cashflow.app.engine.CloseDecision
 import com.cashflow.app.engine.EntryForm
 import com.cashflow.app.engine.EntryFormState
 import com.cashflow.app.engine.EntryWizard
 import com.cashflow.app.engine.FormProblem
-import com.cashflow.app.engine.FormResult
-import com.cashflow.app.engine.LiveMonth
 import com.cashflow.app.engine.Money
 import com.cashflow.app.engine.NewEntry
 import com.cashflow.app.engine.PatternChoice
 import com.cashflow.app.engine.RedDip
+import com.cashflow.app.engine.ResultingBalance
 import com.cashflow.app.engine.Timing
 import com.cashflow.app.engine.TxKind
 import com.cashflow.app.engine.WizardState
 import com.cashflow.app.engine.WizardStep
-import com.cashflow.app.ui.calendar.LiveCalendarPicker
 import com.cashflow.app.ui.components.AppButton
 import com.cashflow.app.ui.components.AppButtonStyle
 import com.cashflow.app.ui.components.LabeledTextField
 import com.cashflow.app.ui.components.fullBleed
 import com.cashflow.app.ui.rememberHaptics
-import com.cashflow.app.ui.settings.DateField
+import com.cashflow.app.ui.settings.DatePickerDialogFor
 import com.cashflow.app.ui.theme.cashflow
 import kotlinx.coroutines.launch
 import java.time.DayOfWeek
 import java.time.LocalDate
-import java.time.YearMonth
-import java.time.format.DateTimeFormatter
-import java.time.format.FormatStyle
-import java.util.Locale
-
-private val ReviewDate: DateTimeFormatter = DateTimeFormatter.ofLocalizedDate(FormatStyle.FULL)
-private val MediumDate: DateTimeFormatter = DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM)
-
-@Composable
-private fun PatternChoice.label() = stringResource(
-    when (this) {
-        PatternChoice.DAILY -> R.string.choice_daily
-        PatternChoice.WEEKLY -> R.string.choice_weekly
-        PatternChoice.EVERY_2_WEEKS -> R.string.choice_every_2_weeks
-        PatternChoice.MONTH_DAY, PatternChoice.MONTH_FIRST, PatternChoice.MONTH_LAST -> R.string.choice_monthly
-        PatternChoice.YEARLY -> R.string.choice_yearly
-        PatternChoice.EVERY_N -> R.string.choice_every_n
-    },
-)
 
 @Composable
 private fun Timing.label(happenedOnADay: Boolean = false) = stringResource(
@@ -105,14 +108,28 @@ private fun FormProblem.message() = stringResource(
         FormProblem.END_BEFORE_START -> R.string.problem_end
         FormProblem.NAME_MISSING -> R.string.problem_name
         FormProblem.DATE_IN_PAST -> R.string.problem_date_past
+        FormProblem.WEEKDAYS_EMPTY -> R.string.problem_weekdays
+    },
+)
+
+@Composable
+private fun PatternChoice.label() = stringResource(
+    when (this) {
+        PatternChoice.DAILY -> R.string.choice_daily
+        PatternChoice.WEEKLY -> R.string.choice_weekly
+        PatternChoice.EVERY_2_WEEKS -> R.string.choice_every_2_weeks
+        PatternChoice.MONTH_DAY -> R.string.choice_monthly_day
+        PatternChoice.MONTH_FIRST -> R.string.choice_month_first_long
+        PatternChoice.MONTH_LAST -> R.string.choice_month_last_long
+        PatternChoice.YEARLY -> R.string.choice_yearly
+        PatternChoice.EVERY_N -> R.string.choice_every_n
     },
 )
 
 /**
- * The Add expense / Add income wizard: one decision per screen (amount, name, when, then the date or the schedule,
- * then a review), with Back and a progress bar. Later and Repeating choose their days on a live calendar that shows
- * the balance with the new item applied. Only when the user confirms is the item checked against the next 90 days;
- * if it would take money below zero a warning sheet comes first.
+ * The Add expense / Add income wizard, full screen so a swipe or a tap outside can never close it by accident:
+ * Amount, Name, When (Now, Later or Repeating, all on one screen), then Below zero (only when needed) and Review.
+ * Back, the system Back button and a swipe all ask "Discard?" instead of losing what was entered.
  */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -120,21 +137,22 @@ fun EntryComposer(
     kind: TxKind,
     ui: HomeUiState,
     redDip: suspend (NewEntry) -> RedDip?,
-    liveMonth: suspend (EntryFormState, YearMonth, LocalDate?, DayOfWeek) -> LiveMonth?,
+    resultingBalance: suspend (NewEntry) -> ResultingBalance?,
     onSave: suspend (NewEntry) -> Unit,
     onSaved: (String) -> Unit,
     onDismiss: () -> Unit,
     /** Opened from a calendar day: that day is prefilled (see [EntryFormState.forDay]). */
     day: LocalDate? = null,
 ) {
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val scope = rememberCoroutineScope()
     val haptics = rememberHaptics()
     val colors = MaterialTheme.cashflow
     val isExpense = kind == TxKind.EXPENSE
     val accentFill = if (isExpense) colors.expenseFill else colors.incomeFill
 
-    var wizard by remember { mutableStateOf(EntryWizard.start(kind, ui.today, day)) }
+    val initial = remember { EntryWizard.start(kind, ui.today, day) }
+    var wizard by remember { mutableStateOf(initial) }
+    var discard by remember { mutableStateOf(DiscardState()) }
     var saving by remember { mutableStateOf(false) }
     var dip by remember { mutableStateOf<RedDip?>(null) }
     val form = wizard.form
@@ -150,191 +168,149 @@ fun EntryComposer(
         },
     )
 
-    fun dismiss() {
-        scope.launch { sheetState.hide() }.invokeOnCompletion { onDismiss() }
-    }
+    fun entry(): NewEntry? = EntryWizard.entryOf(form, defaultText, ui.balanceStartDate)
 
-    fun commit(entry: NewEntry) {
-        scope.launch {
-            saving = true
-            onSave(entry)
-            haptics.confirm()
-            onSaved(savedMessage)
-            dismiss()
-        }
-    }
-
-    /** "Add": only now is the item checked against the next 90 days. */
-    fun confirm() {
-        val entry = (EntryForm.build(form, defaultText, ui.balanceStartDate) as? FormResult.Valid)?.entry
-        if (entry == null) {
-            haptics.reject()
-            return
-        }
-        scope.launch {
-            saving = true
-            val check = redDip(entry)
-            saving = false
-            if (check != null) dip = check else commit(entry)
-        }
+    /** Swipe, tap outside and system Back all land here: ask first when something would be lost. */
+    fun requestClose() {
+        val (state, decision) = discard.onCloseRequested(wizard, initial)
+        discard = state
+        if (decision == CloseDecision.CLOSE) onDismiss()
     }
 
     fun goBack() {
         val back = EntryWizard.back(wizard)
-        if (back == null) dismiss() else wizard = back
+        if (back == null) requestClose() else wizard = back
         haptics.tick()
     }
 
     fun goNext() {
+        if (wizard.step == WizardStep.WHEN) {
+            // Leaving When: only now is the item checked against the next 90 days.
+            val built = entry()
+            if (!EntryWizard.canAdvance(wizard) || built == null) {
+                wizard = wizard.copy(attempted = true)
+                haptics.reject()
+                return
+            }
+            scope.launch {
+                saving = true
+                val check = redDip(built)
+                saving = false
+                dip = check
+                wizard = EntryWizard.afterWhen(wizard, hasDip = check != null)
+                haptics.tick()
+            }
+            return
+        }
         val next = EntryWizard.next(wizard)
-        if (next.step == wizard.step && !EntryWizard.canAdvance(wizard)) haptics.reject() else haptics.tick()
+        if (next.step == wizard.step) haptics.reject() else haptics.tick()
         wizard = next
     }
 
-    BackHandler(enabled = dip == null) { goBack() }
+    fun add() {
+        val built = entry() ?: return
+        scope.launch {
+            saving = true
+            onSave(built)
+            haptics.confirm()
+            onSaved(savedMessage)
+            onDismiss()
+        }
+    }
 
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
-        Column(
-            Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp).padding(bottom = 16.dp).navigationBarsPadding(),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-        ) {
-            // Header: a band in the kind color with white bold text, like the big button on Home.
-            Box(
-                Modifier.fillMaxWidth().clip(MaterialTheme.shapes.large).background(accentFill).padding(vertical = 14.dp),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(
-                    stringResource(if (isExpense) R.string.button_expense else R.string.button_income).uppercase(),
-                    style = MaterialTheme.typography.headlineMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = colors.buttonLabel,
-                )
-            }
-
-            val (position, total) = EntryWizard.progress(wizard)
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                LinearProgressIndicator(
-                    progress = { position.toFloat() / total },
-                    modifier = Modifier.fillMaxWidth(),
-                    color = accentFill,
-                    trackColor = MaterialTheme.colorScheme.surfaceVariant,
-                )
-                Text(
-                    stringResource(R.string.wizard_step_of, position, total),
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-
-            val problems = if (wizard.attempted) EntryWizard.problems(wizard) else emptyList()
-
-            when (wizard.step) {
-                WizardStep.AMOUNT -> AmountStep(form, problems) { wizard = EntryWizard.update(wizard, it) }
-                WizardStep.NAME -> NameStep(form, isExpense, names, problems) { wizard = EntryWizard.update(wizard, it) }
-                WizardStep.WHEN -> WhenStep(form, isExpense) { wizard = EntryWizard.update(wizard, it) }
-                WizardStep.LATER_DATE -> {
-                    StepTitle(stringResource(R.string.wizard_later_title))
-                    LiveCalendarPicker(
-                        selected = form.laterDate,
-                        onPick = { picked -> wizard = EntryWizard.update(wizard) { it.copy(laterDate = picked) }; haptics.tick() },
-                        projectionKey = form,
-                        project = { month, selected, firstDay -> liveMonth(form, month, selected, firstDay) },
+    Dialog(
+        onDismissRequest = ::requestClose,
+        properties = DialogProperties(dismissOnBackPress = true, dismissOnClickOutside = false, usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
+    ) {
+        Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.surface) {
+            Column(Modifier.fillMaxSize().systemBarsPadding().imePadding()) {
+                // Header: a band in the kind color with white bold text, like the big button on Home.
+                Box(
+                    Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp).clip(MaterialTheme.shapes.large).background(accentFill).padding(vertical = 10.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        stringResource(if (isExpense) R.string.button_expense else R.string.button_income).uppercase(),
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = colors.buttonLabel,
                     )
-                    if (!form.laterDate.isAfter(ui.today)) {
-                        Text(stringResource(R.string.later_past_hint), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                    ProblemList(problems)
                 }
-                WizardStep.FREQUENCY -> {
-                    StepTitle(stringResource(R.string.wizard_freq_title))
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        for (c in EntryForm.choicesFor(kind)) {
-                            FilterChip(
-                                selected = form.choice == c,
-                                onClick = { wizard = EntryWizard.update(wizard) { f -> EntryWizard.withFrequency(f, c) }; haptics.tick() },
-                                label = { Text(c.label(), style = MaterialTheme.typography.titleSmall) },
-                                modifier = Modifier.heightIn(min = 56.dp),
-                            )
-                        }
-                    }
-                    OccurrencePreview(form)
-                    ProblemList(problems)
-                }
-                WizardStep.START_DATE -> {
-                    StepTitle(stringResource(R.string.wizard_start_title))
-                    LiveCalendarPicker(
-                        selected = form.startDate,
-                        onPick = { picked -> wizard = EntryWizard.update(wizard) { f -> EntryWizard.withStartDate(f, picked) }; haptics.tick() },
-                        projectionKey = form,
-                        project = { month, selected, firstDay -> liveMonth(form, month, selected, firstDay) },
+                val (position, total) = EntryWizard.progress(wizard)
+                Column(Modifier.padding(horizontal = 24.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    LinearProgressIndicator(
+                        progress = { position.toFloat() / total },
+                        modifier = Modifier.fillMaxWidth(),
+                        color = accentFill,
+                        trackColor = MaterialTheme.colorScheme.surfaceVariant,
                     )
-                    OccurrencePreview(form)
-                    ProblemList(problems)
+                    Text(
+                        stringResource(R.string.wizard_step_of, position, total),
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
-                WizardStep.END_DATE -> {
-                    StepTitle(stringResource(R.string.wizard_end_title))
-                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                        Text(stringResource(R.string.end_date_switch), Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
-                        Switch(checked = form.hasEnd, onCheckedChange = { on -> wizard = EntryWizard.update(wizard) { it.copy(hasEnd = on) } })
-                    }
-                    if (form.hasEnd) {
-                        DateField(stringResource(R.string.ends_label), form.endDate) { picked -> wizard = EntryWizard.update(wizard) { it.copy(endDate = picked) } }
-                    } else {
-                        Text(stringResource(R.string.wizard_end_hint), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                    OccurrencePreview(form)
-                    ProblemList(problems)
-                }
-                WizardStep.REVIEW -> ReviewStep(form, defaultText, ui.today)
-            }
 
-            // Back and Next / Add: white bold text on the kind color.
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                AppButton(
-                    stringResource(if (EntryWizard.back(wizard) == null) R.string.action_cancel else R.string.wizard_back),
-                    onClick = ::goBack,
-                    modifier = Modifier.weight(1f).heightIn(min = 64.dp),
-                    style = AppButtonStyle.Outlined,
-                )
-                val last = wizard.step == WizardStep.REVIEW
-                AppButton(
-                    text = stringResource(
-                        when {
-                            saving -> R.string.saving
-                            last && isExpense -> R.string.wizard_add_expense
-                            last -> R.string.wizard_add_income
-                            else -> R.string.wizard_next
-                        },
-                    ),
-                    onClick = { if (last) confirm() else goNext() },
-                    enabled = !saving,
-                    modifier = Modifier.weight(1f).heightIn(min = 64.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = accentFill, contentColor = colors.buttonLabel),
-                    textStyle = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-                )
+                val problems = if (wizard.attempted) EntryWizard.problems(wizard) else emptyList()
+                Column(
+                    Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp, vertical = 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                ) {
+                    when (wizard.step) {
+                        WizardStep.AMOUNT -> AmountStep(form, problems) { wizard = EntryWizard.update(wizard, it) }
+                        WizardStep.NAME -> NameStep(form, isExpense, names, problems, onNext = ::goNext) { wizard = EntryWizard.update(wizard, it) }
+                        WizardStep.WHEN -> WhenStep(form, isExpense, ui.today, problems) { wizard = EntryWizard.update(wizard, it) }
+                        WizardStep.BELOW_ZERO -> BelowZeroStep(dip, accentFill, onAddAnyway = { wizard = EntryWizard.next(wizard); haptics.tick() }, onChange = { wizard = EntryWizard.change(wizard); haptics.reject() }, onCancel = { onDismiss() })
+                        WizardStep.REVIEW -> ReviewStep(form, defaultText, accentFill, ui, entry(), resultingBalance)
+                    }
+                }
+
+                if (wizard.step != WizardStep.BELOW_ZERO) {
+                    // Back and Next / Add: white bold text on the kind color.
+                    Row(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        AppButton(
+                            stringResource(if (EntryWizard.back(wizard) == null) R.string.action_cancel else R.string.wizard_back),
+                            onClick = ::goBack,
+                            modifier = Modifier.weight(1f).heightIn(min = 64.dp),
+                            style = AppButtonStyle.Outlined,
+                        )
+                        val last = wizard.step == WizardStep.REVIEW
+                        AppButton(
+                            text = stringResource(
+                                when {
+                                    saving -> R.string.saving
+                                    last && isExpense -> R.string.wizard_add_expense
+                                    last -> R.string.wizard_add_income
+                                    else -> R.string.wizard_next
+                                },
+                            ),
+                            onClick = { if (last) add() else goNext() },
+                            enabled = !saving,
+                            modifier = Modifier.weight(1f).heightIn(min = 64.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = accentFill, contentColor = colors.buttonLabel),
+                            textStyle = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                        )
+                    }
+                }
             }
         }
     }
 
-    dip?.let { warning ->
-        RedDipSheet(
-            dip = warning,
-            accentFill = accentFill,
-            onAddAnyway = {
-                dip = null
-                (EntryForm.build(form, defaultText, ui.balanceStartDate) as? FormResult.Valid)?.entry?.let(::commit)
+    if (discard.asking) {
+        AlertDialog(
+            onDismissRequest = { discard = discard.keepGoing() },
+            title = { Text(stringResource(R.string.wizard_discard_title)) },
+            text = { Text(stringResource(R.string.wizard_discard_body)) },
+            confirmButton = {
+                TextButton(onClick = { discard = discard.discard(); onDismiss() }, modifier = Modifier.heightIn(min = 56.dp)) {
+                    Text(stringResource(R.string.wizard_discard))
+                }
             },
-            onChangeDate = {
-                dip = null
-                wizard = EntryWizard.goTo(wizard, WizardStep.WHEN)
-                haptics.reject()
+            dismissButton = {
+                TextButton(onClick = { discard = discard.keepGoing() }, modifier = Modifier.heightIn(min = 56.dp)) {
+                    Text(stringResource(R.string.wizard_keep_going))
+                }
             },
-            onCancel = {
-                dip = null
-                haptics.reject()
-                dismiss()
-            },
-            onDismissRequest = { dip = null },
         )
     }
 }
@@ -377,43 +353,68 @@ private fun AmountStep(form: EntryFormState, problems: List<FormProblem>, change
     )
 }
 
+/**
+ * The name: the field is focused with the keyboard open as soon as this screen shows; Done / Enter goes to the next
+ * step. The three most used names are small chips above the field; a tap fills the name and closes the keyboard.
+ */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun NameStep(
     form: EntryFormState,
     isExpense: Boolean,
-    suggestions: List<String>,
+    frequent: List<String>,
     problems: List<FormProblem>,
+    onNext: () -> Unit,
     change: ((EntryFormState) -> EntryFormState) -> Unit,
 ) {
+    val focus = remember { FocusRequester() }
+    val keyboard = LocalSoftwareKeyboardController.current
+    val focusManager = LocalFocusManager.current
+    LaunchedEffect(Unit) {
+        focus.requestFocus()
+        keyboard?.show()
+    }
     StepTitle(stringResource(R.string.wizard_name_title))
+    if (frequent.isNotEmpty()) {
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            for (name in frequent) {
+                FilterChip(
+                    selected = form.description.trim().equals(name, ignoreCase = true),
+                    onClick = {
+                        change { it.copy(description = name) }
+                        keyboard?.hide()
+                        focusManager.clearFocus()
+                    },
+                    label = { Text(name, style = MaterialTheme.typography.labelLarge) },
+                    modifier = Modifier.heightIn(min = 48.dp),
+                )
+            }
+        }
+    }
     LabeledTextField(
         value = form.description,
         onValueChange = { text -> change { it.copy(description = text) } },
         label = { Text(stringResource(if (isExpense) R.string.name_label_required else R.string.name_label_optional)) },
         singleLine = true,
         isError = FormProblem.NAME_MISSING in problems,
+        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+        keyboardActions = KeyboardActions(onDone = { onNext() }),
         modifier = Modifier.fillMaxWidth(),
+        fieldModifier = Modifier.focusRequester(focus),
     )
     ProblemList(problems)
-    if (suggestions.isNotEmpty()) {
-        Text(stringResource(R.string.wizard_recent_names), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            for (name in suggestions) {
-                FilterChip(
-                    selected = form.description.trim().equals(name, ignoreCase = true),
-                    onClick = { change { it.copy(description = name) } },
-                    label = { Text(name, style = MaterialTheme.typography.titleSmall) },
-                    modifier = Modifier.heightIn(min = 56.dp),
-                )
-            }
-        }
-    }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
+/** Now / Later / Repeating on one screen; Later and Repeating open their fields right below. */
+@OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
 @Composable
-private fun WhenStep(form: EntryFormState, isExpense: Boolean, change: ((EntryFormState) -> EntryFormState) -> Unit) {
+private fun WhenStep(
+    form: EntryFormState,
+    isExpense: Boolean,
+    today: LocalDate,
+    problems: List<FormProblem>,
+    change: ((EntryFormState) -> EntryFormState) -> Unit,
+) {
     val haptics = rememberHaptics()
     StepTitle(stringResource(R.string.wizard_when_title))
     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -426,137 +427,212 @@ private fun WhenStep(form: EntryFormState, isExpense: Boolean, change: ((EntryFo
             )
         }
     }
-    Text(
-        when (form.timing) {
-            Timing.NOW -> form.nowDate?.let { date ->
-                stringResource(if (isExpense) R.string.now_hint_past_expense else R.string.now_hint_past_income, date.format(MediumDate))
-            } ?: stringResource(if (isExpense) R.string.now_hint_expense else R.string.now_hint_income)
-            Timing.LATER -> stringResource(R.string.when_later_hint)
-            Timing.REPEATS -> stringResource(R.string.when_repeats_hint)
-        },
-        style = MaterialTheme.typography.bodyMedium,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-    )
+    when (form.timing) {
+        Timing.NOW -> Text(
+            form.nowDate?.let { date ->
+                stringResource(if (isExpense) R.string.now_hint_past_expense else R.string.now_hint_past_income, AppDates.format(date))
+            } ?: stringResource(if (isExpense) R.string.now_hint_expense else R.string.now_hint_income),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Timing.LATER -> {
+            CompactDateField(stringResource(R.string.wizard_date_label), form.laterDate, earliest = today) { picked -> change { it.copy(laterDate = picked) } }
+            ProblemList(problems)
+        }
+        Timing.REPEATS -> {
+            var open by remember { mutableStateOf(false) }
+            val choices = remember { EntryForm.choicesFor(form.kind) }
+            ExposedDropdownMenuBox(expanded = open, onExpandedChange = { open = it }) {
+                OutlinedTextField(
+                    value = form.choice.label(),
+                    onValueChange = {},
+                    readOnly = true,
+                    label = { Text(stringResource(R.string.wizard_repeat_label)) },
+                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = open) },
+                    modifier = Modifier.menuAnchor().fillMaxWidth(),
+                )
+                ExposedDropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+                    for (c in choices) {
+                        DropdownMenuItem(
+                            text = { Text(c.label()) },
+                            onClick = {
+                                change { it.copy(choice = c) }
+                                open = false
+                                haptics.tick()
+                            },
+                            modifier = Modifier.heightIn(min = 48.dp),
+                        )
+                    }
+                }
+            }
+            when (form.choice) {
+                PatternChoice.WEEKLY -> {
+                    Text(stringResource(R.string.wizard_weekdays_label), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        for (dow in DayOfWeek.entries) {
+                            FilterChip(
+                                selected = dow in form.weekdays,
+                                onClick = {
+                                    change { f -> f.copy(weekdays = if (dow in f.weekdays) f.weekdays - dow else f.weekdays + dow) }
+                                    haptics.tick()
+                                },
+                                label = { Text(AppDates.weekdayShort(dow)) },
+                                modifier = Modifier.heightIn(min = 48.dp),
+                            )
+                        }
+                    }
+                }
+                PatternChoice.MONTH_DAY -> LabeledTextField(
+                    value = form.dayOfMonth,
+                    onValueChange = { text -> change { it.copy(dayOfMonth = text.filter(Char::isDigit).take(2)) } },
+                    label = { Text(stringResource(R.string.day_of_month_label)) },
+                    singleLine = true,
+                    isError = FormProblem.DAY_OF_MONTH_INVALID in problems,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                else -> Unit
+            }
+            // Every year has one date field (the first occurrence); the other schedules have a start date.
+            if (form.choice == PatternChoice.YEARLY) {
+                CompactDateField(stringResource(R.string.wizard_year_date_label), form.startDate, earliest = today) { picked -> change { EntryWizard.withStartDate(it, picked) } }
+            } else {
+                CompactDateField(stringResource(R.string.wizard_start_label), form.startDate, earliest = today) { picked -> change { EntryWizard.withStartDate(it, picked) } }
+            }
+            OptionalDateField(
+                label = stringResource(R.string.wizard_end_label),
+                date = form.endDate.takeIf { form.hasEnd },
+                earliest = form.startDate,
+                onPick = { picked -> change { it.copy(hasEnd = true, endDate = picked) } },
+                onClear = { change { it.copy(hasEnd = false) } },
+            )
+            ProblemList(problems)
+            OccurrencePreview(form)
+        }
+    }
+}
+
+/** A date shown like "05 OCT 2026"; tapping it opens a compact date picker (which also accepts typing). */
+@Composable
+private fun CompactDateField(label: String, date: LocalDate, earliest: LocalDate?, onPick: (LocalDate) -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(label, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        OutlinedButton(onClick = { open = true }, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) {
+            Text(AppDates.format(date), style = MaterialTheme.typography.titleMedium)
+        }
+    }
+    if (open) DatePickerDialogFor(initial = date, earliest = earliest, onPick = onPick, onDismiss = { open = false })
+}
+
+/** The optional end date: "Never" until one is picked, with a way back to "Never". */
+@Composable
+private fun OptionalDateField(label: String, date: LocalDate?, earliest: LocalDate, onPick: (LocalDate) -> Unit, onClear: () -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(label, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            OutlinedButton(onClick = { open = true }, modifier = Modifier.weight(1f).heightIn(min = 56.dp)) {
+                Text(date?.let(AppDates::format) ?: stringResource(R.string.wizard_never), style = MaterialTheme.typography.titleMedium)
+            }
+            if (date != null) {
+                TextButton(onClick = onClear, modifier = Modifier.heightIn(min = 56.dp)) { Text(stringResource(R.string.wizard_never)) }
+            }
+        }
+    }
+    if (open) DatePickerDialogFor(initial = date ?: earliest, earliest = earliest, onPick = onPick, onDismiss = { open = false })
 }
 
 @Composable
 private fun OccurrencePreview(form: EntryFormState) {
     val dates = remember(form) { EntryWizard.occurrencePreview(form) }
     if (dates.isEmpty()) return
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
         Text(stringResource(R.string.wizard_next_dates), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        for (date in dates) Text(date.format(ReviewDate), style = MaterialTheme.typography.bodyLarge)
+        for (date in dates) Text(AppDates.format(date), style = MaterialTheme.typography.bodyMedium)
     }
 }
 
+/** Shown only when the item would take money below zero: every affected day with its balance, in red. */
 @Composable
-private fun ReviewStep(form: EntryFormState, defaultText: String, today: LocalDate) {
+private fun BelowZeroStep(dip: RedDip?, accentFill: androidx.compose.ui.graphics.Color, onAddAnyway: () -> Unit, onChange: () -> Unit, onCancel: () -> Unit) {
     val colors = MaterialTheme.cashflow
-    val income = form.kind == TxKind.INCOME
-    val amount = AmountInput.toMillimes(form.amountText)
-    StepTitle(stringResource(R.string.wizard_review_title))
-    Card(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text(
-                Money.formatSigned(form.kind, amount),
-                style = MaterialTheme.typography.displaySmall,
-                color = if (income) colors.positive else colors.negative,
-            )
-            Text(form.description.trim().ifEmpty { defaultText }, style = MaterialTheme.typography.titleLarge)
-            Text(
-                when (form.timing) {
-                    Timing.NOW -> form.nowDate?.format(ReviewDate) ?: stringResource(R.string.review_when_now)
-                    Timing.LATER -> form.laterDate.format(ReviewDate)
-                    Timing.REPEATS -> stringResource(R.string.review_when_repeats, form.choice.label(), form.startDate.format(MediumDate))
-                },
-                style = MaterialTheme.typography.bodyLarge,
-            )
-            if (form.timing == Timing.REPEATS) {
-                Text(
-                    if (form.hasEnd) stringResource(R.string.review_until, form.endDate.format(MediumDate)) else stringResource(R.string.review_no_end),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                OccurrencePreview(form)
+    StepTitle(stringResource(R.string.dip_title))
+    val resources = androidx.compose.ui.platform.LocalContext.current.resources
+    LazyColumn(Modifier.fillMaxWidth().heightIn(max = 320.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        items(dip?.days.orEmpty(), key = { it.date.toEpochDay() }) { day ->
+            val date = AppDates.format(day.date)
+            val balance = Money.formatDisplay(day.closing, withCurrency = false)
+            Row(
+                Modifier.fillMaxWidth().clip(MaterialTheme.shapes.small).background(colors.dayNegativeFill).padding(horizontal = 14.dp, vertical = 10.dp)
+                    .semantics(mergeDescendants = true) { contentDescription = resources.getString(R.string.dip_row_description, date, balance) },
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Text(date, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface)
+                Text(CompactAmount.balance(day.closing), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, color = colors.negative)
             }
         }
     }
+    AppButton(
+        stringResource(R.string.dip_add_anyway),
+        onClick = onAddAnyway,
+        modifier = Modifier.fillMaxWidth().heightIn(min = 64.dp),
+        colors = ButtonDefaults.buttonColors(containerColor = accentFill, contentColor = colors.buttonLabel),
+        textStyle = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+    )
+    AppButton(stringResource(R.string.dip_change), onClick = onChange, modifier = Modifier.fillMaxWidth(), style = AppButtonStyle.Outlined)
+    AppButton(stringResource(R.string.action_cancel), onClick = onCancel, modifier = Modifier.fillMaxWidth(), style = AppButtonStyle.Tonal)
 }
 
-/** The warning before an item that would take money below zero is saved. Shown only when adding. */
-@OptIn(ExperimentalMaterial3Api::class)
+/** A clear last look: a card in the income / expense color with the amount, the name, when, and the resulting balance. */
 @Composable
-private fun RedDipSheet(
-    dip: RedDip,
+private fun ReviewStep(
+    form: EntryFormState,
+    defaultText: String,
     accentFill: androidx.compose.ui.graphics.Color,
-    onAddAnyway: () -> Unit,
-    onChangeDate: () -> Unit,
-    onCancel: () -> Unit,
-    onDismissRequest: () -> Unit,
+    ui: HomeUiState,
+    entry: NewEntry?,
+    resultingBalance: suspend (NewEntry) -> ResultingBalance?,
 ) {
     val colors = MaterialTheme.cashflow
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    ModalBottomSheet(onDismissRequest = onDismissRequest, sheetState = sheetState) {
-        Column(
-            Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp).padding(bottom = 16.dp).navigationBarsPadding(),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
-        ) {
-            Text(stringResource(R.string.dip_title), style = MaterialTheme.typography.headlineSmall, color = colors.negative, modifier = Modifier.semantics { heading() })
-            Text(
-                stringResource(R.string.dip_lowest, Money.formatDisplay(dip.lowest, withCurrency = false), dip.lowestDate.format(MediumDate)),
-                style = MaterialTheme.typography.titleMedium,
-            )
-            Text(
-                stringResource(R.string.dip_shortfall, Money.formatDisplay(dip.shortfall, withCurrency = false)),
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-                color = colors.negative,
-            )
-            Text(stringResource(R.string.dip_days_header), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            // A strip of the first days that turn red, each with its balance.
-            val shown = dip.days.take(MAX_STRIP_DAYS)
-            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                for (day in shown) DipChip(day)
-            }
-            if (dip.days.size > shown.size) {
+    val amount = AmountInput.toMillimes(form.amountText)
+    StepTitle(stringResource(R.string.wizard_review_title))
+    val balance by produceState<ResultingBalance?>(null, entry) { value = entry?.let { resultingBalance(it) } }
+    Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = accentFill, contentColor = colors.buttonLabel)) {
+        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text(Money.formatSigned(form.kind, amount), style = MaterialTheme.typography.displaySmall, fontWeight = FontWeight.Bold)
+            Text(form.description.trim().ifEmpty { defaultText }, style = MaterialTheme.typography.titleLarge)
+            Text(timingLine(form), style = MaterialTheme.typography.bodyLarge)
+            balance?.let { b ->
+                val shown = Money.formatDisplay(b.balance, withCurrency = false)
                 Text(
-                    stringResource(R.string.dip_more, dip.days.size - shown.size),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    if (form.timing == Timing.NOW) stringResource(R.string.review_balance_now, shown)
+                    else stringResource(R.string.review_balance_on, AppDates.format(b.date), shown),
+                    style = MaterialTheme.typography.titleMedium,
                 )
             }
-            AppButton(
-                stringResource(R.string.dip_add_anyway),
-                onClick = onAddAnyway,
-                modifier = Modifier.fillMaxWidth().heightIn(min = 64.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = accentFill, contentColor = colors.buttonLabel),
-                textStyle = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-            )
-            AppButton(stringResource(R.string.dip_change_date), onClick = onChangeDate, modifier = Modifier.fillMaxWidth(), style = AppButtonStyle.Outlined)
-            AppButton(stringResource(R.string.action_cancel), onClick = onCancel, modifier = Modifier.fillMaxWidth(), style = AppButtonStyle.Tonal)
         }
     }
+    if (form.timing == Timing.REPEATS) OccurrencePreview(form)
 }
 
-private const val MAX_STRIP_DAYS = 14
-
+/** A short human line for when it happens, e.g. "Every week on Mon, Thu - from 05 OCT 2026 until 31 DEC 2026". */
 @Composable
-private fun DipChip(day: DipDay) {
-    val colors = MaterialTheme.cashflow
-    Column(
-        Modifier.clip(MaterialTheme.shapes.small).background(colors.dayNegativeFill).padding(horizontal = 10.dp, vertical = 8.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Text(
-            day.date.format(DateTimeFormatter.ofPattern("d MMM", Locale.getDefault())),
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = com.cashflow.app.ui.theme.Palette.DAY_NUMBER_ALPHA),
-        )
-        Text(
-            com.cashflow.app.engine.CompactAmount.balance(day.closing),
-            style = MaterialTheme.typography.titleSmall,
-            fontWeight = FontWeight.SemiBold,
-            color = colors.negative,
-        )
+private fun timingLine(form: EntryFormState): String = when (form.timing) {
+    Timing.NOW -> form.nowDate?.let { stringResource(R.string.review_on_day, AppDates.format(it)) } ?: stringResource(R.string.review_now)
+    Timing.LATER -> stringResource(R.string.review_later, AppDates.format(form.laterDate))
+    Timing.REPEATS -> {
+        val every = when (form.choice) {
+            PatternChoice.DAILY -> stringResource(R.string.review_every_day)
+            PatternChoice.WEEKLY -> stringResource(R.string.review_every_week_on, AppDates.weekdaysText(form.weekdays))
+            PatternChoice.EVERY_2_WEEKS -> stringResource(R.string.review_every_2_weeks)
+            PatternChoice.MONTH_DAY -> stringResource(R.string.review_every_month_on, form.dayOfMonth)
+            PatternChoice.MONTH_FIRST -> stringResource(R.string.review_first_of_month)
+            PatternChoice.MONTH_LAST -> stringResource(R.string.review_last_of_month)
+            PatternChoice.YEARLY -> stringResource(R.string.review_every_year_on, AppDates.formatShort(form.startDate, form.startDate))
+            PatternChoice.EVERY_N -> stringResource(R.string.choice_every_n)
+        }
+        if (form.hasEnd) stringResource(R.string.review_from_until, every, AppDates.format(form.startDate), AppDates.format(form.endDate))
+        else stringResource(R.string.review_from, every, AppDates.format(form.startDate))
     }
 }

@@ -1,5 +1,20 @@
 package com.cashflow.app.ui.upcoming
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.SwipeToDismissBox
+import androidx.compose.material3.SwipeToDismissBoxValue
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberSwipeToDismissBoxState
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.customActions
+import com.cashflow.app.ui.Haptics
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -39,6 +54,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.cashflow.app.R
+import com.cashflow.app.engine.AppDates
 import com.cashflow.app.engine.Money
 import com.cashflow.app.engine.Transaction
 import com.cashflow.app.engine.TxKind
@@ -56,8 +72,6 @@ import com.cashflow.app.ui.items.rememberItemActions
 import com.cashflow.app.ui.rememberHaptics
 import com.cashflow.app.ui.settings.SettingsViewModel
 import com.cashflow.app.ui.theme.cashflow
-import java.time.format.DateTimeFormatter
-import java.util.Locale
 
 /** The Upcoming tab: what is waiting and what is coming in the next 120 days, grouped by when. */
 @OptIn(ExperimentalLayoutApi::class)
@@ -80,6 +94,8 @@ fun UpcomingScreen(
     val actions = rememberItemActions(home, snackbar)
     var editing by remember { mutableStateOf<Transaction?>(null) }
     var changing by remember { mutableStateOf<Transaction?>(null) }
+    var deleting by remember { mutableStateOf<UpcomingRow?>(null) }
+    val rules by home.rules.collectAsStateWithLifecycle()
     val current = model
 
     LazyColumn(
@@ -147,7 +163,11 @@ fun UpcomingScreen(
                             footer = if (row.repeating || row.shortBy != null) ({ RowTags(row) }) else null,
                         )
                     } else {
-                        UpcomingCard(row, onClick = { editing = row.tx }, modifier = Modifier.animateItem())
+                        SwipeToDelete(
+                            haptics = haptics,
+                            onDelete = { deleting = row },
+                            modifier = Modifier.animateItem(),
+                        ) { UpcomingCard(row, onClick = { editing = row.tx }) }
                     }
                 }
             }
@@ -168,17 +188,82 @@ fun UpcomingScreen(
         ItemEditSheet(tx = tx, actions = actions, onDismiss = { changing = null }, today = today)
     }
     RejectConfirmDialog(actions)
+
+    deleting?.let { row ->
+        val tx = row.tx
+        // A repeating item offers "this one" and "this and all future"; anything else is a plain confirmation.
+        val inSeries = tx.recurringRuleId != null && rules.any { it.id == tx.recurringRuleId }
+        DeleteConfirmDialog(
+            inSeries = inSeries,
+            onThisOne = { deleting = null; actions.delete(tx) },
+            onThisAndFuture = { deleting = null; actions.deleteThisAndFuture(tx) },
+            onCancel = { deleting = null },
+        )
+    }
 }
 
-private val RowDate: DateTimeFormatter get() = DateTimeFormatter.ofPattern("EEE d MMM", Locale.getDefault())
-private val MonthTitle: DateTimeFormatter get() = DateTimeFormatter.ofPattern("LLLL yyyy", Locale.getDefault())
+/** Swipe left to delete: the row snaps back at once and only the confirmation dialog deletes. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SwipeToDelete(haptics: Haptics, onDelete: () -> Unit, modifier: Modifier = Modifier, content: @Composable () -> Unit) {
+    val state = rememberSwipeToDismissBoxState(
+        confirmValueChange = { value ->
+            if (value == SwipeToDismissBoxValue.EndToStart) onDelete()
+            false
+        },
+        positionalThreshold = { total -> total * 0.35f },
+    )
+    LaunchedEffect(state.targetValue) {
+        if (state.targetValue != SwipeToDismissBoxValue.Settled) haptics.tick()
+    }
+    val deleteLabel = stringResource(R.string.swipe_delete_action)
+    SwipeToDismissBox(
+        state = state,
+        modifier = modifier.semantics { customActions = listOf(CustomAccessibilityAction(deleteLabel) { onDelete(); true }) },
+        enableDismissFromStartToEnd = false,
+        backgroundContent = {
+            val active = state.dismissDirection == SwipeToDismissBoxValue.EndToStart
+            Box(
+                Modifier.fillMaxSize().clip(MaterialTheme.shapes.large).background(if (active) MaterialTheme.cashflow.expenseFill else Color.Transparent).padding(horizontal = 28.dp),
+                contentAlignment = Alignment.CenterEnd,
+            ) {
+                if (active) Icon(Icons.Filled.Delete, contentDescription = deleteLabel, tint = MaterialTheme.cashflow.buttonLabel, modifier = Modifier.size(32.dp))
+            }
+        },
+    ) { content() }
+}
+
+@Composable
+private fun DeleteConfirmDialog(inSeries: Boolean, onThisOne: () -> Unit, onThisAndFuture: () -> Unit, onCancel: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onCancel,
+        title = { Text(stringResource(if (inSeries) R.string.swipe_delete_series_title else R.string.swipe_delete_title)) },
+        text = {
+            if (inSeries) {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    TextButton(onClick = onThisOne, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) { Text(stringResource(R.string.swipe_delete_this_one)) }
+                    TextButton(onClick = onThisAndFuture, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) { Text(stringResource(R.string.swipe_delete_future)) }
+                }
+            } else {
+                Text(stringResource(R.string.swipe_delete_body))
+            }
+        },
+        confirmButton = {
+            if (!inSeries) TextButton(onClick = onThisOne, modifier = Modifier.heightIn(min = 56.dp)) { Text(stringResource(R.string.swipe_delete_action)) }
+        },
+        dismissButton = {
+            TextButton(onClick = onCancel, modifier = Modifier.heightIn(min = 56.dp)) { Text(stringResource(R.string.action_cancel)) }
+        },
+    )
+}
+
 
 @Composable
 private fun groupTitle(key: UpcomingGroupKey): String = when (key) {
     UpcomingGroupKey.Waiting -> stringResource(R.string.waiting_header)
     UpcomingGroupKey.Tomorrow -> stringResource(R.string.tomorrow)
     UpcomingGroupKey.ThisWeek -> stringResource(R.string.group_this_week)
-    is UpcomingGroupKey.Month -> key.month.format(MonthTitle)
+    is UpcomingGroupKey.Month -> AppDates.monthYear(key.month)
 }
 
 @Composable
@@ -196,7 +281,7 @@ private fun UpcomingCard(row: UpcomingRow, onClick: () -> Unit, modifier: Modifi
                         overflow = TextOverflow.Ellipsis,
                     )
                     Text(
-                        tx.date.format(RowDate) + " · " + quantityString(R.plurals.in_days, row.daysAway, row.daysAway),
+                        AppDates.withWeekday(tx.date) + " · " + quantityString(R.plurals.in_days, row.daysAway, row.daysAway),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )

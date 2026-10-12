@@ -2,8 +2,8 @@ package com.cashflow.app.engine
 
 import java.time.LocalDate
 
-/** The quick choices of the Postpone menu (a date picker covers everything else). */
-enum class PostponeChoice { TOMORROW, IN_3_DAYS, NEXT_WEEK }
+/** The one suggestion of the Postpone sheet (the date picker covers everything else). */
+enum class PostponeChoice { TOMORROW, IN_3_DAYS, IN_1_WEEK, NEXT_WEEK }
 
 /**
  * Pure rules for "Postpone": moving ONE waiting item to a later day. Only the item's effective [Transaction.date]
@@ -15,7 +15,7 @@ object Postpone {
     fun dateFor(choice: PostponeChoice, today: LocalDate): LocalDate = when (choice) {
         PostponeChoice.TOMORROW -> today.plusDays(1)
         PostponeChoice.IN_3_DAYS -> today.plusDays(3)
-        PostponeChoice.NEXT_WEEK -> today.plusDays(7)
+        PostponeChoice.IN_1_WEEK, PostponeChoice.NEXT_WEEK -> today.plusDays(7)
     }
 
     /** Only a waiting (PENDING) item can be postponed. */
@@ -24,9 +24,26 @@ object Postpone {
     /** A new date must lie after the item's current date: that is what "postpone" means. */
     fun isValidDate(tx: Transaction, newDate: LocalDate): Boolean = canPostpone(tx) && newDate.isAfter(tx.date)
 
-    /** The quick choices that really move [tx] later (e.g. "Tomorrow" is not offered for an item already dated later). */
-    fun choices(tx: Transaction, today: LocalDate): List<PostponeChoice> =
-        if (!canPostpone(tx)) emptyList() else PostponeChoice.entries.filter { isValidDate(tx, dateFor(it, today)) }
+    /**
+     * The single suggestion for an item, from its nature: a daily payment moves to tomorrow, a weekly or every-2-weeks
+     * one in 3 days, a monthly or yearly one in 1 week, a one-time item (no repeating pattern) next week.
+     */
+    fun suggestionFor(pattern: RecurrencePattern?): PostponeChoice = when (pattern) {
+        null -> PostponeChoice.NEXT_WEEK
+        RecurrencePattern.Daily -> PostponeChoice.TOMORROW
+        is RecurrencePattern.Weekly, is RecurrencePattern.WeeklyDays -> PostponeChoice.IN_3_DAYS
+        is RecurrencePattern.EveryNDays -> if (pattern.n <= 14) PostponeChoice.IN_3_DAYS else PostponeChoice.IN_1_WEEK
+        RecurrencePattern.MonthFirst, RecurrencePattern.MonthLast, is RecurrencePattern.DayOfMonth, is RecurrencePattern.Yearly -> PostponeChoice.IN_1_WEEK
+    }
+
+    /**
+     * The suggested new date: the suggestion counted from today, or from the item's own date when that is later, so
+     * the suggestion always moves the item to a LATER day. Null when the item cannot be postponed.
+     */
+    fun suggestedDate(tx: Transaction, pattern: RecurrencePattern?, today: LocalDate): LocalDate? {
+        if (!canPostpone(tx)) return null
+        return dateFor(suggestionFor(pattern), maxOf(today, tx.date))
+    }
 
     /** The earliest date the picker should offer: the day after the item's current date. */
     fun earliestDate(tx: Transaction): LocalDate = tx.date.plusDays(1)

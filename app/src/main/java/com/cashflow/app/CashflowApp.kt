@@ -4,6 +4,7 @@ import android.app.Application
 import com.cashflow.app.data.AppDatabase
 import com.cashflow.app.data.LedgerRepository
 import com.cashflow.app.data.SharedPrefsAutoAccept
+import com.cashflow.app.engine.AppDates
 import com.cashflow.app.engine.BalanceEngine
 import com.cashflow.app.ui.UiPrefs
 import com.cashflow.app.update.UpdateManager
@@ -15,6 +16,9 @@ import java.time.LocalDate
 /** Poor man's DI: one database, one repository, created lazily. */
 class CashflowApp : Application() {
     override fun onCreate() {
+        // The week starts where the phone's region says; everything else is English whatever the phone's language.
+        AppDates.firstDayOfWeek = java.time.temporal.WeekFields.of(java.util.Locale.getDefault()).firstDayOfWeek
+        java.util.Locale.setDefault(AppDates.LOCALE)
         super.onCreate()
         UpdateManager.deleteCachedApk(this) // never keep a downloaded update across launches
     }

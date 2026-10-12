@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.cashflow.app.LedgerSnapshot
 import com.cashflow.app.LedgerSnapshots
+import com.cashflow.app.engine.AppDates
 import com.cashflow.app.engine.CalendarSummaries
 import com.cashflow.app.engine.MonthSummary
 import kotlinx.coroutines.Dispatchers
@@ -18,8 +19,6 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import java.time.LocalDate
 import java.time.YearMonth
-import java.time.temporal.WeekFields
-import java.util.Locale
 
 /**
  * State of the Calendar tab. It lives in the activity's view model store, so the visible month and the
@@ -51,7 +50,7 @@ class CalendarViewModel(private val snapshots: LedgerSnapshots, clock: () -> Loc
         var owner: LedgerSnapshot? = null
         var cache = emptyMap<YearMonth, MonthSummary>()
         snapshots.snapshot.filterNotNull().combine(visible) { snap, vis -> snap to vis }.collect { (snap, vis) ->
-            val firstDay = WeekFields.of(Locale.getDefault()).firstDayOfWeek
+            val firstDay = AppDates.firstDayOfWeek
             val wanted = listOf(vis.minusMonths(1), vis, vis.plusMonths(1))
             val reusable = if (snap === owner) cache else emptyMap()
             val missing = wanted.filter { it !in reusable }

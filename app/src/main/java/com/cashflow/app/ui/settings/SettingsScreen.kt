@@ -43,6 +43,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.cashflow.app.R
 import com.cashflow.app.data.LedgerRepository
 import com.cashflow.app.debug.DebugSection
+import com.cashflow.app.engine.AppDates
 import com.cashflow.app.engine.AppSettings
 import com.cashflow.app.engine.Money
 import com.cashflow.app.engine.SettingsCard
@@ -55,10 +56,8 @@ import java.time.LocalDate
 import java.time.LocalTime
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
-import java.time.format.FormatStyle
 
-private val TimeFormat = DateTimeFormatter.ofPattern("HH:mm")
-private val DateFormat = DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM)
+private val TimeFormat = DateTimeFormatter.ofPattern("HH:mm", java.util.Locale.ENGLISH)
 
 @Composable
 fun SettingsScreen(
@@ -105,7 +104,7 @@ private fun StartingPointCard(viewModel: SettingsViewModel, current: AppSettings
         Text(stringResource(R.string.starting_title), style = MaterialTheme.typography.titleLarge)
         if (layout.startingPointReadOnly) {
             ReadOnlyValue(stringResource(R.string.money_started_label), Money.formatDisplay(current.startingBalance))
-            ReadOnlyValue(stringResource(R.string.started_on_label), current.balanceStartDate.format(DateFormat))
+            ReadOnlyValue(stringResource(R.string.started_on_label), AppDates.format(current.balanceStartDate))
             if (layout.startingPointNote) {
                 Text(
                     stringResource(R.string.starting_locked_note),
@@ -162,7 +161,7 @@ private fun AmountField(label: String, initial: Long, allowNegative: Boolean, on
 internal fun DateField(label: String, value: LocalDate, display: String? = null, onPick: (LocalDate) -> Unit) {
     var open by remember { mutableStateOf(false) }
     OutlinedButton(onClick = { open = true }, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) {
-        Text(stringResource(R.string.field_value_format, label, display ?: value.format(DateFormat)))
+        Text(stringResource(R.string.field_value_format, label, display ?: AppDates.format(value)))
     }
     if (open) {
         DatePickerDialogFor(initial = value, onPick = onPick, onDismiss = { open = false })
@@ -172,7 +171,14 @@ internal fun DateField(label: String, value: LocalDate, display: String? = null,
 /** The date picker in a dialog. Days before [earliest] cannot be chosen. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-internal fun DatePickerDialogFor(initial: LocalDate, onPick: (LocalDate) -> Unit, onDismiss: () -> Unit, earliest: LocalDate? = null) {
+internal fun DatePickerDialogFor(
+    initial: LocalDate,
+    onPick: (LocalDate) -> Unit,
+    onDismiss: () -> Unit,
+    earliest: LocalDate? = null,
+    /** The OK button is enabled only for dates this accepts (e.g. not the item's own date when postponing). */
+    isValid: (LocalDate) -> Boolean = { true },
+) {
     val earliestMillis = earliest?.atStartOfDay(ZoneOffset.UTC)?.toInstant()?.toEpochMilli()
     val state = rememberDatePickerState(
         initialSelectedDateMillis = initial.atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli(),
@@ -183,13 +189,17 @@ internal fun DatePickerDialogFor(initial: LocalDate, onPick: (LocalDate) -> Unit
     DatePickerDialog(
         onDismissRequest = onDismiss,
         confirmButton = {
-            TextButton(onClick = {
-                state.selectedDateMillis?.let { ms ->
-                    // The picker works in UTC midnights; read the calendar date back in UTC.
-                    onPick(Instant.ofEpochMilli(ms).atZone(ZoneOffset.UTC).toLocalDate())
-                }
-                onDismiss()
-            }) { Text(stringResource(R.string.action_ok)) }
+            val picked = state.selectedDateMillis?.let { ms ->
+                // The picker works in UTC midnights; read the calendar date back in UTC.
+                Instant.ofEpochMilli(ms).atZone(ZoneOffset.UTC).toLocalDate()
+            }
+            TextButton(
+                onClick = {
+                    picked?.let(onPick)
+                    onDismiss()
+                },
+                enabled = picked != null && isValid(picked),
+            ) { Text(stringResource(R.string.action_ok)) }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) } },
     ) { DatePicker(state = state) }

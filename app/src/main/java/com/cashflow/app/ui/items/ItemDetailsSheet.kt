@@ -33,6 +33,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.cashflow.app.R
+import com.cashflow.app.engine.AppDates
 import com.cashflow.app.engine.ItemEdits
 import com.cashflow.app.engine.Money
 import com.cashflow.app.engine.Postpone
@@ -51,11 +52,6 @@ import com.cashflow.app.ui.settings.scheduleSummary
 import com.cashflow.app.ui.theme.cashflow
 import kotlinx.coroutines.launch
 import java.time.LocalDate
-import java.time.format.DateTimeFormatter
-import java.time.format.FormatStyle
-
-private val LongDate: DateTimeFormatter = DateTimeFormatter.ofLocalizedDate(FormatStyle.FULL)
-private val ShortDate: DateTimeFormatter = DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM)
 
 /** Finds the series [tx] belongs to and opens its details. Used by Home, Calendar and Upcoming. */
 @Composable
@@ -120,7 +116,7 @@ fun ItemDetailsSheet(
                     Money.formatSigned(tx.kind, tx.amount),
                     valueColor = if (income) MaterialTheme.cashflow.positive else MaterialTheme.cashflow.negative,
                 )
-                DetailRow(stringResource(R.string.detail_date), tx.date.format(LongDate))
+                DetailRow(stringResource(R.string.detail_date), AppDates.withWeekday(tx.date))
                 DetailRow(
                     stringResource(R.string.detail_status),
                     stringResource(
@@ -137,7 +133,7 @@ fun ItemDetailsSheet(
                         stringResource(R.string.detail_one_time)
                     } else {
                         val every = scheduleSummary(rule.pattern)
-                        rule.endDate?.let { stringResource(R.string.detail_series_line, every, it.format(ShortDate)) } ?: every
+                        rule.endDate?.let { stringResource(R.string.detail_series_line, every, AppDates.format(it)) } ?: every
                     },
                 )
             }
@@ -188,17 +184,25 @@ fun ItemDetailsSheet(
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                // One suggestion, chosen from the nature of the item, and a date picker for everything else.
+                val suggestion = Postpone.suggestionFor(rule?.pattern)
+                val suggestedDate = Postpone.suggestedDate(tx, rule?.pattern, today)
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    for (choice in Postpone.choices(tx, today)) {
+                    if (suggestedDate != null) {
                         AppButton(
                             stringResource(
-                                when (choice) {
-                                    PostponeChoice.TOMORROW -> R.string.postpone_tomorrow
-                                    PostponeChoice.IN_3_DAYS -> R.string.postpone_3_days
-                                    PostponeChoice.NEXT_WEEK -> R.string.postpone_next_week
-                                },
+                                R.string.postpone_suggestion,
+                                stringResource(
+                                    when (suggestion) {
+                                        PostponeChoice.TOMORROW -> R.string.postpone_tomorrow
+                                        PostponeChoice.IN_3_DAYS -> R.string.postpone_3_days
+                                        PostponeChoice.IN_1_WEEK -> R.string.postpone_1_week
+                                        PostponeChoice.NEXT_WEEK -> R.string.postpone_next_week
+                                    },
+                                ),
+                                AppDates.formatShort(suggestedDate, today),
                             ),
-                            onClick = { close { actions.postpone(tx, Postpone.dateFor(choice, today)) } },
+                            onClick = { close { actions.postpone(tx, suggestedDate) } },
                             style = AppButtonStyle.Tonal,
                         )
                     }
@@ -228,10 +232,12 @@ fun ItemDetailsSheet(
     }
 
     if (pickingDate) {
+        // Opens on the item's own date (selected) with today outlined by the picker; only later days can be chosen.
         DatePickerDialogFor(
-            initial = Postpone.earliestDate(tx),
-            earliest = Postpone.earliestDate(tx),
-            onPick = { date -> if (Postpone.isValidDate(tx, date)) close { actions.postpone(tx, date) } },
+            initial = tx.date,
+            earliest = maxOf(tx.date, today),
+            isValid = { Postpone.isValidDate(tx, it) },
+            onPick = { date -> close { actions.postpone(tx, date) } },
             onDismiss = { pickingDate = false },
         )
     }
@@ -340,7 +346,7 @@ private fun SeriesEndDialog(rule: RecurringRule, earliest: LocalDate, initial: L
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text(stringResource(R.string.series_end_body), style = MaterialTheme.typography.bodyMedium)
                 androidx.compose.material3.OutlinedButton(onClick = { picking = true }, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) {
-                    Text(stringResource(R.string.field_value_format, stringResource(R.string.series_end_from), from.format(ShortDate)))
+                    Text(stringResource(R.string.field_value_format, stringResource(R.string.series_end_from), AppDates.format(from)))
                 }
             }
         },

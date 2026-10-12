@@ -89,7 +89,6 @@ import com.cashflow.app.ui.components.AppButtonStyle
 import com.cashflow.app.ui.components.AnswerButtons
 import com.cashflow.app.ui.components.AppCard
 import com.cashflow.app.ui.components.KindButtons
-import com.cashflow.app.ui.items.CardDate
 import com.cashflow.app.ui.items.ItemDetails
 import com.cashflow.app.ui.items.ItemEditSheet
 import com.cashflow.app.ui.items.RejectConfirmDialog
@@ -203,7 +202,7 @@ private fun HomeContent(
             kind = TxKind.valueOf(name),
             ui = ui,
             redDip = viewModel::redDip,
-            liveMonth = viewModel::liveMonth,
+            resultingBalance = viewModel::resultingBalance,
             onSave = viewModel::save,
             onSaved = { message -> actions.announce(message) },
             onDismiss = { composerKind = null },

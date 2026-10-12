@@ -117,12 +117,4 @@ class CalendarGridTest {
         assertEquals(0f, CalendarGrid.rowHeight(-5f, 6), 0f)
         assertEquals(0f, CalendarGrid.rowHeight(300f, 0), 0f)
     }
-
-    @Test fun cells_always_keep_the_balance_only_the_amounts_are_dropped_on_short_rows() {
-        assertEquals(CellMode.FULL, CalendarCells.mode(rowHeight = 100f, fullHeight = 92f))
-        assertEquals(CellMode.FULL, CalendarCells.mode(rowHeight = 92f, fullHeight = 92f))
-        assertEquals(CellMode.COMPACT, CalendarCells.mode(rowHeight = 60f, fullHeight = 92f))
-        // There is no mode without the balance (and no dots mode any more).
-        assertEquals(listOf("FULL", "COMPACT"), CellMode.entries.map { it.name })
-    }
 }

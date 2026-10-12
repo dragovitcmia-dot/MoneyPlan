@@ -28,7 +28,7 @@ object RedDipCheck {
         val today = engine.today
         val end = today.plusDays(HORIZON_DAYS.toLong())
         val before = engine.forecast(today, end).associate { it.date to it.closing }
-        val after = LiveCalendar.engineWith(engine, entry).forecast(today, end)
+        val after = EntryProjection.engineWith(engine, entry).forecast(today, end)
         val days = after.filter { day ->
             day.closing < 0 && (before[day.date]?.let { it >= 0 || day.closing < it } ?: true)
         }.map { DipDay(it.date, it.closing, before[it.date]) }
@@ -38,14 +38,24 @@ object RedDipCheck {
     }
 }
 
-/** Quick name suggestions for the Name step: the names used most recently, newest first, without repeats. */
+/** The names offered above the Name field: the ones used most often. */
 object NameSuggestions {
-    fun recent(transactions: List<Transaction>, kind: TxKind, limit: Int = 6): List<String> =
-        transactions.asSequence()
-            .filter { it.kind == kind && it.description.isNotBlank() }
-            .sortedWith(compareByDescending<Transaction> { it.date }.thenByDescending { it.id })
-            .map { it.description.trim() }
-            .distinctBy { it.lowercase() }
+    /**
+     * The [limit] most frequently used names of [kind] (compared without regard to case), most used first; equally used
+     * names are ordered by how recently they were used. Blank names are ignored.
+     */
+    fun topFrequent(transactions: List<Transaction>, kind: TxKind, limit: Int = 3): List<String> {
+        val used = transactions.filter { it.kind == kind && it.description.isNotBlank() }
+        data class Stat(var count: Int, var latest: Transaction, val label: String)
+        val stats = LinkedHashMap<String, Stat>()
+        for (t in used.sortedWith(compareByDescending<Transaction> { it.date }.thenByDescending { it.id })) {
+            val key = t.description.trim().lowercase()
+            val stat = stats[key]
+            if (stat == null) stats[key] = Stat(1, t, t.description.trim()) else stat.count++
+        }
+        return stats.values
+            .sortedWith(compareByDescending<Stat> { it.count }.thenByDescending { it.latest.date }.thenByDescending { it.latest.id })
             .take(limit)
-            .toList()
+            .map { it.label }
+    }
 }

@@ -3,6 +3,8 @@ package com.cashflow.app.data
 import androidx.room.withTransaction
 import com.cashflow.app.engine.AppSettings
 import com.cashflow.app.engine.DeleteOutcome
+import com.cashflow.app.engine.DeletePlan
+import com.cashflow.app.engine.Deletions
 import com.cashflow.app.engine.ItemEdits
 import com.cashflow.app.engine.Postpone
 import com.cashflow.app.engine.applyAutoIncome
@@ -148,6 +150,27 @@ class LedgerRepository(private val db: AppDatabase, private val autoAccept: Auto
             is DeleteOutcome.MarkSkipped -> txDao.setStatus(outcome.id, TxStatus.SKIPPED)
         }
         return outcome
+    }
+
+    /**
+     * "This and all future" for a repeating item: the series ends the day before the item and its waiting occurrences
+     * from then on are removed (accepted and rejected rows stay). Returns what is needed to undo it, or null when the
+     * item has no series any more.
+     */
+    suspend fun deleteThisAndFuture(tx: Transaction, today: LocalDate): DeletePlan.EndSeries? = db.withTransaction {
+        val ruleId = tx.recurringRuleId ?: return@withTransaction null
+        val rule = ruleDao.get(ruleId)?.toDomain() ?: return@withTransaction null
+        val plan = Deletions.planThisAndFuture(tx, rule, rowsOf(ruleId), today)
+        apply(plan.change)
+        plan
+    }
+
+    /** Undo of [deleteThisAndFuture]: the old series and every removed row come back. */
+    suspend fun undoDeleteThisAndFuture(plan: DeletePlan.EndSeries) {
+        db.withTransaction {
+            ruleDao.update(plan.oldRule.toEntity())
+            if (plan.removed.isNotEmpty()) txDao.insertAll(plan.removed.map { it.toEntity() })
+        }
     }
 
     /** Undo of a manual delete: puts the row back (it gets a new id). */

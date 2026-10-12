@@ -35,6 +35,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.cashflow.app.R
+import com.cashflow.app.engine.AppDates
 import com.cashflow.app.engine.Money
 import com.cashflow.app.engine.Transaction
 import com.cashflow.app.engine.TxKind
@@ -42,8 +43,6 @@ import com.cashflow.app.ui.Haptics
 import com.cashflow.app.ui.components.AppCard
 import com.cashflow.app.ui.components.SwipeHint
 import com.cashflow.app.ui.theme.cashflow
-import java.time.format.DateTimeFormatter
-import java.time.format.FormatStyle
 
 /**
  * Swipe right = confirm, swipe left = skip (no buttons). Small hints on the card edges show how,
@@ -129,7 +128,7 @@ fun WaitingCard(
                             overflow = TextOverflow.Ellipsis,
                         )
                         Text(
-                            tx.date.format(CardDate),
+                            AppDates.format(tx.date),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -147,6 +146,4 @@ fun WaitingCard(
     }
 }
 
-
-val CardDate: DateTimeFormatter = DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM)
 

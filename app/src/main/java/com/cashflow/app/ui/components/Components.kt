@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonColors
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Card
 import androidx.compose.material3.LocalContentColor
@@ -45,7 +46,8 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.rememberTextMeasurer
@@ -60,17 +62,25 @@ import com.cashflow.app.ui.theme.cashflow
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 
-/** Buttons and tappable cards shrink to 0.96 while pressed. The scale is read in the draw phase. */
+/**
+ * Buttons and tappable cards shrink to 0.96 while pressed. Only the DRAWING is scaled: scaling the whole element (a
+ * graphics layer) would shrink its touch area under the finger, and a press near an edge could then end outside the
+ * button and not count as a tap.
+ */
 fun Modifier.pressScale(interactionSource: InteractionSource): Modifier = composed {
     val pressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(
         targetValue = if (pressed) 0.96f else 1f,
-        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
+        animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMedium),
         label = "pressScale",
     )
-    graphicsLayer {
-        scaleX = scale
-        scaleY = scale
+    drawWithContent {
+        val s = scale
+        if (s == 1f) {
+            drawContent()
+        } else {
+            scale(s, s, pivot = center) { this@drawWithContent.drawContent() }
+        }
     }
 }
 
@@ -174,6 +184,9 @@ fun LabeledTextField(
     placeholder: (@Composable () -> Unit)? = null,
     supportingText: (@Composable () -> Unit)? = null,
     keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
+    keyboardActions: KeyboardActions = KeyboardActions.Default,
+    /** Applied to the text field itself (e.g. a focus requester). */
+    fieldModifier: Modifier = Modifier,
 ) {
     Column(modifier.semantics(mergeDescendants = true) {}, verticalArrangement = Arrangement.spacedBy(6.dp)) {
         CompositionLocalProvider(LocalContentColor provides if (isError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant) {
@@ -182,12 +195,13 @@ fun LabeledTextField(
         OutlinedTextField(
             value = value,
             onValueChange = onValueChange,
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth().then(fieldModifier),
             singleLine = singleLine,
             isError = isError,
             placeholder = placeholder,
             supportingText = supportingText,
             keyboardOptions = keyboardOptions,
+            keyboardActions = keyboardActions,
         )
     }
 }

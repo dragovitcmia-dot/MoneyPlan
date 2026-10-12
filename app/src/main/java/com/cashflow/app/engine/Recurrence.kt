@@ -25,6 +25,7 @@ object Recurrence {
             RecurrencePattern.MonthLast -> monthly(lo, hi) { it.atEndOfMonth() }
             is RecurrencePattern.DayOfMonth -> monthly(lo, hi) { it.atDay(minOf(p.day, it.lengthOfMonth())) }
             is RecurrencePattern.Yearly -> yearly(lo, hi, p)
+            is RecurrencePattern.WeeklyDays -> generateSequence(lo) { it.plusDays(1) }.takeWhile { !it.isAfter(hi) }.filter { it.dayOfWeek in p.days }.toList()
         }
     }
 

@@ -93,17 +93,26 @@ class RedDipTest {
     private fun named(name: String, day: Int, id: Long, kind: TxKind = TxKind.EXPENSE) =
         tx(d(2026, 10, day), 5, kind, id = id, description = name)
 
-    @Test fun recent_names_come_newest_first_without_repeats() {
-        val rows = listOf(named("Bus", 1, 1), named("Coffee", 5, 2), named("bus", 7, 3), named("Rent", 3, 4), named("", 9, 5))
-        assertEquals(listOf("bus", "Coffee", "Rent"), NameSuggestions.recent(rows, TxKind.EXPENSE))
+    @Test fun the_three_most_used_names_come_first_ties_by_recency() {
+        val rows = listOf(
+            named("Bus", 1, 1), named("bus", 2, 2), named("Bus", 3, 3), // 3 uses
+            named("Coffee", 4, 4), named("Coffee", 5, 5), // 2 uses, newest 5
+            named("Rent", 6, 6), named("rent", 7, 7), // 2 uses, newest 7: wins the tie
+            named("Gum", 9, 8), named("", 9, 9), // 1 use; a blank name is ignored
+        )
+        assertEquals(listOf("Bus", "rent", "Coffee"), NameSuggestions.topFrequent(rows, TxKind.EXPENSE))
     }
 
-    @Test fun suggestions_are_per_kind_and_limited() {
+    @Test fun names_are_per_kind_and_limited_and_may_be_empty() {
         val rows = (1..10).map { named("n$it", it, it.toLong()) } + named("Salary", 2, 50, TxKind.INCOME)
-        assertEquals(listOf("Salary"), NameSuggestions.recent(rows, TxKind.INCOME))
-        val expenses = NameSuggestions.recent(rows, TxKind.EXPENSE, limit = 4)
-        assertEquals(listOf("n10", "n9", "n8", "n7"), expenses)
-        assertTrue(NameSuggestions.recent(emptyList(), TxKind.EXPENSE).isEmpty())
-        assertNotNull(expenses)
+        assertEquals(listOf("Salary"), NameSuggestions.topFrequent(rows, TxKind.INCOME))
+        assertEquals(listOf("n10", "n9", "n8"), NameSuggestions.topFrequent(rows, TxKind.EXPENSE)) // all used once: newest first
+        assertEquals(listOf("n10"), NameSuggestions.topFrequent(rows, TxKind.EXPENSE, limit = 1))
+        assertTrue(NameSuggestions.topFrequent(emptyList(), TxKind.EXPENSE).isEmpty())
+    }
+
+    @Test fun the_label_keeps_the_most_recent_spelling() {
+        val rows = listOf(named("bus", 1, 1), named("Bus", 5, 2))
+        assertEquals(listOf("Bus"), NameSuggestions.topFrequent(rows, TxKind.EXPENSE))
     }
 }

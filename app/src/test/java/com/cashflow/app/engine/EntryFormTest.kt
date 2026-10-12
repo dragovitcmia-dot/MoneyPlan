@@ -4,6 +4,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.time.DayOfWeek
 
 /**
  * Regression for "Complete the schedule": the old form computed `validate(entry) ?: "Complete the
@@ -24,7 +25,7 @@ class EntryFormTest {
         assertEquals(Timing.NOW, s.timing)
         assertEquals(today.plusDays(1), s.laterDate)
         assertEquals(PatternChoice.WEEKLY, s.choice)
-        assertEquals(today.dayOfWeek, s.weekday)
+        assertEquals(setOf(today.dayOfWeek), s.weekdays)
         assertEquals(today, s.startDate)
         assertFalse(s.hasEnd)
     }
@@ -75,26 +76,51 @@ class EntryFormTest {
         assertEquals(start.plusDays(1), entry.startDate)
     }
 
-    @Test fun the_same_five_frequencies_are_offered_for_expenses_and_income() {
-        val five = listOf(PatternChoice.DAILY, PatternChoice.WEEKLY, PatternChoice.EVERY_2_WEEKS, PatternChoice.MONTH_DAY, PatternChoice.YEARLY)
-        assertEquals(five, EntryForm.choicesFor(TxKind.EXPENSE))
-        assertEquals(five, EntryForm.choicesFor(TxKind.INCOME))
+    @Test fun the_same_seven_frequencies_are_offered_for_expenses_and_income() {
+        val all = listOf(
+            PatternChoice.DAILY, PatternChoice.WEEKLY, PatternChoice.EVERY_2_WEEKS,
+            PatternChoice.MONTH_DAY, PatternChoice.MONTH_FIRST, PatternChoice.MONTH_LAST, PatternChoice.YEARLY,
+        )
+        assertEquals(all, EntryForm.choicesFor(TxKind.EXPENSE))
+        assertEquals(all, EntryForm.choicesFor(TxKind.INCOME))
         assertTrue(build(minimal(TxKind.EXPENSE, Timing.REPEATS).copy(choice = PatternChoice.DAILY)) is FormResult.Valid)
     }
 
     @Test fun every_frequency_for_both_kinds_is_persisted_and_visible_in_the_balance() {
         for (kind in TxKind.entries) for (choice in EntryForm.choicesFor(kind)) {
-            val form = EntryWizard.withFrequency(minimal(kind, Timing.REPEATS).copy(startDate = today), choice)
+            val form = minimal(kind, Timing.REPEATS).copy(startDate = today, choice = choice)
             val entry = (build(form) as FormResult.Valid).entry as NewEntry.Recurring
             val rule = EntryPlanner.ruleFor(entry)!!
             val rows = RuleMaintenance.materialize(rule, emptyList(), today)
             assertTrue("$kind/$choice produced no rows", rows.isNotEmpty())
-            assertEquals("$kind/$choice first occurrence is the start day", today, rows.first().date)
+            assertTrue("$kind/$choice starts before the start day", !rows.first().date.isBefore(today))
+            assertTrue("$kind/$choice first occurrence is more than a month away", !rows.first().date.isAfter(today.plusDays(30)))
             val engine = BalanceEngine(settings(start, 100), rows, today)
             val sign = if (kind == TxKind.EXPENSE) -1 else 1
             val end = engine.forecast(today, today.plusDays(30)).last().closing
             assertTrue("$kind/$choice did not change the forecast", (end - tnd(100)) * sign > 0)
         }
+    }
+
+    @Test fun several_weekdays_make_a_weekday_set_and_one_weekday_a_plain_weekly() {
+        val two = minimal(TxKind.EXPENSE, Timing.REPEATS).copy(weekdays = setOf(DayOfWeek.MONDAY, DayOfWeek.THURSDAY))
+        assertEquals(
+            RecurrencePattern.WeeklyDays(setOf(DayOfWeek.MONDAY, DayOfWeek.THURSDAY)),
+            ((build(two) as FormResult.Valid).entry as NewEntry.Recurring).pattern,
+        )
+        val one = two.copy(weekdays = setOf(DayOfWeek.FRIDAY))
+        assertEquals(RecurrencePattern.Weekly(DayOfWeek.FRIDAY), ((build(one) as FormResult.Valid).entry as NewEntry.Recurring).pattern)
+        val none = build(two.copy(weekdays = emptySet()))
+        assertEquals(listOf(FormProblem.WEEKDAYS_EMPTY), (none as FormResult.Invalid).problems)
+    }
+
+    @Test fun first_and_last_day_of_the_month_and_every_2_weeks_and_yearly_build_the_right_patterns() {
+        fun pattern(choice: PatternChoice, start: java.time.LocalDate = today) =
+            ((build(minimal(TxKind.INCOME, Timing.REPEATS).copy(choice = choice, startDate = start)) as FormResult.Valid).entry as NewEntry.Recurring).pattern
+        assertEquals(RecurrencePattern.MonthFirst, pattern(PatternChoice.MONTH_FIRST))
+        assertEquals(RecurrencePattern.MonthLast, pattern(PatternChoice.MONTH_LAST))
+        assertEquals(RecurrencePattern.EveryNDays(14, today), pattern(PatternChoice.EVERY_2_WEEKS))
+        assertEquals(RecurrencePattern.Yearly(2, 14), pattern(PatternChoice.YEARLY, d(2027, 2, 14)))
     }
 
     @Test fun every_wizard_path_ends_in_a_stored_row_or_rule() {

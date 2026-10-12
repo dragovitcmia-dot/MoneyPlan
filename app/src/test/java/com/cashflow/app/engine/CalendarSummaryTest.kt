@@ -50,21 +50,59 @@ class CalendarSummaryTest {
         assertEquals(TxStatus.SKIPPED, day.items.first { it.tx.id == 1L }.tx.status)
     }
 
-    @Test fun daily_income_is_never_shown_but_other_recurring_income_is() {
+    @Test fun income_from_any_series_is_not_shown_but_one_time_income_is_and_everything_counts_in_the_balance() {
         val daily = incomeSource(RecurrencePattern.Daily, d(2026, 10, 2), amount = 30, id = 2)
         val weekly = incomeSource(RecurrencePattern.Weekly(DayOfWeek.MONDAY), d(2026, 10, 2), amount = 50, id = 3)
-        val rows = RuleMaintenance.materialize(daily, emptyList(), today) + RuleMaintenance.materialize(weekly, emptyList(), today)
+        val oneTime = tx(d(2026, 10, 12), 20, TxKind.INCOME, id = 99)
+        val rows = RuleMaintenance.materialize(daily, emptyList(), today) + RuleMaintenance.materialize(weekly, emptyList(), today) + oneTime
         val m = month(rows, listOf(daily, weekly))
-        val monday = m.day(d(2026, 10, 12))!! // a Monday: 30 daily + 50 weekly
-        assertEquals(tnd(50), monday.shownIncome)
-        assertEquals(2, monday.items.size)
-        assertTrue(monday.items.first { it.tx.recurringRuleId == 2L }.dailyIncome)
-        assertFalse(monday.items.first { it.tx.recurringRuleId == 3L }.dailyIncome)
+        val monday = m.day(d(2026, 10, 12))!! // a Monday: 30 daily + 50 weekly + 20 one-time
+        assertEquals(tnd(20), monday.shownIncome) // only the one-time income is shown
+        assertTrue(monday.hasIncome)
+        assertEquals(3, monday.items.size) // the series income is still listed in the day sheet
         val tuesday = m.day(d(2026, 10, 13))!!
         assertEquals(0L, tuesday.shownIncome)
         assertFalse(tuesday.hasIncome)
-        // The daily income still counts in the closing balance.
-        assertEquals(m.day(d(2026, 10, 12))!!.closing + tnd(30), tuesday.closing)
+        // The balance is unchanged by what is displayed: every income counts.
+        assertEquals(tnd(100), monday.closing - m.day(d(2026, 10, 11))!!.closing)
+        assertEquals(tnd(30), tuesday.closing - monday.closing)
+    }
+
+    @Test fun expenses_of_repeating_series_are_shown() {
+        val weekly = rule(RecurrencePattern.Weekly(DayOfWeek.MONDAY), d(2026, 10, 2), amount = 40, id = 4)
+        val rows = RuleMaintenance.materialize(weekly, emptyList(), today)
+        val monday = month(rows, listOf(weekly)).day(d(2026, 10, 12))!!
+        assertTrue(monday.hasExpenses)
+        assertEquals(tnd(40), monday.expenses)
+        assertEquals(tnd(20), monday.closing) // 100 - 40 (Oct 5, overdue: due today) - 40 (this Monday)
+    }
+
+    @Test fun a_cell_always_has_the_same_three_line_slots() {
+        val m = month(listOf(tx(d(2026, 10, 12), 30, id = 1), tx(d(2026, 10, 12), 5, TxKind.INCOME, id = 2)))
+        for (day in m.weeks.flatten()) {
+            val c = CalendarCellContent.of(day)
+            assertEquals("${day.date}", CalendarCellContent.SLOTS, c.lines.size)
+            assertEquals(day.date.dayOfMonth, c.dayNumber)
+            // the balance is there for every day that has one, whatever else is (not) on the day
+            assertEquals("${day.date}", day.hasForecast, c.balance != null)
+        }
+        val full = CalendarCellContent.of(m.day(d(2026, 10, 12))!!)
+        assertEquals("-30", full.expense!!.text)
+        assertEquals(CellLineKind.EXPENSE, full.expense!!.kind)
+        assertEquals("+5", full.income!!.text)
+        assertEquals("75", full.balance!!.text) // 100 - 30 + 5
+        val empty = CalendarCellContent.of(m.day(d(2026, 10, 20))!!)
+        assertNull(empty.expense)
+        assertNull(empty.income)
+        assertEquals("75", empty.balance!!.text)
+        assertEquals(3, empty.lines.size) // empty lines keep their slot
+    }
+
+    @Test fun the_balance_line_is_signed_when_negative() {
+        val m = month(listOf(tx(d(2026, 10, 12), 130, id = 1)), balance = 100)
+        val c = CalendarCellContent.of(m.day(d(2026, 10, 12))!!)
+        assertEquals("-30", c.balance!!.text)
+        assertEquals("-130", c.expense!!.text)
     }
 
     @Test fun negative_flag_follows_the_closing_balance() {

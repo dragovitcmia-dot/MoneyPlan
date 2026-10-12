@@ -66,6 +66,13 @@ import com.cashflow.app.ui.settings.SettingsViewModel
 import com.cashflow.app.ui.theme.CashflowTheme
 
 class MainActivity : ComponentActivity() {
+    /** Library texts (date picker, dialogs) come in English too, whatever language the phone uses. */
+    override fun attachBaseContext(newBase: android.content.Context) {
+        val config = android.content.res.Configuration(newBase.resources.configuration)
+        config.setLocale(com.cashflow.app.engine.AppDates.LOCALE)
+        super.attachBaseContext(newBase.createConfigurationContext(config))
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()

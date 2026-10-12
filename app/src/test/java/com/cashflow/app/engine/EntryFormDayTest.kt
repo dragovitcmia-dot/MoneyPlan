@@ -58,7 +58,7 @@ class EntryFormDayTest {
         val day = d(2026, 11, 10) // a Tuesday
         val form = EntryFormState.forDay(TxKind.EXPENSE, day, today).copy(timing = Timing.REPEATS)
         assertEquals(day, form.startDate)
-        assertEquals(DayOfWeek.TUESDAY, form.weekday)
+        assertEquals(setOf(DayOfWeek.TUESDAY), form.weekdays)
         assertEquals("10", form.dayOfMonth)
         val entry = valid(form) as NewEntry.Recurring
         assertEquals(RecurrencePattern.Weekly(DayOfWeek.TUESDAY), entry.pattern)
