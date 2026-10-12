@@ -138,6 +138,24 @@ def find(text, scroll=True, last=False, timeout=FIND_TIMEOUT, contains=False):
         time.sleep(0.5)
 
 
+def find_slow(text, max_swipes=40):
+    """Looks for `text` while scrolling down with slow, short drags (no fling), so a long list cannot jump past it
+    between two looks. Raises NotFound after `max_swipes` drags."""
+    nodes = []
+    for _ in range(max_swipes):
+        nodes = dump_nodes() or []
+        dismiss_system_dialog(nodes)
+        hits = [b for t, d, b in nodes if t.strip() == text or d.strip() == text]
+        if hits:
+            return sorted(hits, key=lambda b: (b[1], b[0]))[0]
+        if nodes:
+            w, h = screen_size(nodes)
+            sh(f"input swipe {w // 2} {int(h * 0.7)} {w // 2} {int(h * 0.4)} 900")
+            time.sleep(0.5)
+    visible = [(t or d) for t, d, _ in nodes if (t or d)]
+    raise NotFound(f"text {text!r} not found after {max_swipes} slow drags; visible texts: {visible}")
+
+
 def diagnostics():
     pid = sh(f"pidof {PKG}", check=False).strip()
     print(f"  pid: {pid or 'NONE'}")
@@ -444,7 +462,7 @@ def upcoming_flow(name, today):
     if nov10 < 0:
         try:
             scroll_to_top(15)  # the list keeps its position after the sheet: look downwards from the top
-            find(S["short_by_tag"].replace("%1$s", balance_text(-nov10)), timeout=60)
+            find_slow(S["short_by_tag"].replace("%1$s", balance_text(-nov10)))
             screenshot(f"{name}-upcoming-short")
         except NotFound as e:
             problems.append(f"{name}: Upcoming has no 'Short by {-nov10} TND' row for Nov 10 ({e})")
