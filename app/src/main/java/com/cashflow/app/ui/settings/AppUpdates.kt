@@ -37,7 +37,7 @@ internal fun AppUpdatesSection(manager: UpdateManager) {
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { manager.onResumed() }
 
     SectionCard {
-        Text(stringResource(R.string.updates_title), style = MaterialTheme.typography.titleMedium)
+        Text(stringResource(R.string.updates_title), style = MaterialTheme.typography.titleLarge)
         Text(stringResource(R.string.version_line, manager.installedVersionName), style = MaterialTheme.typography.bodyLarge)
 
         when (val s = state) {

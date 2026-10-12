@@ -3,6 +3,7 @@ package com.cashflow.app.ui
 import com.cashflow.app.ui.theme.Contrast
 import com.cashflow.app.ui.theme.Palette
 import com.cashflow.app.ui.theme.ThemePalette
+import com.cashflow.app.ui.theme.graphicPairs
 import com.cashflow.app.ui.theme.textPairs
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -19,6 +20,25 @@ class ContrastTest {
     @Test fun dark_theme_text_pairs_meet_wcag_aa() = check("dark", Palette.dark)
 
     @Test fun light_theme_text_pairs_meet_wcag_aa() = check("light", Palette.light)
+
+    private fun checkGraphics(name: String, palette: ThemePalette) {
+        val failures = palette.graphicPairs().filter { Contrast.ratio(it.foreground, it.background) < it.required }
+            .map { "${it.name}: %.2f < ${it.required}".format(Contrast.ratio(it.foreground, it.background)) }
+        assertTrue("$name theme has low-contrast graphics:\n" + failures.joinToString("\n"), failures.isEmpty())
+    }
+
+    @Test fun dark_theme_calendar_graphics_meet_3_to_1() = checkGraphics("dark", Palette.dark)
+
+    @Test fun light_theme_calendar_graphics_meet_3_to_1() = checkGraphics("light", Palette.light)
+
+    @Test fun every_calendar_cell_text_pair_is_in_the_text_check_for_both_themes() {
+        for (p in listOf(Palette.dark, Palette.light)) {
+            val names = p.textPairs().map { it.name }
+            assertTrue(names.count { it.startsWith("calendar ") } >= 10)
+            assertTrue(p.graphicPairs().size >= 15)
+        }
+        assertEquals(3.0, Contrast.GRAPHIC, 0.0)
+    }
 
     @Test fun white_text_on_the_kind_fills_reaches_4_5_to_1_in_both_themes() {
         for (p in listOf(Palette.dark, Palette.light)) {

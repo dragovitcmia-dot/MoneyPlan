@@ -63,6 +63,7 @@ import com.cashflow.app.ui.settings.DateField
 import com.cashflow.app.ui.theme.cashflow
 import kotlinx.coroutines.launch
 import java.time.DayOfWeek
+import java.time.LocalDate
 import java.time.format.TextStyle
 import java.util.Locale
 
@@ -79,9 +80,9 @@ private fun PatternChoice.label() = stringResource(
 )
 
 @Composable
-private fun Timing.label() = stringResource(
+private fun Timing.label(happenedOnADay: Boolean = false) = stringResource(
     when (this) {
-        Timing.NOW -> R.string.timing_now
+        Timing.NOW -> if (happenedOnADay) R.string.timing_happened else R.string.timing_now
         Timing.LATER -> R.string.timing_later
         Timing.REPEATS -> R.string.timing_repeats
     },
@@ -110,6 +111,8 @@ fun EntryComposer(
     onSave: suspend (NewEntry) -> Unit,
     onSaved: (String) -> Unit,
     onDismiss: () -> Unit,
+    /** Opened from a calendar day: that day is prefilled (see [EntryFormState.forDay]). */
+    day: LocalDate? = null,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val scope = rememberCoroutineScope()
@@ -118,7 +121,9 @@ fun EntryComposer(
     val isExpense = kind == TxKind.EXPENSE
     val accentFill = if (isExpense) colors.expenseFill else colors.incomeFill
 
-    var form by remember { mutableStateOf(EntryFormState.initial(kind, ui.today)) }
+    var form by remember {
+        mutableStateOf(if (day != null) EntryFormState.forDay(kind, day, ui.today) else EntryFormState.initial(kind, ui.today))
+    }
     var tried by remember { mutableStateOf(false) }
     var saving by remember { mutableStateOf(false) }
     var warning by remember { mutableStateOf<Pair<NewEntry, WhatIfResult>?>(null) }
@@ -231,11 +236,11 @@ fun EntryComposer(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Timing.entries.forEach { t ->
+                form.timings.forEach { t ->
                     FilterChip(
                         selected = form.timing == t,
                         onClick = { form = form.copy(timing = t); haptics.tick() },
-                        label = { Text(t.label(), style = MaterialTheme.typography.titleSmall) },
+                        label = { Text(t.label(form.nowDate != null), style = MaterialTheme.typography.titleSmall) },
                         modifier = Modifier.heightIn(min = 56.dp),
                     )
                 }
@@ -243,7 +248,12 @@ fun EntryComposer(
 
             when (form.timing) {
                 Timing.NOW -> Text(
-                    stringResource(if (isExpense) R.string.now_hint_expense else R.string.now_hint_income),
+                    form.nowDate?.let { date ->
+                        stringResource(
+                            if (isExpense) R.string.now_hint_past_expense else R.string.now_hint_past_income,
+                            date.format(java.time.format.DateTimeFormatter.ofLocalizedDate(java.time.format.FormatStyle.MEDIUM)),
+                        )
+                    } ?: stringResource(if (isExpense) R.string.now_hint_expense else R.string.now_hint_income),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

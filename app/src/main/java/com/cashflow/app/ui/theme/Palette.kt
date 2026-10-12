@@ -30,6 +30,14 @@ class ThemePalette(
     val inverseSurface: Long,
     val inverseOnSurface: Long,
     val inverseAccent: Long,
+    /** Fill of a calendar day whose closing balance is negative. */
+    val dayNegativeFill: Long,
+    /** Fill of the selected calendar day (it also gets an accent outline). */
+    val daySelectedFill: Long,
+    /** The "waiting for you" dot on a calendar day (not text, so 3:1 is enough). */
+    val badge: Long,
+    /** Income amounts and dots inside calendar cells: a little darker than [accent] in the light theme so it stays readable on the red tint. */
+    val cellIncome: Long,
 )
 
 object Palette {
@@ -51,6 +59,7 @@ object Palette {
         expenseFill = EXPENSE_RED, incomeFill = INCOME_GREEN, buttonLabel = KIND_LABEL,
         keypadBackground = 0xFF010101, keyDigit = 0xFF2D2D2F, keyAction = 0xFF171719, keyPressed = 0xFF474749, keyText = 0xFFFFFFFF,
         inverseSurface = 0xFFF2F4F7, inverseOnSurface = 0xFF0B0D10, inverseAccent = 0xFF087A4F,
+        dayNegativeFill = 0xFF3A1A1F, daySelectedFill = 0xFF1D2A27, badge = 0xFFFFB020, cellIncome = 0xFF3DDC97,
     )
 
     val light = ThemePalette(
@@ -63,6 +72,7 @@ object Palette {
         expenseFill = EXPENSE_RED, incomeFill = INCOME_GREEN, buttonLabel = KIND_LABEL,
         keypadBackground = 0xFFE9E9EC, keyDigit = 0xFFFFFFFF, keyAction = 0xFFD3D3D8, keyPressed = 0xFFC8C8CE, keyText = 0xFF1C1C1E,
         inverseSurface = 0xFF14171C, inverseOnSurface = 0xFFF2F4F7, inverseAccent = 0xFF3DDC97,
+        dayNegativeFill = 0xFFFFE2E5, daySelectedFill = 0xFFE4F3EC, badge = 0xFFB45F00, cellIncome = 0xFF066B44,
     )
 }
 
@@ -84,6 +94,9 @@ object Contrast {
 
     const val NORMAL_TEXT = 4.5
     const val LARGE_TEXT = 3.0
+
+    /** Non-text graphics (dots, outlines). */
+    const val GRAPHIC = 3.0
 }
 
 /** A text color drawn on a background somewhere in the app. [large] = 24sp or bigger. */
@@ -119,4 +132,38 @@ fun ThemePalette.textPairs(): List<TextPair> = listOf(
     TextPair("skip swipe label on hairline", text, hairline),
     TextPair("snackbar text", inverseOnSurface, inverseSurface),
     TextPair("snackbar action", inverseAccent, inverseSurface),
+    // Calendar cells (day numbers, amounts, the banner and the "short by" tag reuse the pairs above).
+    TextPair("calendar income amount on background", cellIncome, background),
+    TextPair("calendar income amount on surface", cellIncome, surface),
+    TextPair("calendar text on a negative day", text, dayNegativeFill),
+    TextPair("calendar secondary text (past day number) on a negative day", textSecondary, dayNegativeFill),
+    TextPair("calendar expense amount on a negative day", negativeText, dayNegativeFill),
+    TextPair("calendar income amount on a negative day", cellIncome, dayNegativeFill),
+    TextPair("calendar text on the selected day", text, daySelectedFill),
+    TextPair("calendar secondary text (past day number) on the selected day", textSecondary, daySelectedFill),
+    TextPair("calendar expense amount on the selected day", negativeText, daySelectedFill),
+    TextPair("calendar income amount on the selected day", cellIncome, daySelectedFill),
+    TextPair("today's day number on the today circle", onAccent, accent),
+)
+
+/** A graphic (dot, outline, tint) against what it sits on; WCAG asks for 3:1 for such non-text parts. */
+class GraphicPair(val name: String, val foreground: Long, val background: Long, val required: Double = Contrast.GRAPHIC)
+
+fun ThemePalette.graphicPairs(): List<GraphicPair> = listOf(
+    GraphicPair("waiting dot on background", badge, background),
+    GraphicPair("waiting dot on a negative day", badge, dayNegativeFill),
+    GraphicPair("waiting dot on the selected day", badge, daySelectedFill),
+    GraphicPair("waiting dot on surface", badge, surface),
+    GraphicPair("expense dot on background", negativeText, background),
+    GraphicPair("expense dot on a negative day", negativeText, dayNegativeFill),
+    GraphicPair("expense dot on the selected day", negativeText, daySelectedFill),
+    GraphicPair("income dot on background", cellIncome, background),
+    GraphicPair("income dot on a negative day", cellIncome, dayNegativeFill),
+    GraphicPair("income dot on the selected day", cellIncome, daySelectedFill),
+    GraphicPair("selection outline on background", accent, background),
+    GraphicPair("selection outline on a negative day", accent, dayNegativeFill),
+    GraphicPair("selection outline on the selected day", accent, daySelectedFill),
+    // A negative day must be recognisable by its fill alone (the colour is not the only cue: dots and text help too).
+    GraphicPair("negative day fill against the background", dayNegativeFill, background, required = 1.12),
+    GraphicPair("selected day fill against the background", daySelectedFill, background, required = 1.05),
 )

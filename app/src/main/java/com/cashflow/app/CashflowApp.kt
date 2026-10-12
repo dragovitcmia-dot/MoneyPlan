@@ -6,6 +6,9 @@ import com.cashflow.app.data.LedgerRepository
 import com.cashflow.app.engine.BalanceEngine
 import com.cashflow.app.ui.UiPrefs
 import com.cashflow.app.update.UpdateManager
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import java.time.LocalDate
 
 /** Poor man's DI: one database, one repository, created lazily. */
@@ -23,6 +26,11 @@ class CashflowApp : Application() {
 
     /** The balance engine is injected as a factory so view models never construct it directly. */
     val engineFactory: EngineFactory = EngineFactory(::BalanceEngine)
+
+    private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
+    /** Shared engine snapshots for the Calendar and Upcoming tabs. */
+    val snapshots: LedgerSnapshots by lazy { LedgerSnapshots(repository, engineFactory, clock, appScope) }
 
     /** Device-local date; re-read on every call so a time zone change is picked up. */
     val clock: () -> LocalDate = { LocalDate.now() }

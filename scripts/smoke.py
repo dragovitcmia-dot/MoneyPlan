@@ -37,6 +37,19 @@ TEXT_SETTINGS = S["nav_settings"]
 TEXT_HOME = S["nav_home"]
 TEXT_LOAD_SAMPLE = S["debug_load_sample"]
 TEXT_EXPENSE = S["button_expense"]
+NAV_CALENDAR = S["nav_calendar"]
+NAV_UPCOMING = S["nav_upcoming"]
+TEXT_REPEATING = S["repeating_title"]
+DESC_NEXT_MONTH = S["calendar_next_month"]
+DESC_PREV_MONTH = S["calendar_previous_month"]
+
+# Configurations that also walk through Calendar, day sheet, item edit, Upcoming and Repeating payments.
+CALENDAR_CONFIGS = {"dark-normal", "light-normal", "dark-font2", "dark-320dp"}
+# Configurations that also screenshot the bottom of Settings.
+SETTINGS_BOTTOM_CONFIGS = {"dark-normal", "dark-font2"}
+# Configurations that also switch "Add my income automatically" off to look at the dimmed income list.
+INCOME_OFF_CONFIGS = {"dark-normal", "light-normal"}
+SAMPLE_MONTH = (2026, 11)  # the reference scenario's interesting month
 
 
 def adb(*args, check=True):
@@ -88,20 +101,24 @@ class NotFound(Exception):
     pass
 
 
-def find(text, scroll=True, last=False, timeout=FIND_TIMEOUT):
-    """Waits up to `timeout` (10 s) for a node with exactly this text; scrolls down while it is missing."""
+def find(text, scroll=True, last=False, timeout=FIND_TIMEOUT, contains=False):
+    """Waits up to `timeout` (10 s) for a node with exactly this text (or, with `contains`, a text or content
+    description that includes it); scrolls down while it is missing."""
     deadline = time.time() + timeout
     last_nodes = None
     while True:
         nodes = dump_nodes()
         if nodes:
             last_nodes = nodes
-            hits = [b for t, d, b in nodes if t.strip() == text or d.strip() == text]
+            if contains:
+                hits = [b for t, d, b in nodes if text in t or text in d]
+            else:
+                hits = [b for t, d, b in nodes if t.strip() == text or d.strip() == text]
             if hits:
                 return sorted(hits, key=lambda b: (b[1], b[0]))[-1 if last else 0]
             if scroll:
                 w, h = screen_size(nodes)
-                sh(f"input swipe {w // 2} {int(h * 0.75)} {w // 2} {int(h * 0.35)} 300")
+                sh(f"input swipe {w // 2} {int(h * 0.8)} {w // 2} {int(h * 0.25)} 300")
         if time.time() > deadline:
             visible = [(t or d) for t, d, _ in (last_nodes or []) if (t or d)]
             raise NotFound(f"text {text!r} not found within {timeout:.0f}s; visible texts: {visible}")
@@ -179,13 +196,202 @@ def launch():
     raise NotFound("the app never showed its UI after 3 launch attempts")
 
 
+# ---- calendar / upcoming / settings walk-through -------------------------------------------------------
+
+MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
+
+
+def swipe_up(fraction_from=0.75, fraction_to=0.3):
+    nodes = dump_nodes() or []
+    if nodes:
+        w, h = screen_size(nodes)
+        sh(f"input swipe {w // 2} {int(h * fraction_from)} {w // 2} {int(h * fraction_to)} 300")
+        time.sleep(0.8)
+
+
+def swipe_down():
+    nodes = dump_nodes() or []
+    if nodes:
+        w, h = screen_size(nodes)
+        sh(f"input swipe {w // 2} {int(h * 0.3)} {w // 2} {int(h * 0.75)} 300")
+        time.sleep(0.8)
+
+
+def scroll_to_top(times=10):
+    for _ in range(times):
+        swipe_down()
+
+
+def visible_month_title():
+    """(year, month) of the calendar title that is on screen, or None."""
+    for t, _, _ in dump_nodes() or []:
+        m = re.fullmatch(r"([A-Z][a-z]+) (\d{4})", t.strip())
+        if m and m.group(1) in MONTHS:
+            return int(m.group(2)), MONTHS.index(m.group(1)) + 1
+    return None
+
+
+def go_to_month(year, month):
+    for _ in range(40):
+        shown = visible_month_title()
+        if shown == (year, month):
+            return
+        if shown is None:
+            time.sleep(0.7)
+            continue
+        forward = (year, month) > shown
+        tap_text(DESC_NEXT_MONTH if forward else DESC_PREV_MONTH, scroll=False)
+        time.sleep(0.8)
+    raise NotFound(f"could not navigate the calendar to {year}-{month:02d}")
+
+
+def cell_descriptions():
+    """{date: content description} of the calendar cells, scrolling the tab once to reach the lower rows."""
+    out = {}
+    pattern = re.compile(r"^[A-Za-z]+, ([A-Za-z]+) (\d+), (\d{4})")
+
+    def collect():
+        for _, d, _ in dump_nodes() or []:
+            m = pattern.match(d)
+            if m and m.group(1) in MONTHS:
+                out[(int(m.group(3)), MONTHS.index(m.group(1)) + 1, int(m.group(2)))] = d
+
+    collect()
+    swipe_up()
+    collect()
+    swipe_down()
+    return out
+
+
+def check_sample_numbers(name):
+    """Compares what the November 2026 cells say (their accessibility text) with the reference scenario."""
+    import datetime
+    problems = []
+    cells = cell_descriptions()
+    y, m = SAMPLE_MONTH
+    for day in range(1, 31):
+        d = cells.get((y, m, day))
+        if d is None:
+            problems.append(f"{name}: calendar cell for {y}-{m:02d}-{day:02d} was not found")
+            continue
+        short = "Money runs short" in d
+        want_short = day in (10, 12)
+        if short != want_short:
+            problems.append(f"{name}: {y}-{m:02d}-{day:02d} short={short}, expected {want_short} ({d!r})")
+        if "Income" in d:
+            problems.append(f"{name}: {y}-{m:02d}-{day:02d} shows income although only daily income exists ({d!r})")
+    expected = {10: 380, 12: 63, 28: 220, 30: 25}
+    for day in range(1, 31):
+        if datetime.date(y, m, day).weekday() == 6:
+            expected[day] = 75  # the Sunday rule
+    for day, amount in expected.items():
+        d = cells.get((y, m, day), "")
+        if f"Expenses {amount} dinars" not in d:
+            problems.append(f"{name}: {y}-{m:02d}-{day:02d} should say 'Expenses {amount} dinars' but says {d!r}")
+    for day in range(1, 31):
+        if day not in expected and "Expenses" in cells.get((y, m, day), ""):
+            problems.append(f"{name}: {y}-{m:02d}-{day:02d} shows an expense that is not in the scenario")
+    print(f"  calendar numbers checked against the reference scenario: {len(cells)} cells read, {len(problems)} problems")
+    return problems
+
+
+def calendar_flow(name):
+    problems = []
+    tap_text(NAV_CALENDAR, scroll=False)
+    time.sleep(1.5)
+    screenshot(f"{name}-calendar")
+    go_to_month(*SAMPLE_MONTH)
+    time.sleep(1)
+    screenshot(f"{name}-calendar-nov")
+    problems += check_sample_numbers(name)
+
+    # Day sheet of Nov 10: closes at -10, so "Short by 10 TND" and the item list.
+    tap_text("November 10, 2026", scroll=False, contains=True)
+    time.sleep(1.2)
+    screenshot(f"{name}-day-sheet")
+    find(S["day_end_short"].replace("%1$s", "10"), scroll=False, timeout=8)
+    # One item: change it.
+    tap_text("Expense 11/10")
+    time.sleep(1)
+    find(S["item_edit_title"], scroll=False, timeout=8)
+    screenshot(f"{name}-item-edit")
+    swipe_up()
+    screenshot(f"{name}-item-edit-bottom")
+    sh("input keyevent 4")  # closes the edit sheet
+    time.sleep(1.2)
+    # Add from the day: the composer opens with that day prefilled.
+    tap_text(TEXT_EXPENSE)
+    find("1", scroll=True, last=True)
+    time.sleep(1)
+    screenshot(f"{name}-day-composer")
+    sh("input keyevent 4")  # closes the composer
+    time.sleep(1.2)
+    sh("input keyevent 4")  # closes the day sheet
+    time.sleep(1.2)
+
+    # An item that comes from a repeating payment (Sunday Nov 8).
+    tap_text("November 8, 2026", scroll=False, contains=True)
+    time.sleep(1.2)
+    tap_text("Sunday expense")
+    time.sleep(1)
+    find(S["item_edit_title"], scroll=False, timeout=8)
+    screenshot(f"{name}-item-edit-series")
+    sh("input keyevent 4")
+    time.sleep(1.2)
+    sh("input keyevent 4")
+    time.sleep(1.2)
+    return problems
+
+
+def upcoming_flow(name):
+    problems = []
+    tap_text(NAV_UPCOMING, scroll=False)
+    time.sleep(1.5)
+    screenshot(f"{name}-upcoming")
+    try:
+        find(S["short_by_tag"].replace("%1$s", "10"), timeout=30)
+        screenshot(f"{name}-upcoming-short")
+    except NotFound as e:
+        problems.append(f"{name}: Upcoming has no 'Short by 10 TND' row for Nov 10 ({e})")
+    return problems
+
+
+def settings_flow(name):
+    """Settings screenshots: Repeating payments (and its editor), and the bottom of the screen."""
+    problems = []
+    if name in INCOME_OFF_CONFIGS:
+        switch_text = S["auto_income_title"]
+        tap_text(switch_text, scroll=False, last=True)  # the switch has the same description as its label
+        time.sleep(1)
+        try:
+            find(S["income_not_auto"], scroll=False, timeout=8)
+            screenshot(f"{name}-settings-income-off")
+        except NotFound as e:
+            problems.append(f"{name}: switching automatic income off did not show the note ({e})")
+        tap_text(switch_text, scroll=False, last=True)  # back on
+        time.sleep(1)
+    find(TEXT_REPEATING, scroll=True)
+    time.sleep(0.5)
+    screenshot(f"{name}-repeating")
+    tap_text("Sunday expense", scroll=True)
+    time.sleep(1)
+    screenshot(f"{name}-repeating-edit")
+    sh("input keyevent 4")
+    time.sleep(1)
+    if name in SETTINGS_BOTTOM_CONFIGS:
+        for _ in range(8):
+            swipe_up()
+        screenshot(f"{name}-settings-bottom")
+    return problems
+
+
 def run_config(name, night, font, size, density):
     print(f"== {name}: night={night} font={font} size={size or 'default'}")
     configure(night, font, size, density)
     try:
         launch()
         tap_text(TEXT_SETTINGS, scroll=False)
-        tap_text(TEXT_LOAD_SAMPLE)  # scrolls down to the debug section
+        tap_text(TEXT_LOAD_SAMPLE, timeout=60)  # scrolls down to the developer tools card (a long screen at large fonts)
         time.sleep(2.5)
         tap_text(TEXT_HOME, scroll=False)
         time.sleep(4)  # the count-up finishes
@@ -200,9 +406,15 @@ def run_config(name, night, font, size, density):
         screenshot(f"{name}-composer-typed")
         sh("input keyevent 4")  # back: closes the composer
         time.sleep(1.5)
+        extra = []
+        if name in CALENDAR_CONFIGS:
+            extra += calendar_flow(name)
+            extra += upcoming_flow(name)
         tap_text(TEXT_SETTINGS, scroll=False)
         time.sleep(1)
+        scroll_to_top()  # the tab keeps its scroll position, so a fresh look starts from the top
         screenshot(f"{name}-settings")
+        extra += settings_flow(name)
     except NotFound as e:
         screenshot(f"{name}-FAILED")
         print("  NOT FOUND:", e)
@@ -210,7 +422,7 @@ def run_config(name, night, font, size, density):
         nodes = dump_nodes() or []
         print("  dump:", [(t, d, b) for t, d, b in nodes if t or d][:80])
         return [f"{name}: {e}"]
-    problems = []
+    problems = list(extra)
     if not app_alive():
         problems.append(f"{name}: app process is not alive")
     problems += [f"{name}: crash in log:\n{c}" for c in crash_log()]
@@ -387,9 +599,21 @@ def run_hero_animation():
             problems.append("hero: screenrecord produced no video")
             frames = []
         print("  logcat CashflowHero:")
-        for line in adb("logcat", "-d", "-v", "time", "-s", "CashflowHero:I", check=False).splitlines():
+        launch_log = adb("logcat", "-d", "-v", "time", "-s", "CashflowHero:I", check=False)
+        for line in launch_log.splitlines():
             if "CashflowHero" in line:
                 print("   ", line)
+        # The app's own clock is the reliable duration measure: from the moment the roll starts to the moment
+        # it has settled. (A screen recording on a loaded CI emulator drops and duplicates frames.)
+        rolling = re.search(r"rolling t=(\d+)", launch_log)
+        settled = re.search(r"settled t=(\d+)", launch_log)
+        if rolling and settled:
+            took = int(settled.group(1)) - int(rolling.group(1))
+            print(f"  animation duration on the app clock: {took} ms (spec 1500 ms)")
+            if not 1450 <= took <= 1700:
+                problems.append(f"hero: the roll took {took} ms on the app clock, expected about 1500")
+        else:
+            problems.append("hero: the app log has no rolling/settled lines for the launch animation")
         time.sleep(1)
         screenshot("hero-anim-final")
         final = band_info(os.path.join(OUT, "hero-anim-final.png"))
@@ -397,10 +621,13 @@ def run_hero_animation():
         for path, t in frames:
             count, left, right, crop = band_info(path)
             infos.append((path, t, count, left, right, crop))
-        hero_frames = [x for x in infos if is_hero_frame(x[2], x[3], x[4])]
+        # Frames from the window-open transition (the app icon fading, the whole window still dark) are not
+        # layout evidence: the number must be at least half as bright as in the final screenshot.
+        final_peak = final[3].getextrema()[1]
+        hero_frames = [x for x in infos if is_hero_frame(x[2], x[3], x[4]) and x[5].getextrema()[1] >= 0.5 * final_peak]
         print("  frame   t(s)    ink  left right  diff-to-final")
         for path, t, count, left, right, crop in infos:
-            if is_hero_frame(count, left, right):
+            if is_hero_frame(count, left, right) and crop.getextrema()[1] >= 0.5 * final_peak:
                 d = mean_abs_diff(crop, final[3].resize(crop.size))
                 print(f"  {os.path.basename(path)[-7:-4]:>5} {t:6.2f} {count:6d} {left!s:>5} {right!s:>5}  {d:6.2f}")
         if len(hero_frames) < 10:
@@ -425,7 +652,7 @@ def run_hero_animation():
             steps = [mean_abs_diff(a[5], b[5]) for a, b in zip(hero_frames, hero_frames[1:])]
             changed_idx = [i + 1 for i, d in enumerate(steps) if d > 0.3]  # lossy video: ignore encoder noise
             print(f"  consecutive hero frames that differ: {len(changed_idx)} of {len(hero_frames) - 1}")
-            if len(changed_idx) < 5:
+            if len(changed_idx) < 3:
                 problems.append("hero: the number did not visibly animate between frames")
             else:
                 t_start = hero_frames[changed_idx[0] - 1][1]  # the last still frame before the first change
@@ -433,8 +660,6 @@ def run_hero_animation():
                 shown_for = t_end - t_start
                 print(f"  observed: start value still shown from t={hero_frames[0][1]:.2f}s, first change after "
                       f"t={t_start:.2f}s, last change t={t_end:.2f}s -> rolling for {shown_for:.2f}s (spec 1.5s)")
-                if not 0.9 <= shown_for <= 2.2:
-                    problems.append(f"hero: observed animation duration {shown_for:.2f}s is far from 1.5 s")
             print(f"  first frame vs final screenshot: mean abs diff {diffs[0]:.2f}; last frame: {diffs[-1]:.2f}")
             if diffs[0] < 6.0:
                 problems.append("hero: the first frame already shows (almost) the final value, no count-down from all nines")

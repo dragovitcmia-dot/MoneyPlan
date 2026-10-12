@@ -31,7 +31,12 @@ fun DebugSection(repository: LedgerRepository, onDataChanged: () -> Unit) {
     var confirmClear by remember { mutableStateOf(false) }
 
     SectionCard {
-        Text(stringResource(R.string.debug_title), style = MaterialTheme.typography.titleMedium)
+        Text(stringResource(R.string.developer_title), style = MaterialTheme.typography.titleLarge)
+        Text(
+            stringResource(R.string.developer_note),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
         AppButton(
             stringResource(R.string.debug_load_sample),
             onClick = {

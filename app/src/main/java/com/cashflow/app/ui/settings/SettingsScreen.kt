@@ -1,5 +1,6 @@
 package com.cashflow.app.ui.settings
 
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -31,6 +32,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -40,8 +42,11 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.cashflow.app.R
 import com.cashflow.app.data.LedgerRepository
 import com.cashflow.app.debug.DebugSection
+import com.cashflow.app.engine.AppSettings
 import com.cashflow.app.engine.Money
-import com.cashflow.app.engine.WalletMode
+import com.cashflow.app.engine.SettingsCard
+import com.cashflow.app.engine.SettingsLayout
+import com.cashflow.app.engine.SettingsPlan
 import com.cashflow.app.ui.components.SectionCard
 import com.cashflow.app.update.UpdateManager
 import java.time.Instant
@@ -60,6 +65,7 @@ fun SettingsScreen(
     repository: LedgerRepository,
     updateManager: UpdateManager,
     contentPadding: PaddingValues,
+    scrollState: ScrollState,
 ) {
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     // Bumped by the debug actions so the text fields re-read the replaced data.
@@ -67,7 +73,7 @@ fun SettingsScreen(
     val current = settings
 
     Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(
+        Modifier.fillMaxSize().verticalScroll(scrollState).padding(
             start = 20.dp,
             end = 20.dp,
             top = contentPadding.calculateTopPadding() + 16.dp,
@@ -77,50 +83,57 @@ fun SettingsScreen(
     ) {
         Text(stringResource(R.string.settings_title), style = MaterialTheme.typography.headlineMedium)
         if (current != null) {
-            key(generation) {
-                SectionCard {
-                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                        Column(Modifier.weight(1f).padding(end = 12.dp)) {
-                            Text(stringResource(R.string.auto_income_title), style = MaterialTheme.typography.titleMedium)
-                            Text(
-                                stringResource(if (current.walletMode == WalletMode.DYNAMIC) R.string.auto_income_on else R.string.auto_income_off),
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                        Switch(
-                            checked = current.walletMode == WalletMode.DYNAMIC,
-                            onCheckedChange = { dynamic ->
-                                viewModel.update {
-                                    it.copy(walletMode = if (dynamic) WalletMode.DYNAMIC else WalletMode.STATIC)
-                                }
-                            },
-                        )
-                    }
-                }
-                SectionCard {
-                    AmountField(
-                        label = stringResource(R.string.money_started_label),
-                        initial = current.startingBalance,
-                        allowNegative = true,
-                        onValid = { v -> viewModel.update { it.copy(startingBalance = v) } },
-                    )
-                    DateField(
-                        label = stringResource(R.string.started_on_label),
-                        value = current.balanceStartDate,
-                        onPick = { d -> viewModel.update { it.copy(balanceStartDate = d) } },
-                    )
-                    TimeField(
-                        label = stringResource(R.string.remind_label),
-                        value = current.reminderTime,
-                        onPick = { t -> viewModel.update { it.copy(reminderTime = t) } },
-                    )
+            // Which cards, in which order, and how they behave is decided by the pure SettingsPlan (and tested there).
+            val layout = SettingsPlan.build(current.walletMode)
+            for (card in layout.cards) {
+                when (card) {
+                    SettingsCard.INCOME -> key(generation) { IncomeCard(viewModel, current, layout) }
+                    SettingsCard.REPEATING_PAYMENTS -> RepeatingPaymentsCard(viewModel)
+                    SettingsCard.STARTING_POINT -> key(generation) { StartingPointCard(viewModel, current, layout) }
+                    SettingsCard.APP_UPDATES -> AppUpdatesSection(updateManager)
+                    SettingsCard.DEVELOPER_TOOLS -> DebugSection(repository) { viewModel.reload { generation++ } }
                 }
             }
-            IncomeSourcesSection(viewModel)
-            AppUpdatesSection(updateManager)
-            DebugSection(repository) { viewModel.reload { generation++ } }
         }
+    }
+}
+
+/** "Money I started with" and "Starting date". Read-only (with a note) when [SettingsConfig.STARTING_POINT_EDITABLE] is false. */
+@Composable
+private fun StartingPointCard(viewModel: SettingsViewModel, current: AppSettings, layout: SettingsLayout) {
+    SectionCard {
+        Text(stringResource(R.string.starting_title), style = MaterialTheme.typography.titleLarge)
+        if (layout.startingPointReadOnly) {
+            ReadOnlyValue(stringResource(R.string.money_started_label), Money.formatDisplay(current.startingBalance))
+            ReadOnlyValue(stringResource(R.string.started_on_label), current.balanceStartDate.format(DateFormat))
+            if (layout.startingPointNote) {
+                Text(
+                    stringResource(R.string.starting_locked_note),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        } else {
+            AmountField(
+                label = stringResource(R.string.money_started_label),
+                initial = current.startingBalance,
+                allowNegative = true,
+                onValid = { v -> viewModel.update { it.copy(startingBalance = v) } },
+            )
+            DateField(
+                label = stringResource(R.string.started_on_label),
+                value = current.balanceStartDate,
+                onPick = { d -> viewModel.update { it.copy(balanceStartDate = d) } },
+            )
+        }
+    }
+}
+
+@Composable
+private fun ReadOnlyValue(label: String, value: String) {
+    Column(Modifier.fillMaxWidth().semantics(mergeDescendants = true) {}) {
+        Text(label, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(value, style = MaterialTheme.typography.titleMedium)
     }
 }
 

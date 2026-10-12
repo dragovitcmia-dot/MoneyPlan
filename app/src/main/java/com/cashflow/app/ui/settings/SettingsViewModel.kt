@@ -32,6 +32,15 @@ class SettingsViewModel(
         .map { rules -> rules.filter { it.kind == TxKind.INCOME } }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
+    /** Repeating payments: expense rules that have not ended. */
+    val repeating: StateFlow<List<RecurringRule>> = repository.rules
+        .map { rules -> rules.filter { it.kind == TxKind.EXPENSE && RuleMaintenance.isRunning(it, clock()) } }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /** Every rule, so an item can open the series it came from. */
+    val rules: StateFlow<List<RecurringRule>> = repository.rules
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
     private val saves = Channel<AppSettings>(Channel.CONFLATED)
 
     init {
@@ -68,6 +77,11 @@ class SettingsViewModel(
 
     fun setSourceEnabled(id: Long, enabled: Boolean) {
         viewModelScope.launch { repository.setRuleEnabled(id, enabled, clock()) }
+    }
+
+    /** "Stop repeating": ends the series today and removes its waiting future entries. */
+    fun stopRepeating(id: Long) {
+        viewModelScope.launch { repository.stopSeries(id, clock()) }
     }
 
     fun deleteSource(id: Long) {
