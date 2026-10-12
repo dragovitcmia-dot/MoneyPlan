@@ -102,6 +102,17 @@ class NotFound(Exception):
     pass
 
 
+def dismiss_system_dialog(nodes):
+    """An emulator's own "<app> isn't responding" box (seen for the launcher on slow runners) hides the app from the
+    UI dump: press Wait so the app is visible again."""
+    if any("isn't responding" in (t or "") for t, _, _ in nodes):
+        for t, _, b in nodes:
+            if (t or "").strip() == "Wait":
+                sh(f"input tap {(b[0] + b[2]) // 2} {(b[1] + b[3]) // 2}")
+                time.sleep(1)
+                return
+
+
 def find(text, scroll=True, last=False, timeout=FIND_TIMEOUT, contains=False):
     """Waits up to `timeout` (10 s) for a node with exactly this text (or, with `contains`, a text or content
     description that includes it); scrolls down while it is missing."""
@@ -111,6 +122,7 @@ def find(text, scroll=True, last=False, timeout=FIND_TIMEOUT, contains=False):
         nodes = dump_nodes()
         if nodes:
             last_nodes = nodes
+            dismiss_system_dialog(nodes)
             if contains:
                 hits = [b for t, d, b in nodes if text in t or text in d]
             else:
@@ -431,7 +443,8 @@ def upcoming_flow(name, today):
     nov10 = ref_closing(_dt.date(2026, 11, 10), today)
     if nov10 < 0:
         try:
-            find(S["short_by_tag"].replace("%1$s", balance_text(-nov10)), timeout=30)
+            scroll_to_top(15)  # the list keeps its position after the sheet: look downwards from the top
+            find(S["short_by_tag"].replace("%1$s", balance_text(-nov10)), timeout=60)
             screenshot(f"{name}-upcoming-short")
         except NotFound as e:
             problems.append(f"{name}: Upcoming has no 'Short by {-nov10} TND' row for Nov 10 ({e})")
@@ -464,7 +477,12 @@ def settings_flow(name):
         problems.append(f"{name}: the ending income series is not listed with an end date ({e})")
     scroll_to_top()
     find(TEXT_REPEATING, scroll=True)
-    tap_text("Sunday expense", scroll=True)
+    try:
+        tap_text("Sunday expense", scroll=True, timeout=8)
+    except NotFound:
+        # Scrolled past the list (a flaky swipe on a short screen): start again from the top and look downwards.
+        scroll_to_top()
+        tap_text("Sunday expense", scroll=True, timeout=25)
     time.sleep(1)
     screenshot(f"{name}-repeating-edit")
     sh("input keyevent 4")
