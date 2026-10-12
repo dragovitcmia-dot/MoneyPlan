@@ -45,7 +45,7 @@ internal fun IncomeCard(viewModel: SettingsViewModel, settings: AppSettings) {
     SectionCard {
         Text(stringResource(R.string.income_card_title), style = MaterialTheme.typography.titleLarge)
         Row(Modifier.fillMaxWidth().heightIn(min = 56.dp), verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f).padding(end = 12.dp)) {
+            Column(Modifier.weight(1f).padding(end = 12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(stringResource(R.string.auto_income_title), style = MaterialTheme.typography.titleMedium)
                 Text(
                     stringResource(R.string.auto_income_helper),
