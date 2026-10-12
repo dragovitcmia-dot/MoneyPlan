@@ -609,10 +609,13 @@ def run_hero_animation():
         for path, t in frames:
             count, left, right, crop = band_info(path)
             infos.append((path, t, count, left, right, crop))
-        hero_frames = [x for x in infos if is_hero_frame(x[2], x[3], x[4])]
+        # Frames from the window-open transition (the app icon fading, the whole window still dark) are not
+        # layout evidence: the number must be at least half as bright as in the final screenshot.
+        final_peak = final[3].getextrema()[1]
+        hero_frames = [x for x in infos if is_hero_frame(x[2], x[3], x[4]) and x[5].getextrema()[1] >= 0.5 * final_peak]
         print("  frame   t(s)    ink  left right  diff-to-final")
         for path, t, count, left, right, crop in infos:
-            if is_hero_frame(count, left, right):
+            if is_hero_frame(count, left, right) and crop.getextrema()[1] >= 0.5 * final_peak:
                 d = mean_abs_diff(crop, final[3].resize(crop.size))
                 print(f"  {os.path.basename(path)[-7:-4]:>5} {t:6.2f} {count:6d} {left!s:>5} {right!s:>5}  {d:6.2f}")
         if len(hero_frames) < 10:
