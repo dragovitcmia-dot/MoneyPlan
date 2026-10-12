@@ -464,7 +464,12 @@ def settings_flow(name):
         problems.append(f"{name}: the ending income series is not listed with an end date ({e})")
     scroll_to_top()
     find(TEXT_REPEATING, scroll=True)
-    tap_text("Sunday expense", scroll=True)
+    try:
+        tap_text("Sunday expense", scroll=True, timeout=8)
+    except NotFound:
+        # Scrolled past the list (a flaky swipe on a short screen): start again from the top and look downwards.
+        scroll_to_top()
+        tap_text("Sunday expense", scroll=True, timeout=25)
     time.sleep(1)
     screenshot(f"{name}-repeating-edit")
     sh("input keyevent 4")
