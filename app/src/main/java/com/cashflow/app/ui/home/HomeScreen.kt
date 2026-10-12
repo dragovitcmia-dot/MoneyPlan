@@ -203,7 +203,7 @@ private fun HomeContent(
             kind = TxKind.valueOf(name),
             ui = ui,
             redDip = viewModel::redDip,
-            liveMonth = viewModel::liveMonth,
+            resultingBalance = viewModel::resultingBalance,
             onSave = viewModel::save,
             onSaved = { message -> actions.announce(message) },
             onDismiss = { composerKind = null },

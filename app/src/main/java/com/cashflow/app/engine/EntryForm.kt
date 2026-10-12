@@ -8,7 +8,7 @@ enum class Timing { NOW, LATER, REPEATS }
 enum class PatternChoice { DAILY, WEEKLY, EVERY_N, MONTH_FIRST, MONTH_LAST, MONTH_DAY, EVERY_2_WEEKS, YEARLY }
 
 /** A specific field that needs fixing, so the UI can highlight it with a plain-language message. */
-enum class FormProblem { AMOUNT_MISSING, EVERY_N_INVALID, DAY_OF_MONTH_INVALID, END_BEFORE_START, NAME_MISSING, DATE_IN_PAST }
+enum class FormProblem { AMOUNT_MISSING, EVERY_N_INVALID, DAY_OF_MONTH_INVALID, END_BEFORE_START, NAME_MISSING, DATE_IN_PAST, WEEKDAYS_EMPTY }
 
 /**
  * Everything the Add expense / Add income form holds. The defaults are a valid form once an amount
@@ -21,7 +21,8 @@ data class EntryFormState(
     val timing: Timing = Timing.NOW,
     val laterDate: LocalDate,
     val choice: PatternChoice = PatternChoice.WEEKLY,
-    val weekday: DayOfWeek,
+    /** The weekdays of a weekly payment (one or more). */
+    val weekdays: Set<DayOfWeek>,
     val everyN: String = "7",
     val dayOfMonth: String,
     val startDate: LocalDate,
@@ -36,7 +37,7 @@ data class EntryFormState(
         fun initial(kind: TxKind, today: LocalDate) = EntryFormState(
             kind = kind,
             laterDate = today.plusDays(1),
-            weekday = today.dayOfWeek,
+            weekdays = setOf(today.dayOfWeek),
             dayOfMonth = today.dayOfMonth.toString(),
             startDate = today,
             endDate = today.plusMonths(1),
@@ -48,7 +49,7 @@ data class EntryFormState(
          */
         fun forDay(kind: TxKind, day: LocalDate, today: LocalDate): EntryFormState {
             val base = initial(kind, today).copy(
-                weekday = day.dayOfWeek,
+                weekdays = setOf(day.dayOfWeek),
                 dayOfMonth = day.dayOfMonth.toString(),
                 startDate = day,
                 endDate = day.plusMonths(1),
@@ -69,12 +70,14 @@ sealed interface FormResult {
 
 object EntryForm {
     /**
-     * Frequencies offered for [kind]: the same five for expenses and income. "Monthly" is [PatternChoice.MONTH_DAY]
-     * on the start date's day of the month; "Every 2 weeks" and "Yearly" count from the start date.
+     * Frequencies offered for [kind] (the same for expenses and income): every day; every week on chosen weekdays;
+     * every 2 weeks; every month on a chosen day; first day of every month; last day of every month; every year.
      */
     @Suppress("UNUSED_PARAMETER")
-    fun choicesFor(kind: TxKind): List<PatternChoice> =
-        listOf(PatternChoice.DAILY, PatternChoice.WEEKLY, PatternChoice.EVERY_2_WEEKS, PatternChoice.MONTH_DAY, PatternChoice.YEARLY)
+    fun choicesFor(kind: TxKind): List<PatternChoice> = listOf(
+        PatternChoice.DAILY, PatternChoice.WEEKLY, PatternChoice.EVERY_2_WEEKS,
+        PatternChoice.MONTH_DAY, PatternChoice.MONTH_FIRST, PatternChoice.MONTH_LAST, PatternChoice.YEARLY,
+    )
 
     /**
      * Turns the form into an entry, or lists exactly which fields are wrong.
@@ -99,7 +102,11 @@ object EntryForm {
                 val day = state.dayOfMonth.toIntOrNull()?.takeIf { it in 1..31 }
                 val pattern: RecurrencePattern? = when (state.choice) {
                     PatternChoice.DAILY -> RecurrencePattern.Daily
-                    PatternChoice.WEEKLY -> RecurrencePattern.Weekly(state.weekday)
+                    PatternChoice.WEEKLY -> when (state.weekdays.size) {
+                        0 -> null
+                        1 -> RecurrencePattern.Weekly(state.weekdays.first())
+                        else -> RecurrencePattern.WeeklyDays(state.weekdays)
+                    }
                     PatternChoice.EVERY_N -> n?.let { RecurrencePattern.EveryNDays(it, state.startDate) }
                     PatternChoice.MONTH_FIRST -> RecurrencePattern.MonthFirst
                     PatternChoice.MONTH_LAST -> RecurrencePattern.MonthLast
@@ -108,6 +115,7 @@ object EntryForm {
                     PatternChoice.YEARLY -> RecurrencePattern.Yearly(state.startDate.monthValue, state.startDate.dayOfMonth)
                 }
                 if (state.choice == PatternChoice.EVERY_N && n == null) problems += FormProblem.EVERY_N_INVALID
+                if (state.choice == PatternChoice.WEEKLY && state.weekdays.isEmpty()) problems += FormProblem.WEEKDAYS_EMPTY
                 if (state.choice == PatternChoice.MONTH_DAY && day == null) problems += FormProblem.DAY_OF_MONTH_INVALID
                 if (state.hasEnd && state.endDate.isBefore(state.startDate)) problems += FormProblem.END_BEFORE_START
                 val start = if (state.kind == TxKind.INCOME && state.choice == PatternChoice.DAILY && balanceStartDate != null) {

@@ -13,7 +13,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-/** Shows a message for 5 seconds, with an Undo action when one is given. One message at a time. */
+/** Shows a message for 6 seconds, with an Undo action when one is given. One message at a time. */
 @Stable
 class Announcer(
     private val scope: CoroutineScope,
@@ -24,7 +24,7 @@ class Announcer(
         scope.launch {
             host.currentSnackbarData?.dismiss()
             val timer = launch {
-                delay(5_000)
+                delay(6_000)
                 host.currentSnackbarData?.dismiss()
             }
             val result = host.showSnackbar(

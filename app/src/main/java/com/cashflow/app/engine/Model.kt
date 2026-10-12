@@ -36,6 +36,13 @@ sealed interface RecurrencePattern {
 
     data class Weekly(val dayOfWeek: DayOfWeek) : RecurrencePattern
 
+    /** Every week on each of [days] (two or more; a single weekday is [Weekly]). */
+    data class WeeklyDays(val days: Set<DayOfWeek>) : RecurrencePattern {
+        init {
+            require(days.isNotEmpty()) { "at least one weekday" }
+        }
+    }
+
     /** Every [n] days, in phase with [anchorDate] (which may lie before the rule's startDate). */
     data class EveryNDays(val n: Int, val anchorDate: LocalDate) : RecurrencePattern {
         init {

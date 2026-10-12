@@ -28,6 +28,7 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.cashflow.app.R
+import com.cashflow.app.engine.AppDates
 import com.cashflow.app.engine.DayItem
 import com.cashflow.app.engine.DaySummary
 import com.cashflow.app.engine.Money
@@ -38,10 +39,7 @@ import com.cashflow.app.ui.components.AppCard
 import com.cashflow.app.ui.components.KindButtons
 import com.cashflow.app.ui.theme.cashflow
 import java.time.LocalDate
-import java.time.format.DateTimeFormatter
-import java.time.format.FormatStyle
 
-private val SheetDate: DateTimeFormatter = DateTimeFormatter.ofLocalizedDate(FormatStyle.FULL)
 
 /** Everything about one day: the closing balance, its items (tap one to change it) and the add buttons. */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -60,7 +58,7 @@ fun DaySheet(
             Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp).padding(bottom = 16.dp).navigationBarsPadding(),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            Text(date.format(SheetDate), style = MaterialTheme.typography.headlineSmall)
+            Text(AppDates.withWeekday(date), style = MaterialTheme.typography.headlineSmall)
 
             if (summary != null && summary.hasForecast) {
                 val amount = Money.formatDisplay(if (summary.closing < 0) -summary.closing else summary.closing, withCurrency = false)

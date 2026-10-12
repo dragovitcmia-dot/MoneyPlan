@@ -84,7 +84,7 @@ class PostponeTest {
             val item = tx(d(2026, 10, 8), 30, status = status, id = 1)
             assertFalse(Postpone.canPostpone(item))
             assertNull(Postpone.apply(item, d(2026, 10, 20)))
-            assertTrue(Postpone.choices(item, today).isEmpty())
+            assertNull(Postpone.suggestedDate(item, null, today))
         }
     }
 
@@ -92,17 +92,39 @@ class PostponeTest {
         assertEquals(d(2026, 10, 11), Postpone.dateFor(PostponeChoice.TOMORROW, today))
         assertEquals(d(2026, 10, 13), Postpone.dateFor(PostponeChoice.IN_3_DAYS, today))
         assertEquals(d(2026, 10, 17), Postpone.dateFor(PostponeChoice.NEXT_WEEK, today))
+        assertEquals(d(2026, 10, 17), Postpone.dateFor(PostponeChoice.IN_1_WEEK, today))
     }
 
-    @Test fun only_choices_that_really_move_the_item_later_are_offered() {
-        assertEquals(PostponeChoice.entries, Postpone.choices(tx(d(2026, 10, 8), 5, id = 1), today)) // overdue: all
-        assertEquals(PostponeChoice.entries, Postpone.choices(tx(d(2026, 10, 10), 5, id = 1), today)) // today: all
-        assertEquals(
-            listOf(PostponeChoice.IN_3_DAYS, PostponeChoice.NEXT_WEEK),
-            Postpone.choices(tx(d(2026, 10, 11), 5, id = 1), today), // tomorrow: "Tomorrow" would not move it
-        )
-        assertEquals(listOf(PostponeChoice.NEXT_WEEK), Postpone.choices(tx(d(2026, 10, 15), 5, id = 1), today))
-        assertTrue(Postpone.choices(tx(d(2026, 10, 20), 5, id = 1), today).isEmpty())
+    @Test fun the_suggestion_follows_the_nature_of_the_item() {
+        assertEquals(PostponeChoice.TOMORROW, Postpone.suggestionFor(RecurrencePattern.Daily))
+        assertEquals(PostponeChoice.IN_3_DAYS, Postpone.suggestionFor(RecurrencePattern.Weekly(DayOfWeek.MONDAY)))
+        assertEquals(PostponeChoice.IN_3_DAYS, Postpone.suggestionFor(RecurrencePattern.WeeklyDays(setOf(DayOfWeek.MONDAY, DayOfWeek.FRIDAY))))
+        assertEquals(PostponeChoice.IN_3_DAYS, Postpone.suggestionFor(RecurrencePattern.EveryNDays(14, d(2026, 10, 1))))
+        assertEquals(PostponeChoice.IN_1_WEEK, Postpone.suggestionFor(RecurrencePattern.DayOfMonth(15)))
+        assertEquals(PostponeChoice.IN_1_WEEK, Postpone.suggestionFor(RecurrencePattern.MonthFirst))
+        assertEquals(PostponeChoice.IN_1_WEEK, Postpone.suggestionFor(RecurrencePattern.MonthLast))
+        assertEquals(PostponeChoice.IN_1_WEEK, Postpone.suggestionFor(RecurrencePattern.Yearly(3, 1)))
+        assertEquals(PostponeChoice.NEXT_WEEK, Postpone.suggestionFor(null)) // a one-time item
+    }
+
+    @Test fun the_suggested_date_is_counted_from_today_or_the_items_own_later_date() {
+        val dueToday = tx(d(2026, 10, 10), 5, id = 1)
+        assertEquals(d(2026, 10, 11), Postpone.suggestedDate(dueToday, RecurrencePattern.Daily, today))
+        assertEquals(d(2026, 10, 13), Postpone.suggestedDate(dueToday, RecurrencePattern.Weekly(DayOfWeek.MONDAY), today))
+        assertEquals(d(2026, 10, 17), Postpone.suggestedDate(dueToday, RecurrencePattern.Yearly(3, 1), today))
+        assertEquals(d(2026, 10, 17), Postpone.suggestedDate(dueToday, null, today))
+        val overdue = tx(d(2026, 10, 2), 5, id = 2)
+        assertEquals(d(2026, 10, 11), Postpone.suggestedDate(overdue, RecurrencePattern.Daily, today)) // from today, not from the old date
+        val planned = tx(d(2026, 10, 20), 5, id = 3)
+        assertEquals(d(2026, 10, 21), Postpone.suggestedDate(planned, RecurrencePattern.Daily, today)) // always later than the item
+        assertEquals(d(2026, 10, 27), Postpone.suggestedDate(planned, null, today))
+        for (p in listOf<RecurrencePattern?>(null, RecurrencePattern.Daily, RecurrencePattern.MonthLast)) {
+            assertTrue(Postpone.isValidDate(planned, Postpone.suggestedDate(planned, p, today)!!))
+        }
+    }
+
+    @Test fun a_postponed_item_that_cannot_be_postponed_has_no_suggestion() {
+        assertNull(Postpone.suggestedDate(tx(d(2026, 10, 8), 5, status = TxStatus.CONFIRMED, id = 1), null, today))
     }
 
     @Test fun the_picker_starts_the_day_after_the_item() {

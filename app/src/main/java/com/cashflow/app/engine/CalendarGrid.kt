@@ -39,20 +39,6 @@ object CalendarGrid {
     fun weekdays(firstDayOfWeek: DayOfWeek): List<DayOfWeek> = List(DAYS_PER_WEEK) { firstDayOfWeek.plus(it.toLong()) }
 }
 
-/** How much a calendar cell shows. The closing balance is in both: it is never replaced by dots or hidden. */
-enum class CellMode {
-    /** Day number, the day's expense and income, and the balance. */
-    FULL,
-
-    /** Day number and balance only: the row is too short for the amounts. */
-    COMPACT,
-}
-
-object CalendarCells {
-    /** [FULL] when a row is at least [fullHeight] tall (any unit, the same for both), else [COMPACT]. */
-    fun mode(rowHeight: Float, fullHeight: Float): CellMode = if (rowHeight >= fullHeight) CellMode.FULL else CellMode.COMPACT
-}
-
 /** Maps pager pages to months: page 0 is [BASE], one page per month. */
 object MonthPages {
     val BASE: YearMonth = YearMonth.of(2020, 1)

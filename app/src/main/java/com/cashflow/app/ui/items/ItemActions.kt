@@ -12,6 +12,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
 import com.cashflow.app.R
+import com.cashflow.app.engine.AppDates
 import com.cashflow.app.engine.ConfirmGate
 import com.cashflow.app.engine.DeleteOutcome
 import com.cashflow.app.engine.RecurringRule
@@ -96,12 +97,22 @@ class ItemActions(
         announcer.announce(resources.getString(R.string.item_saved))
     }
 
+    /** "This and all future" for a repeating item; Undo brings the series and every removed occurrence back. */
+    fun deleteThisAndFuture(tx: Transaction) {
+        haptics.reject()
+        viewModel.deleteThisAndFuture(tx) { plan ->
+            if (plan != null) {
+                announcer.announce(resources.getString(R.string.item_deleted_future, labelOf(tx))) { viewModel.undoDeleteThisAndFuture(plan) }
+            }
+        }
+    }
+
     /** Moves this one item to a later day (only this occurrence when it belongs to a series); Undo moves it back. */
     fun postpone(tx: Transaction, newDate: LocalDate) {
         haptics.tick()
         viewModel.postpone(tx.id, newDate) { moved ->
             if (moved) {
-                announcer.announce(resources.getString(R.string.postponed_item, labelOf(tx), newDate.format(MessageDate))) {
+                announcer.announce(resources.getString(R.string.postponed_item, labelOf(tx), AppDates.format(newDate))) {
                     viewModel.moveTo(tx.id, tx.date)
                 }
             }
@@ -117,7 +128,7 @@ class ItemActions(
     fun endSeries(rule: RecurringRule, from: LocalDate) {
         haptics.confirm()
         viewModel.endSeriesFrom(rule.id, from)
-        announcer.announce(resources.getString(R.string.series_ended, from.minusDays(1).format(MessageDate)))
+        announcer.announce(resources.getString(R.string.series_ended, AppDates.format(from.minusDays(1))))
     }
 
     fun deleteSeries(rule: RecurringRule) {
@@ -139,8 +150,6 @@ class ItemActions(
         }
     }
 }
-
-private val MessageDate: java.time.format.DateTimeFormatter = java.time.format.DateTimeFormatter.ofLocalizedDate(java.time.format.FormatStyle.MEDIUM)
 
 /** The "Reject this?" dialog; place it once on every screen that offers swipe or button rejection. */
 @Composable

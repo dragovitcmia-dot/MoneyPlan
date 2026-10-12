@@ -2,10 +2,11 @@ package com.cashflow.app.engine
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.time.DayOfWeek
+import java.time.LocalDate
 
 class EntryWizardTest {
     private val today = d(2026, 10, 15) // a Thursday
@@ -17,39 +18,26 @@ class EntryWizardTest {
 
     // ---- the path ------------------------------------------------------------------------------
 
-    @Test fun now_goes_amount_name_when_review() {
+    @Test fun the_path_is_amount_name_when_review() {
         assertEquals(
             listOf(WizardStep.AMOUNT, WizardStep.NAME, WizardStep.WHEN, WizardStep.REVIEW),
-            EntryWizard.path(wizard().form),
+            EntryWizard.path(wizard()),
         )
+        // Later and Repeating do not add screens: their fields are on the When screen.
+        for (timing in Timing.entries) {
+            assertEquals(4, EntryWizard.path(EntryWizard.update(wizard()) { it.copy(timing = timing) }).size)
+        }
     }
 
-    @Test fun later_adds_the_date_screen() {
-        val form = wizard().form.copy(timing = Timing.LATER)
+    @Test fun the_below_zero_screen_is_on_the_path_only_when_the_check_found_something() {
+        val flagged = wizard().copy(belowZero = true)
         assertEquals(
-            listOf(WizardStep.AMOUNT, WizardStep.NAME, WizardStep.WHEN, WizardStep.LATER_DATE, WizardStep.REVIEW),
-            EntryWizard.path(form),
+            listOf(WizardStep.AMOUNT, WizardStep.NAME, WizardStep.WHEN, WizardStep.BELOW_ZERO, WizardStep.REVIEW),
+            EntryWizard.path(flagged),
         )
-    }
-
-    @Test fun repeating_adds_frequency_start_and_end() {
-        val form = wizard().form.copy(timing = Timing.REPEATS)
-        assertEquals(
-            listOf(
-                WizardStep.AMOUNT, WizardStep.NAME, WizardStep.WHEN,
-                WizardStep.FREQUENCY, WizardStep.START_DATE, WizardStep.END_DATE, WizardStep.REVIEW,
-            ),
-            EntryWizard.path(form),
-        )
-    }
-
-    @Test fun progress_counts_the_screens_of_the_chosen_path() {
-        var s = wizard()
-        assertEquals(1 to 4, EntryWizard.progress(s))
-        s = EntryWizard.update(s) { it.copy(timing = Timing.REPEATS) }
-        assertEquals(1 to 7, EntryWizard.progress(s))
-        assertEquals(7 to 7, EntryWizard.progress(s.copy(step = WizardStep.REVIEW)))
-        assertEquals(5 to 7, EntryWizard.progress(s.copy(step = WizardStep.START_DATE)))
+        assertEquals(1 to 5, EntryWizard.progress(flagged))
+        assertEquals(1 to 4, EntryWizard.progress(wizard()))
+        assertEquals(5 to 5, EntryWizard.progress(flagged.copy(step = WizardStep.REVIEW)))
     }
 
     // ---- going forward: required fields -----------------------------------------------------------
@@ -80,37 +68,47 @@ class EntryWizardTest {
         assertEquals(WizardStep.WHEN, EntryWizard.next(income).step)
     }
 
+    private fun atWhen(timing: Timing, change: (EntryFormState) -> EntryFormState = { it }) =
+        EntryWizard.update(typed(wizard())) { change(it.copy(timing = timing)) }.copy(step = WizardStep.WHEN)
+
+    @Test fun now_has_nothing_to_check_on_the_when_screen() {
+        assertTrue(EntryWizard.problems(atWhen(Timing.NOW)).isEmpty())
+    }
+
     @Test fun later_cannot_be_in_the_past_but_may_be_today() {
-        val base = typed(wizard()).copy(step = WizardStep.LATER_DATE)
-        val later = EntryWizard.update(base) { it.copy(timing = Timing.LATER, laterDate = today.minusDays(1)) }
-        assertEquals(listOf(FormProblem.DATE_IN_PAST), EntryWizard.problems(later))
-        assertEquals(WizardStep.LATER_DATE, EntryWizard.next(later).step)
-        val todayOk = EntryWizard.update(later) { it.copy(laterDate = today) }
+        val past = atWhen(Timing.LATER) { it.copy(laterDate = today.minusDays(1)) }
+        assertEquals(listOf(FormProblem.DATE_IN_PAST), EntryWizard.problems(past))
+        assertEquals(WizardStep.WHEN, EntryWizard.next(past).step)
+        assertEquals(WizardStep.WHEN, EntryWizard.afterWhen(past, hasDip = false).step)
+        assertTrue(EntryWizard.afterWhen(past, hasDip = false).attempted)
+        val todayOk = atWhen(Timing.LATER) { it.copy(laterDate = today) }
         assertEquals(WizardStep.REVIEW, EntryWizard.next(todayOk).step)
     }
 
-    @Test fun a_repeating_payment_needs_a_start_today_or_later_and_an_end_after_the_start() {
-        val base = EntryWizard.update(typed(wizard())) { it.copy(timing = Timing.REPEATS) }
-        val past = base.copy(step = WizardStep.START_DATE, form = EntryWizard.withStartDate(base.form, today.minusDays(3)))
+    @Test fun a_repeating_payment_needs_valid_weekdays_a_start_today_or_later_and_an_end_after_the_start() {
+        val noDays = atWhen(Timing.REPEATS) { it.copy(choice = PatternChoice.WEEKLY, weekdays = emptySet()) }
+        assertEquals(listOf(FormProblem.WEEKDAYS_EMPTY), EntryWizard.problems(noDays))
+        val past = atWhen(Timing.REPEATS) { EntryWizard.withStartDate(it, today.minusDays(3)) }
         assertEquals(listOf(FormProblem.DATE_IN_PAST), EntryWizard.problems(past))
-        val end = base.copy(step = WizardStep.END_DATE, form = base.form.copy(hasEnd = true, endDate = today.minusDays(1)))
+        val end = atWhen(Timing.REPEATS) { it.copy(hasEnd = true, endDate = today.minusDays(1)) }
         assertEquals(listOf(FormProblem.END_BEFORE_START), EntryWizard.problems(end))
-        val noEnd = end.copy(form = end.form.copy(hasEnd = false))
-        assertTrue(EntryWizard.problems(noEnd).isEmpty()) // an end date that is switched off does not count
+        val noEnd = atWhen(Timing.REPEATS) { it.copy(hasEnd = false, endDate = today.minusDays(1)) }
+        assertTrue(EntryWizard.problems(noEnd).isEmpty()) // an end date that is "Never" does not count
+        val badDay = atWhen(Timing.REPEATS) { it.copy(choice = PatternChoice.MONTH_DAY, dayOfMonth = "32") }
+        assertEquals(listOf(FormProblem.DAY_OF_MONTH_INVALID), EntryWizard.problems(badDay))
         assertEquals(WizardStep.REVIEW, EntryWizard.next(noEnd).step)
     }
 
-    @Test fun the_review_collects_every_problem_on_the_path() {
+    @Test fun the_review_collects_every_problem_on_the_way() {
         val s = wizard().copy(step = WizardStep.REVIEW) // nothing typed yet
         assertEquals(listOf(FormProblem.AMOUNT_MISSING, FormProblem.NAME_MISSING), EntryWizard.problems(s))
         assertFalse(EntryWizard.canAdvance(s))
         assertTrue(EntryWizard.canAdvance(typed(wizard()).copy(step = WizardStep.REVIEW)))
     }
 
-    @Test fun a_full_walk_for_every_timing_reaches_a_valid_entry() {
+    @Test fun a_full_walk_for_every_timing_and_kind_reaches_a_valid_entry() {
         for (kind in TxKind.entries) for (timing in Timing.entries) {
-            var s = typed(wizard(kind))
-            s = EntryWizard.update(s) { it.copy(timing = timing) }
+            var s = EntryWizard.update(typed(wizard(kind))) { it.copy(timing = timing) }
             var guard = 0
             while (s.step != WizardStep.REVIEW && guard++ < 10) s = EntryWizard.next(s)
             assertEquals("$kind/$timing", WizardStep.REVIEW, s.step)
@@ -118,9 +116,50 @@ class EntryWizardTest {
         }
     }
 
+    // ---- the below-zero check ---------------------------------------------------------------------
+
+    @Test fun without_a_dip_the_step_after_when_is_the_review() {
+        val s = EntryWizard.afterWhen(atWhen(Timing.NOW), hasDip = false)
+        assertEquals(WizardStep.REVIEW, s.step)
+        assertFalse(s.belowZero)
+    }
+
+    @Test fun with_a_dip_the_step_after_when_is_below_zero_and_then_the_review() {
+        val below = EntryWizard.afterWhen(atWhen(Timing.NOW), hasDip = true)
+        assertEquals(WizardStep.BELOW_ZERO, below.step)
+        assertTrue(below.belowZero)
+        assertEquals(4 to 5, EntryWizard.progress(below)) // "Add anyway" then goes on
+        val review = EntryWizard.next(below)
+        assertEquals(WizardStep.REVIEW, review.step)
+        assertEquals(5 to 5, EntryWizard.progress(review))
+    }
+
+    @Test fun change_and_back_return_to_when_and_forget_the_check() {
+        val below = EntryWizard.afterWhen(atWhen(Timing.NOW), hasDip = true)
+        val changed = EntryWizard.change(below)
+        assertEquals(WizardStep.WHEN, changed.step)
+        assertFalse(changed.belowZero)
+        assertEquals(WizardStep.WHEN, EntryWizard.back(below)!!.step)
+        val review = EntryWizard.next(below)
+        val back = EntryWizard.back(review)!!
+        assertEquals(WizardStep.WHEN, back.step)
+        assertFalse(back.belowZero)
+        assertEquals(below.form, back.form) // nothing typed is lost
+    }
+
+    @Test fun editing_the_form_drops_an_earlier_below_zero_finding() {
+        val below = EntryWizard.afterWhen(atWhen(Timing.NOW), hasDip = true)
+        assertFalse(EntryWizard.update(below) { it.copy(amountText = "1") }.belowZero)
+    }
+
+    @Test fun after_when_does_nothing_on_other_screens() {
+        val s = typed(wizard())
+        assertEquals(s, EntryWizard.afterWhen(s, hasDip = true))
+    }
+
     // ---- going back --------------------------------------------------------------------------------
 
-    @Test fun back_from_the_first_screen_closes_the_wizard() {
+    @Test fun back_from_the_first_screen_returns_null_so_the_screen_can_ask_before_closing() {
         assertNull(EntryWizard.back(wizard()))
     }
 
@@ -129,28 +168,24 @@ class EntryWizardTest {
         s = EntryWizard.update(s) { it.copy(timing = Timing.LATER, laterDate = today.plusDays(9)) }
         s = s.copy(step = WizardStep.REVIEW)
         val back = EntryWizard.back(s)!!
-        assertEquals(WizardStep.LATER_DATE, back.step)
+        assertEquals(WizardStep.WHEN, back.step)
         assertEquals(s.form, back.form)
         val again = EntryWizard.back(back)!!
-        assertEquals(WizardStep.WHEN, again.step)
+        assertEquals(WizardStep.NAME, again.step)
         assertEquals("12.5", again.form.amountText)
         assertFalse(again.attempted)
     }
 
-    @Test fun changing_when_changes_the_path_and_back_follows_the_new_one() {
-        var s = typed(wizard()).copy(step = WizardStep.WHEN)
-        s = EntryWizard.update(s) { it.copy(timing = Timing.REPEATS) }
-        s = EntryWizard.next(s)
-        assertEquals(WizardStep.FREQUENCY, s.step)
-        s = EntryWizard.update(EntryWizard.back(s)!!) { it.copy(timing = Timing.NOW) }
-        assertEquals(WizardStep.REVIEW, EntryWizard.next(s).step) // Now skips the date screens
-    }
-
-    @Test fun go_to_only_jumps_to_screens_on_the_path() {
-        val now = typed(wizard()).copy(step = WizardStep.REVIEW)
-        assertEquals(WizardStep.REVIEW, EntryWizard.goTo(now, WizardStep.LATER_DATE).step) // not on the Now path
-        val later = EntryWizard.update(now) { it.copy(timing = Timing.LATER) }
-        assertEquals(WizardStep.LATER_DATE, EntryWizard.goTo(later, WizardStep.LATER_DATE).step) // "Change date"
+    @Test fun go_back_all_the_way_and_forward_again_without_losing_input() {
+        var s = typed(wizard())
+        s = EntryWizard.update(s) { it.copy(timing = Timing.REPEATS, weekdays = setOf(DayOfWeek.MONDAY, DayOfWeek.THURSDAY)) }
+        s = s.copy(step = WizardStep.WHEN)
+        val form = s.form
+        s = EntryWizard.back(EntryWizard.back(s)!!)!!
+        assertEquals(WizardStep.AMOUNT, s.step)
+        s = EntryWizard.next(EntryWizard.next(s))
+        assertEquals(WizardStep.WHEN, s.step)
+        assertEquals(form, s.form)
     }
 
     // ---- start -----------------------------------------------------------------------------------
@@ -168,18 +203,17 @@ class EntryWizardTest {
         assertEquals(today, s.form.startDate)
     }
 
-    // ---- start date, frequency, preview -------------------------------------------------------------
+    // ---- preview ------------------------------------------------------------------------------------
 
-    @Test fun the_start_date_defines_weekday_and_day_of_month() {
-        val f = EntryWizard.withStartDate(wizard().form, d(2026, 11, 3)) // a Tuesday
-        assertEquals(java.time.DayOfWeek.TUESDAY, f.weekday)
-        assertEquals("3", f.dayOfMonth)
-        assertEquals(d(2026, 11, 3), f.startDate)
-    }
-
-    private fun preview(choice: PatternChoice, start: java.time.LocalDate, end: java.time.LocalDate? = null): List<java.time.LocalDate> {
+    private fun preview(
+        choice: PatternChoice,
+        start: LocalDate,
+        end: LocalDate? = null,
+        weekdays: Set<DayOfWeek> = setOf(start.dayOfWeek),
+        dayOfMonth: String = start.dayOfMonth.toString(),
+    ): List<LocalDate> {
         val base = typed(wizard()).form.copy(timing = Timing.REPEATS)
-        val f = EntryWizard.withFrequency(EntryWizard.withStartDate(base, start), choice)
+        val f = base.copy(choice = choice, startDate = start, weekdays = weekdays, dayOfMonth = dayOfMonth)
             .let { if (end != null) it.copy(hasEnd = true, endDate = end) else it }
         return EntryWizard.occurrencePreview(f)
     }
@@ -189,7 +223,16 @@ class EntryWizardTest {
         assertEquals(listOf(d(2026, 10, 15), d(2026, 10, 22), d(2026, 10, 29)), preview(PatternChoice.WEEKLY, today))
         assertEquals(listOf(d(2026, 10, 15), d(2026, 10, 29), d(2026, 11, 12)), preview(PatternChoice.EVERY_2_WEEKS, today))
         assertEquals(listOf(d(2026, 12, 31), d(2027, 1, 31), d(2027, 2, 28)), preview(PatternChoice.MONTH_DAY, d(2026, 12, 31)))
+        assertEquals(listOf(d(2026, 11, 1), d(2026, 12, 1), d(2027, 1, 1)), preview(PatternChoice.MONTH_FIRST, today))
+        assertEquals(listOf(d(2026, 10, 31), d(2026, 11, 30), d(2026, 12, 31)), preview(PatternChoice.MONTH_LAST, today))
         assertEquals(listOf(d(2027, 2, 28), d(2028, 2, 28), d(2029, 2, 28)), preview(PatternChoice.YEARLY, d(2027, 2, 28)))
+    }
+
+    @Test fun preview_for_several_weekdays() {
+        assertEquals(
+            listOf(d(2026, 10, 15), d(2026, 10, 19), d(2026, 10, 22)),
+            preview(PatternChoice.WEEKLY, today, weekdays = setOf(DayOfWeek.MONDAY, DayOfWeek.THURSDAY)),
+        )
     }
 
     @Test fun a_yearly_payment_on_29_february_falls_on_the_28th_in_other_years() {
@@ -203,22 +246,41 @@ class EntryWizardTest {
         assertTrue(EntryWizard.occurrencePreview(typed(wizard()).form.copy(timing = Timing.LATER)).isEmpty())
     }
 
-    // ---- the entry for the live calendar -------------------------------------------------------------
-
-    @Test fun entry_at_applies_the_chosen_day_to_later_and_repeating_forms() {
-        val base = typed(wizard()).form
-        val later = EntryWizard.entryAt(base.copy(timing = Timing.LATER), d(2026, 11, 3)) as NewEntry.Planned
+    @Test fun entry_of_builds_what_would_be_saved() {
+        val form = typed(wizard()).form
+        assertTrue(EntryWizard.entryOf(form.copy(timing = Timing.NOW), "x") is NewEntry.Now)
+        val later = EntryWizard.entryOf(form.copy(timing = Timing.LATER, laterDate = d(2026, 11, 3)), "x") as NewEntry.Planned
         assertEquals(d(2026, 11, 3), later.date)
-        val rec = EntryWizard.entryAt(base.copy(timing = Timing.REPEATS), d(2026, 11, 3)) as NewEntry.Recurring
-        assertEquals(d(2026, 11, 3), rec.startDate)
-        assertEquals(RecurrencePattern.Weekly(java.time.DayOfWeek.TUESDAY), rec.pattern)
-        assertTrue(EntryWizard.entryAt(base.copy(timing = Timing.NOW), d(2026, 11, 3)) is NewEntry.Now)
-        assertNull(EntryWizard.entryAt(base.copy(amountText = "", timing = Timing.LATER), d(2026, 11, 3)))
+        assertNull(EntryWizard.entryOf(form.copy(amountText = ""), "x"))
     }
 
-    @Test fun the_five_frequencies_are_offered_for_both_kinds() {
-        val five = listOf(PatternChoice.DAILY, PatternChoice.WEEKLY, PatternChoice.EVERY_2_WEEKS, PatternChoice.MONTH_DAY, PatternChoice.YEARLY)
-        for (kind in TxKind.entries) assertEquals(five, EntryForm.choicesFor(kind))
-        assertNotNull(five)
+    // ---- the discard guard ---------------------------------------------------------------------------
+
+    @Test fun closing_an_untouched_wizard_needs_no_question() {
+        val initial = wizard()
+        val (state, decision) = DiscardState().onCloseRequested(initial, initial)
+        assertEquals(CloseDecision.CLOSE, decision)
+        assertFalse(state.asking)
+    }
+
+    @Test fun closing_after_typing_asks_first_and_keep_going_changes_nothing() {
+        val initial = wizard()
+        val current = typed(initial)
+        val (asking, decision) = DiscardState().onCloseRequested(current, initial)
+        assertEquals(CloseDecision.ASK, decision)
+        assertTrue(asking.asking)
+        val kept = asking.keepGoing()
+        assertFalse(kept.asking)
+        // the wizard itself was never touched by the question
+        assertEquals("12.5", current.form.amountText)
+        assertEquals(current.step, current.step)
+        assertFalse(asking.discard().asking)
+    }
+
+    @Test fun any_screen_past_the_first_counts_as_progress() {
+        val initial = wizard()
+        assertTrue(DiscardGuard.hasProgress(initial.copy(step = WizardStep.NAME), initial))
+        assertFalse(DiscardGuard.hasProgress(initial, initial))
+        assertTrue(DiscardGuard.hasProgress(EntryWizard.update(initial) { it.copy(amountText = "1") }, initial))
     }
 }

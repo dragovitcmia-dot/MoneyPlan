@@ -61,6 +61,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -68,9 +69,12 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.cashflow.app.R
-import com.cashflow.app.engine.CalendarCells
 import com.cashflow.app.engine.CalendarGrid
-import com.cashflow.app.engine.CellMode
+import com.cashflow.app.engine.AppDates
+import com.cashflow.app.engine.CalendarCellContent
+import com.cashflow.app.engine.CalendarCellLayout
+import com.cashflow.app.engine.CellLineKind
+import com.cashflow.app.engine.CellMetrics
 import com.cashflow.app.engine.CompactAmount
 import com.cashflow.app.engine.DaySummary
 import com.cashflow.app.engine.Money
@@ -78,7 +82,6 @@ import com.cashflow.app.engine.MonthPages
 import com.cashflow.app.engine.MonthSummary
 import com.cashflow.app.engine.Transaction
 import com.cashflow.app.engine.TxKind
-import com.cashflow.app.ui.components.FitText
 import com.cashflow.app.ui.components.AppButton
 import com.cashflow.app.ui.components.AppButtonStyle
 import com.cashflow.app.ui.home.EntryComposer
@@ -103,8 +106,6 @@ import java.util.Locale
 private val CellGap = 3.dp
 private val GridPadding = 8.dp
 
-/** Money numbers shrink to fit their cell, but never below this. */
-private val MinMoneySize = 9.sp
 
 /**
  * The Calendar tab: a month grid you can swipe, with each day's planned expense (red) and extra income
@@ -156,24 +157,19 @@ fun CalendarScreen(
     }
 
     val density = LocalDensity.current
-    val measurer = rememberTextMeasurer()
-    val amountStyle = MaterialTheme.typography.labelMedium.copy(fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-    val firstDay = remember { WeekFields.of(Locale.getDefault()).firstDayOfWeek }
+    val firstDay = AppDates.firstDayOfWeek
     val shownMonth = MonthPages.monthOf(pager.currentPage)
-    val title = remember(shownMonth) { shownMonth.format(DateTimeFormatter.ofPattern("LLLL yyyy", Locale.getDefault())) }
+    val title = remember(shownMonth) { AppDates.monthYear(shownMonth) }
 
     BoxWithConstraints(Modifier.fillMaxSize()) {
-        val cellWidth = (maxWidth - GridPadding * 2) / CalendarGrid.DAYS_PER_WEEK
-        // From 1.5x text the content cannot be made to fit, so the screen may scroll (the only case it does).
-        val scrollMode = density.fontScale >= 1.5f
-        val dayLine = with(density) { (16.sp * 1.3f).toDp() }
-        val amountLine = with(density) { (13.sp * 1.3f).toDp() }
-        // A cell with day number, expense, income and the day's balance needs about this much height.
-        val amountsRow = maxOf(92.dp, dayLine + amountLine * 3 + 22.dp)
+        val cellWidthDp = ((maxWidth - GridPadding * 2) / CalendarGrid.DAYS_PER_WEEK - CellGap * 2).value
         val topPad = padding.calculateTopPadding() + 12.dp
 
-        // Month title with its arrows; the Today button sits under it (the same layout at every font size).
-        val header: @Composable () -> Unit = {
+        Column(
+            Modifier.fillMaxSize().padding(top = topPad, bottom = padding.calculateBottomPadding() + 4.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            // Month title with its arrows; the Today button sits under it (the same layout at every font size).
             Column(
                 Modifier.fillMaxWidth().padding(horizontal = 12.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
@@ -209,53 +205,36 @@ fun CalendarScreen(
                 goToMonth(YearMonth.from(day))
             } }
             WeekdayHeader(firstDay)
-        }
 
-        val pages: @Composable (Modifier, CellMode, Dp?) -> Unit = { modifier, mode, fixedRow ->
-            HorizontalPager(
-                state = pager,
-                modifier = modifier,
-                key = { it },
-                verticalAlignment = Alignment.Top,
-            ) { page ->
-                MonthGrid(
-                    summary = months[MonthPages.monthOf(page)],
-                    selected = selected,
-                    mode = mode,
-                    fixedRowHeight = fixedRow,
-                    dayLine = dayLine,
-                    amountStyle = amountStyle,
-                    onDayClick = { day ->
-                        select(day.date)
-                        sheetDate = day.date.toString()
-                    },
-                )
-            }
-        }
-
-        if (scrollMode) {
-            Column(
-                Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(
-                    top = topPad,
-                    bottom = padding.calculateBottomPadding() + 24.dp,
-                ),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                header()
-                // Big text: the rows keep the height the numbers need and the screen scrolls; the numbers stay visible.
-                pages(Modifier.fillMaxWidth().height(amountsRow * CalendarGrid.FIXED_ROWS), CellMode.FULL, amountsRow)
-            }
-        } else {
-            // The grid takes exactly the height between the header and the bottom bar: no scrolling, no dead space.
-            Column(
-                Modifier.fillMaxSize().padding(top = topPad, bottom = padding.calculateBottomPadding() + 4.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                header()
-                BoxWithConstraints(Modifier.fillMaxWidth().weight(1f)) {
-                    // Judged for the tallest month (6 rows): a row too short for the amounts shows day number and balance.
-                    val mode = CalendarCells.mode(CalendarGrid.rowHeight(maxHeight.value, CalendarGrid.FIXED_ROWS), amountsRow.value)
-                    pages(Modifier.fillMaxSize(), mode, null)
+            // The grid takes exactly the height left under the header. Every cell is the same: the day number and three
+            // money lines. When the room is short the TEXT shrinks; only when even the smallest text cannot fit does the
+            // grid area (not the header) scroll. The sizes are a pure function of this area's size and the text scale.
+            BoxWithConstraints(Modifier.fillMaxWidth().weight(1f)) {
+                val metrics = CalendarCellLayout.metrics(maxHeight.value, CalendarGrid.FIXED_ROWS, density.fontScale)
+                val pagerModifier = if (metrics.scrolls) {
+                    Modifier.fillMaxWidth().height(metrics.rowHeightDp.dp * CalendarGrid.FIXED_ROWS)
+                } else {
+                    Modifier.fillMaxSize()
+                }
+                Box(if (metrics.scrolls) Modifier.fillMaxSize().verticalScroll(rememberScrollState()) else Modifier.fillMaxSize()) {
+                    HorizontalPager(
+                        state = pager,
+                        modifier = pagerModifier,
+                        key = { it },
+                        verticalAlignment = Alignment.Top,
+                    ) { page ->
+                        MonthGrid(
+                            summary = months[MonthPages.monthOf(page)],
+                            selected = selected,
+                            metrics = metrics,
+                            cellWidthDp = cellWidthDp,
+                            fontScale = density.fontScale,
+                            onDayClick = { day ->
+                                select(day.date)
+                                sheetDate = day.date.toString()
+                            },
+                        )
+                    }
                 }
             }
         }
@@ -283,7 +262,7 @@ fun CalendarScreen(
                 kind = TxKind.valueOf(name),
                 ui = ui,
                 redDip = home::redDip,
-                liveMonth = home::liveMonth,
+                resultingBalance = home::resultingBalance,
                 onSave = home::save,
                 onSaved = { message -> actions.announce(message) },
                 onDismiss = { composerKind = null },
@@ -312,7 +291,7 @@ fun CalendarScreen(
 private fun ShortBanner(day: LocalDate, onClick: () -> Unit) {
     val text = stringResource(
         R.string.calendar_runs_short,
-        day.format(DateTimeFormatter.ofPattern("d MMM", Locale.getDefault())).replace(' ', '\u00A0'), // "10 Nov" never breaks
+        AppDates.formatShort(day, LocalDate.now()).replace(' ', '\u00A0'), // "10 NOV" never breaks
     )
     val action = stringResource(R.string.calendar_runs_short_action)
     Surface(
@@ -339,12 +318,12 @@ private fun WeekdayHeader(firstDay: java.time.DayOfWeek) {
     Row(Modifier.fillMaxWidth().padding(horizontal = GridPadding)) {
         for (dow in CalendarGrid.weekdays(firstDay)) {
             Text(
-                dow.getDisplayName(if (narrow) TextStyle.NARROW else TextStyle.SHORT, Locale.getDefault()),
+                dow.getDisplayName(if (narrow) TextStyle.NARROW else TextStyle.SHORT, AppDates.LOCALE),
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,
                 maxLines = 1,
-                modifier = Modifier.weight(1f).semantics { contentDescription = dow.getDisplayName(TextStyle.FULL, Locale.getDefault()) },
+                modifier = Modifier.weight(1f).semantics { contentDescription = dow.getDisplayName(TextStyle.FULL, AppDates.LOCALE) },
             )
         }
     }
@@ -354,17 +333,14 @@ private fun WeekdayHeader(firstDay: java.time.DayOfWeek) {
 private fun MonthGrid(
     summary: MonthSummary?,
     selected: LocalDate?,
-    mode: CellMode,
-    /** A fixed row height (the scrolling fallback); null: the rows share the available height equally. */
-    fixedRowHeight: Dp?,
-    dayLine: Dp,
-    amountStyle: androidx.compose.ui.text.TextStyle,
+    metrics: CellMetrics,
+    cellWidthDp: Float,
+    fontScale: Float,
     onDayClick: (DaySummary) -> Unit,
 ) {
-    val fill = if (fixedRowHeight == null) Modifier.fillMaxSize() else Modifier.fillMaxWidth()
     if (summary == null) {
         // Nothing numeric until this month has been computed.
-        Box(fill, contentAlignment = Alignment.Center) {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Text(stringResource(R.string.cal_loading), color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         return
@@ -373,7 +349,7 @@ private fun MonthGrid(
     val horizontalLine = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.35f)
     val verticalLine = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)
     Column(
-        (if (fixedRowHeight == null) fill else Modifier.fillMaxWidth().height(fixedRowHeight * rows))
+        Modifier.fillMaxSize()
             .padding(horizontal = GridPadding)
             .drawBehind {
                 // Thick lines between the week rows, faint ones between the day columns.
@@ -390,14 +366,14 @@ private fun MonthGrid(
             },
     ) {
         for (week in summary.weeks) {
-            Row(if (fixedRowHeight == null) Modifier.fillMaxWidth().weight(1f) else Modifier.fillMaxWidth().height(fixedRowHeight)) {
+            Row(Modifier.fillMaxWidth().weight(1f)) {
                 for (day in week) {
                     DayCell(
                         day = day,
                         selected = day.inMonth && day.date == selected,
-                        mode = mode,
-                        dayLine = dayLine,
-                        amountStyle = amountStyle,
+                        metrics = metrics,
+                        cellWidthDp = cellWidthDp,
+                        fontScale = fontScale,
                         onClick = onDayClick,
                         modifier = Modifier.weight(1f).fillMaxHeight(),
                     )
@@ -407,29 +383,35 @@ private fun MonthGrid(
     }
 }
 
-private val FullDate: DateTimeFormatter = DateTimeFormatter.ofLocalizedDate(FormatStyle.FULL)
-
+/**
+ * One fixed structure at every size: the day number, then three line slots (expenses, one-time income, balance) that
+ * always keep their space, so the balances line up across cells. Nothing is hidden; text shrinks to fit.
+ */
 @Composable
 private fun DayCell(
     day: DaySummary,
     selected: Boolean,
-    mode: CellMode,
-    dayLine: Dp,
-    amountStyle: androidx.compose.ui.text.TextStyle,
+    metrics: CellMetrics,
+    cellWidthDp: Float,
+    fontScale: Float,
     onClick: (DaySummary) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val colors = MaterialTheme.cashflow
-    // Day numbers are faint (the money is the content); only today's number is full contrast and bold.
+    // Day numbers are small and faint (the money is the content); only today's number is full contrast and bold.
     val faint = MaterialTheme.colorScheme.onSurface.copy(alpha = Palette.DAY_NUMBER_ALPHA)
     val numberColor = if (day.inMonth) faint else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
+    val dayLine = with(LocalDensity.current) { (metrics.daySp.sp * CalendarCellLayout.LINE).toDp() }
+    val moneyLine = with(LocalDensity.current) { (metrics.moneySp.sp * CalendarCellLayout.LINE).toDp() }
+    val dayStyle = MaterialTheme.typography.bodyMedium.copy(fontSize = metrics.daySp.sp, lineHeight = (metrics.daySp * CalendarCellLayout.LINE).sp)
     if (!day.inMonth) {
         // The neighbouring months' days only fill the grid; they are dimmed and not touchable.
         Box(modifier.padding(CellGap).clearAndSetSemantics {}, contentAlignment = Alignment.TopCenter) {
-            Text(day.date.dayOfMonth.toString(), style = MaterialTheme.typography.bodyMedium, color = numberColor, modifier = Modifier.padding(top = 4.dp))
+            Text(day.date.dayOfMonth.toString(), style = dayStyle, color = numberColor, modifier = Modifier.padding(top = 2.dp))
         }
         return
     }
+    val content = remember(day) { CalendarCellContent.of(day) }
     val resources = LocalContext.current.resources
     val description = remember(day, resources) { describe(resources, day) }
     val shape = MaterialTheme.shapes.small
@@ -447,49 +429,53 @@ private fun DayCell(
             .clickable(role = Role.Button) { onClick(day) }
             .semantics { contentDescription = description; this.selected = selected },
     ) {
-        Column(Modifier.fillMaxSize().padding(top = 4.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            if (day.isToday) {
-                Box(
-                    Modifier.defaultMinSize(minWidth = dayLine, minHeight = dayLine).clip(CircleShape).background(MaterialTheme.colorScheme.primary),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(
-                        day.date.dayOfMonth.toString(),
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onPrimary,
-                        modifier = Modifier.padding(horizontal = 4.dp),
-                    )
-                }
-            } else {
-                Text(
-                    day.date.dayOfMonth.toString(),
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Normal,
-                    color = numberColor,
-                )
-            }
-            if (mode == CellMode.FULL) {
-                if (day.hasExpenses) {
-                    FitText(CompactAmount.signed(TxKind.EXPENSE, day.expenses), colors.negative, amountStyle, Modifier.fillMaxWidth(), minSize = MinMoneySize)
-                }
-                if (day.hasIncome) {
-                    FitText(CompactAmount.signed(TxKind.INCOME, day.shownIncome), colors.cellIncome, amountStyle, Modifier.fillMaxWidth(), minSize = MinMoneySize)
+        Column(Modifier.fillMaxSize().padding(top = (CalendarCellLayout.PAD_DP / 2).dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            Box(Modifier.fillMaxWidth().height(dayLine), contentAlignment = Alignment.Center) {
+                if (day.isToday) {
+                    Box(
+                        Modifier.defaultMinSize(minWidth = dayLine, minHeight = dayLine).clip(CircleShape).background(MaterialTheme.colorScheme.primary),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            day.date.dayOfMonth.toString(),
+                            style = dayStyle,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onPrimary,
+                            modifier = Modifier.padding(horizontal = 3.dp),
+                        )
+                    }
+                } else {
+                    Text(day.date.dayOfMonth.toString(), style = dayStyle, fontWeight = FontWeight.Normal, color = numberColor)
                 }
             }
-        }
-        if (day.hasForecast) {
-            // The balance at the end of the day, always shown and always full contrast: red when negative.
-            FitText(
-                CompactAmount.balance(day.closing),
-                if (day.negative) colors.negative else MaterialTheme.colorScheme.onSurface,
-                amountStyle,
-                Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(bottom = 5.dp),
-                minSize = MinMoneySize,
-            )
+            for (line in content.lines) {
+                Box(Modifier.fillMaxWidth().height(moneyLine), contentAlignment = Alignment.Center) {
+                    if (line != null) {
+                        val color = when (line.kind) {
+                            CellLineKind.EXPENSE -> colors.negative
+                            CellLineKind.INCOME -> colors.cellIncome
+                            CellLineKind.BALANCE -> if (day.negative) colors.negative else MaterialTheme.colorScheme.onSurface
+                        }
+                        val size = CalendarCellLayout.fitSp(line.text, cellWidthDp, metrics.moneySp, fontScale)
+                        Text(
+                            line.text,
+                            color = color,
+                            style = MaterialTheme.typography.labelMedium.copy(
+                                fontSize = size.sp,
+                                lineHeight = (size * CalendarCellLayout.LINE).sp,
+                                fontWeight = FontWeight.SemiBold,
+                            ),
+                            maxLines = 1,
+                            softWrap = false,
+                            overflow = TextOverflow.Clip,
+                            textAlign = TextAlign.Center,
+                        )
+                    }
+                }
+            }
         }
         if (day.waiting > 0) {
-            Box(Modifier.align(Alignment.TopEnd).padding(top = 5.dp, end = 5.dp).size(8.dp).background(colors.badge, CircleShape))
+            Box(Modifier.align(Alignment.TopEnd).padding(top = 3.dp, end = 3.dp).size(6.dp).background(colors.badge, CircleShape))
         }
     }
 }
@@ -497,7 +483,7 @@ private fun DayCell(
 /** What TalkBack says for a cell: the date, then what is on that day. */
 private fun describe(resources: android.content.res.Resources, day: DaySummary): String {
     val parts = ArrayList<String>()
-    parts += day.date.format(FullDate)
+    parts += AppDates.withWeekday(day.date)
     if (day.isToday) parts += resources.getString(R.string.cal_desc_today)
     if (day.hasExpenses) parts += resources.getString(R.string.cal_desc_expenses, Money.formatDisplay(day.expenses, withCurrency = false))
     if (day.hasIncome) parts += resources.getString(R.string.cal_desc_income, Money.formatDisplay(day.shownIncome, withCurrency = false))

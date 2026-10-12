@@ -51,7 +51,7 @@
     <string name="now_hint_expense">You already spent this. It counts today.</string>
     <string name="now_hint_income">You already received this. It counts today.</string>
     <string name="later_date_label">Date</string>
-    <string name="later_past_hint">Today or earlier: it will show up under “Waiting for you”.</string>
+    <string name="later_past_hint">Today or earlier shows under “Waiting for you”.</string>
     <string name="choice_daily">Every day</string>
     <string name="choice_weekly">Every week</string>
     <string name="choice_every_n">Every few days</string>
@@ -116,15 +116,22 @@
     <!-- Change one item -->
     <string name="item_edit_title">Change this item</string>
     <string name="item_date_label">Date</string>
-    <string name="item_series_note">This comes from a repeating payment. Changes here only affect this day.</string>
+    <string name="item_series_note">Repeating payment. Changes here affect this day only.</string>
     <string name="item_edit_series">Edit this repeating payment</string>
     <string name="action_mark_waiting">Mark as waiting</string>
     <string name="item_saved">Changes saved</string>
     <string name="marked_waiting">%1$s is waiting for you again</string>
     <string name="item_delete_title">Delete “%1$s”?</string>
     <string name="item_delete_manual_body">This removes it for good.</string>
-    <string name="item_delete_series_body">This payment will be rejected for this day only. The other days of the repeating payment stay as they are.</string>
+    <string name="item_delete_series_body">Rejected for this day only. The other days stay.</string>
     <string name="item_deleted">Deleted %1$s</string>
+    <string name="item_deleted_future">Deleted %1$s and all later ones</string>
+    <string name="swipe_delete_title">Delete this?</string>
+    <string name="swipe_delete_body">It is removed from your plan.</string>
+    <string name="swipe_delete_series_title">Delete this repeating payment?</string>
+    <string name="swipe_delete_this_one">This one only</string>
+    <string name="swipe_delete_future">This and all future</string>
+    <string name="swipe_delete_action">Delete</string>
     <string name="item_skipped_this_day">Rejected %1$s for this day only</string>
 
     <!-- Add wizard -->
@@ -133,44 +140,54 @@
     <string name="wizard_next">Next</string>
     <string name="wizard_add_expense">Add expense</string>
     <string name="wizard_add_income">Add income</string>
+    <string name="wizard_discard_title">Discard?</string>
+    <string name="wizard_discard_body">What you entered will be lost.</string>
+    <string name="wizard_discard">Discard</string>
+    <string name="wizard_keep_going">Keep going</string>
     <string name="wizard_amount_title">How much?</string>
     <string name="wizard_name_title">What is it called?</string>
     <string name="name_label_required">Name</string>
     <string name="name_label_optional">Name (optional)</string>
-    <string name="wizard_recent_names">Recent names</string>
+    <string name="wizard_frequent_names">Often used</string>
+    <string name="problem_weekdays">Choose at least one day.</string>
     <string name="problem_name">Give it a name first.</string>
     <string name="problem_date_past">Choose today or a later day.</string>
     <string name="wizard_when_title">When does it happen?</string>
-    <string name="when_later_hint">Pick a day on the calendar and see what it does to your money.</string>
-    <string name="when_repeats_hint">Every day, week, month or year, with an optional last day.</string>
-    <string name="wizard_later_title">Pick the day</string>
-    <string name="wizard_freq_title">How often?</string>
     <string name="choice_every_2_weeks">Every 2 weeks</string>
-    <string name="choice_monthly">Every month</string>
-    <string name="choice_yearly">Every year</string>
-    <string name="wizard_start_title">First day</string>
-    <string name="wizard_end_title">Last day</string>
-    <string name="wizard_end_hint">Leave this off and it keeps repeating until you end it.</string>
+    <string name="choice_monthly_day">Every month on a day</string>
+    <string name="choice_month_first_long">First day of every month</string>
+    <string name="choice_month_last_long">Last day of every month</string>
+    <string name="wizard_repeat_label">Repeat</string>
+    <string name="wizard_weekdays_label">On these days</string>
+    <string name="wizard_date_label">Date</string>
+    <string name="wizard_start_label">Start date</string>
+    <string name="wizard_end_label">End date</string>
+    <string name="wizard_never">Never</string>
+    <string name="wizard_year_date_label">Every year on</string>
     <string name="wizard_next_dates">Next dates</string>
+    <string name="when_later_hint">Choose the day.</string>
+    <string name="review_now">Now</string>
+    <string name="review_on_day">On %1$s</string>
+    <string name="review_later">Later - %1$s</string>
+    <string name="review_every_day">Every day</string>
+    <string name="review_every_week_on">Every week on %1$s</string>
+    <string name="review_every_2_weeks">Every 2 weeks</string>
+    <string name="review_every_month_on">Every month on day %1$s</string>
+    <string name="review_first_of_month">First day of every month</string>
+    <string name="review_last_of_month">Last day of every month</string>
+    <string name="review_every_year_on">Every year on %1$s</string>
+    <string name="review_from">%1$s - from %2$s</string>
+    <string name="review_from_until">%1$s - from %2$s until %3$s</string>
+    <string name="review_balance_now">Balance after this: %1$s TND</string>
+    <string name="review_balance_on">Balance on %1$s: %2$s TND</string>
+    <string name="choice_yearly">Every year</string>
+    <string name="dip_row_description">%1$s: balance %2$s dinars</string>
     <string name="wizard_review_title">Check and add</string>
-    <string name="review_when_now">Today</string>
-    <string name="review_when_repeats">%1$s, from %2$s</string>
-    <string name="review_until">Until %1$s</string>
-    <string name="review_no_end">No end date</string>
-    <string name="live_summary">On %1$s you will have %2$s TND. The lowest it gets after that is %3$s TND on %4$s.</string>
-    <string name="live_summary_empty">Tap a day to see what happens to your money.</string>
-    <string name="live_loading">Calculating…</string>
-    <string name="live_cell_description">Balance %1$s dinars.</string>
-    <string name="live_cell_negative">Below zero.</string>
 
     <!-- Below-zero warning (only when adding) -->
-    <string name="dip_title">This would take you below zero</string>
-    <string name="dip_lowest">Lowest balance: %1$s TND on %2$s</string>
-    <string name="dip_shortfall">You would be short by %1$s TND</string>
-    <string name="dip_days_header">Days below zero</string>
-    <string name="dip_more">and %1$d more days</string>
     <string name="dip_add_anyway">Add anyway</string>
-    <string name="dip_change_date">Change date</string>
+    <string name="dip_title">Your balance will go below zero</string>
+    <string name="dip_change">Change</string>
 
     <!-- Reject warning -->
     <string name="reject_title">Reject this?</string>
@@ -188,7 +205,7 @@
     <string name="detail_kind_income">Income</string>
     <string name="detail_series_line">%1$s · until %2$s</string>
     <string name="details_edit_item">Change this item</string>
-    <string name="details_future_note">This is planned for a later day. You can accept or reject it on its day.</string>
+    <string name="details_future_note">Planned for a later day. You can answer it on its day.</string>
 
     <!-- Postpone -->
     <string name="action_postpone">Postpone</string>
@@ -196,30 +213,32 @@
     <string name="postpone_tomorrow">Tomorrow</string>
     <string name="postpone_3_days">In 3 days</string>
     <string name="postpone_next_week">Next week</string>
+    <string name="postpone_1_week">In 1 week</string>
+    <string name="postpone_suggestion">%1$s - %2$s</string>
     <string name="postpone_pick">Pick a date</string>
     <string name="postponed_item">Moved %1$s to %2$s</string>
-    <string name="postpone_series_note">Only this day moves. The rest of the repeating payment stays as it is.</string>
+    <string name="postpone_series_note">Only this day moves.</string>
 
     <!-- Repeating payment actions on an item -->
     <string name="series_section_title">This repeating payment</string>
     <string name="series_edit_future">Edit this and future</string>
     <string name="series_edit_future_title">Change this and future</string>
-    <string name="series_edit_future_body">Waiting items from today on get the new name and amount. Items you already accepted or rejected stay as they are.</string>
+    <string name="series_edit_future_body">Waiting items from today on change. Accepted and rejected ones stay.</string>
     <string name="series_end">End series</string>
     <string name="series_end_title">End “%1$s”?</string>
-    <string name="series_end_body">Choose the first day it should no longer appear. Waiting items from that day on are removed. Items you already accepted or rejected stay.</string>
+    <string name="series_end_body">Pick the first day it should stop. Waiting items from then on are removed. Accepted and rejected ones stay.</string>
     <string name="series_end_from">Stop from</string>
     <string name="series_delete">Delete series</string>
     <string name="series_delete_title">Delete “%1$s” for good?</string>
-    <string name="series_delete_body">The repeating payment is removed, together with its waiting items after today. Items you already accepted or rejected stay in your history.</string>
+    <string name="series_delete_body">Removes it and its waiting items after today. Accepted and rejected ones stay.</string>
     <string name="series_changed">Repeating payment changed</string>
     <string name="series_ended">Repeating payment ends on %1$s</string>
     <string name="series_deleted">Repeating payment deleted</string>
 
     <!-- Add from a day -->
     <string name="timing_happened">Already happened</string>
-    <string name="now_hint_past_expense">You spent this on %1$s. It counts on that day.</string>
-    <string name="now_hint_past_income">You received this on %1$s. It counts on that day.</string>
+    <string name="now_hint_past_expense">Spent on %1$s. It counts on that day.</string>
+    <string name="now_hint_past_income">Received on %1$s. It counts on that day.</string>
 
     <!-- Upcoming -->
     <string name="upcoming_title">Coming up</string>
@@ -235,7 +254,7 @@
     <!-- Settings -->
     <string name="settings_title">Settings</string>
     <string name="auto_income_title">Accept my income automatically</string>
-    <string name="auto_income_helper">On: your income is added on its day without asking. Off: you tap the green check to accept each income.</string>
+    <string name="auto_income_helper">On: income is added on its day. Off: you tap the green check.</string>
     <string name="money_started_label">Money I started with (TND)</string>
     <string name="started_on_label">I started on</string>
     <string name="remind_label">Remind me at</string>
@@ -248,6 +267,7 @@
     <string name="sched_month_day">Day %1$d of each month</string>
     <string name="sched_first">First day of each month</string>
     <string name="sched_last">Last day of each month</string>
+    <string name="sched_weekdays">Every week on %1$s</string>
     <string name="sched_yearly">Every year on %1$s</string>
     <string name="sched_every_n">Every %1$d days</string>
 
@@ -256,7 +276,7 @@
     <string name="starting_title">Starting point</string>
     <string name="starting_locked_note">Clear all data to start again</string>
     <string name="developer_title">Developer tools</string>
-    <string name="developer_note">For testing only. These buttons change or erase the data on this phone.</string>
+    <string name="developer_note">For testing. These buttons change or erase data on this phone.</string>
 
     <!-- App updates -->
     <string name="updates_title">App updates</string>
@@ -266,7 +286,7 @@
     <string name="up_to_date">You’re up to date</string>
     <string name="downloading_version">Downloading version %1$s…</string>
     <string name="installing_version">Installing version %1$s…</string>
-    <string name="install_notice">The app will close to finish updating. Open it again afterwards.</string>
+    <string name="install_notice">The app closes to update. Open it again afterwards.</string>
     <string name="permission_title">Allow updates</string>
     <string name="permission_body">To install an update, Android needs your OK first. On the next screen, turn on “Allow from this source” for Cashflow, then come back here. The update will carry on by itself.</string>
     <string name="permission_continue">Continue</string>
@@ -276,7 +296,7 @@
     <string name="update_error_timeout">The server took too long to answer.</string>
     <string name="update_error_invalid">The update information could not be read.</string>
     <string name="update_error_server">The server answered with error %1$d.</string>
-    <string name="update_error_checksum">The download was damaged, so it was thrown away. Please try again.</string>
+    <string name="update_error_checksum">The download was damaged. Please try again.</string>
     <string name="update_error_cut">The download stopped early. Please try again.</string>
     <string name="update_error_install">The update could not be installed (%1$s).</string>
     <string name="update_cancelled">Update cancelled.</string>
@@ -288,6 +308,6 @@
     <string name="debug_load_sample">Load sample data</string>
     <string name="debug_clear_all">Clear all data</string>
     <string name="clear_title">Erase everything?</string>
-    <string name="clear_body">This erases all your entries, repeating items and settings on this phone. It cannot be undone.</string>
+    <string name="clear_body">Erases all entries, repeating items and settings. This cannot be undone.</string>
     <string name="clear_confirm">Erase everything</string>
 </resources>

@@ -17,6 +17,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.cashflow.app.R
+import com.cashflow.app.engine.AppDates
 import com.cashflow.app.engine.AppSettings
 import com.cashflow.app.engine.RecurrencePattern
 import com.cashflow.app.ui.components.SectionCard
@@ -24,7 +25,7 @@ import java.time.DayOfWeek
 import java.time.format.TextStyle
 import java.util.Locale
 
-private fun dayName(d: DayOfWeek) = d.getDisplayName(TextStyle.FULL, Locale.getDefault())
+private fun dayName(d: DayOfWeek) = d.getDisplayName(TextStyle.FULL, AppDates.LOCALE)
 
 @Composable
 internal fun scheduleSummary(p: RecurrencePattern): String = when (p) {
@@ -34,7 +35,8 @@ internal fun scheduleSummary(p: RecurrencePattern): String = when (p) {
     RecurrencePattern.MonthFirst -> stringResource(R.string.sched_first)
     RecurrencePattern.MonthLast -> stringResource(R.string.sched_last)
     is RecurrencePattern.EveryNDays -> stringResource(R.string.sched_every_n, p.n)
-    is RecurrencePattern.Yearly -> stringResource(R.string.sched_yearly, java.time.LocalDate.of(2000, p.month, minOf(p.day, java.time.YearMonth.of(2000, p.month).lengthOfMonth())).format(java.time.format.DateTimeFormatter.ofPattern("d MMMM", Locale.getDefault())))
+    is RecurrencePattern.WeeklyDays -> stringResource(R.string.sched_weekdays, AppDates.weekdaysText(p.days))
+    is RecurrencePattern.Yearly -> stringResource(R.string.sched_yearly, AppDates.formatShort(java.time.LocalDate.of(2000, p.month, minOf(p.day, java.time.YearMonth.of(2000, p.month).lengthOfMonth())), java.time.LocalDate.of(2000, 1, 1)))
 }
 
 /**
