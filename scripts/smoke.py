@@ -93,6 +93,9 @@ def screen_size(nodes):
 
 def screenshot(name):
     os.makedirs(OUT, exist_ok=True)
+    for _ in range(3):  # a system "isn't responding" box would hide the app in the picture
+        if not dismiss_system_dialog(dump_nodes() or []):
+            break
     png = subprocess.run(["adb", "exec-out", "screencap", "-p"], capture_output=True).stdout
     with open(os.path.join(OUT, name + ".png"), "wb") as f:
         f.write(png)
@@ -104,14 +107,15 @@ class NotFound(Exception):
 
 
 def dismiss_system_dialog(nodes):
-    """An emulator's own "<app> isn't responding" box (seen for the launcher on slow runners) hides the app from the
-    UI dump: press Wait so the app is visible again."""
-    if any("isn't responding" in (t or "") for t, _, _ in nodes):
+    """An emulator's own "<app> isn't responding" box (seen for the launcher after the screen size changes; the
+    apostrophe may be a typographic one) hides the app: press Wait so the app is visible again."""
+    if any("responding" in (t or "").lower() for t, _, _ in nodes):
         for t, _, b in nodes:
             if (t or "").strip() == "Wait":
                 sh(f"input tap {(b[0] + b[2]) // 2} {(b[1] + b[3]) // 2}")
-                time.sleep(1)
-                return
+                time.sleep(1.5)
+                return True
+    return False
 
 
 def find(text, scroll=True, last=False, timeout=FIND_TIMEOUT, contains=False):
@@ -573,12 +577,14 @@ def wizard_walk(name):
                 tap_text(S["wizard_discard"], scroll=False, timeout=3)
             except NotFound:
                 pass
-        raise
+        return [f"{name}: wizard walk: {e}"]
+    return []
 
 
 def run_config(name, night, font, size, density):
     print(f"== {name}: night={night} font={font} size={size or 'default'}")
     configure(night, font, size, density)
+    time.sleep(5)  # let the launcher settle after a size change
     try:
         launch()
         tap_text(TEXT_SETTINGS, scroll=False)
@@ -603,7 +609,7 @@ def run_config(name, night, font, size, density):
         find(S["action_reject"], scroll=False, timeout=8)
         sh("input keyevent 4")
         time.sleep(1.2)
-        wizard_walk(name)
+        extra += wizard_walk(name)
         if name in CALENDAR_CONFIGS:
             today = device_now().date()
             extra += calendar_flow(name, today)
