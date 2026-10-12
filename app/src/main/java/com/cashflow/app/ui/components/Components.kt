@@ -33,7 +33,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChipDefaults
-import androidx.compose.material3.ChipColors
+import androidx.compose.material3.SelectableChipColors
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
@@ -213,7 +213,7 @@ fun LabeledTextField(
 
 /** A selected chip is filled with the accent (3:1 or more against the background) and its label turns dark/white. */
 @Composable
-fun selectedChipColors(): ChipColors = FilterChipDefaults.filterChipColors(
+fun selectedChipColors(): SelectableChipColors = FilterChipDefaults.filterChipColors(
     selectedContainerColor = MaterialTheme.colorScheme.primary,
     selectedLabelColor = MaterialTheme.colorScheme.onPrimary,
     selectedLeadingIconColor = MaterialTheme.colorScheme.onPrimary,
