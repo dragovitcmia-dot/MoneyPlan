@@ -484,6 +484,10 @@ def settings_flow(name):
     problems = []
     time.sleep(0.5)
     screenshot(f"{name}-settings-top")
+    swipe_up(0.75, 0.35)
+    time.sleep(0.6)
+    screenshot(f"{name}-settings-notifications")  # the Notifications card
+    scroll_to_top(4)
     if name in SETTINGS_BOTTOM_CONFIGS:
         for _ in range(8):
             swipe_up()
@@ -581,6 +585,26 @@ def wizard_walk(name):
     return []
 
 
+def notification_walk(name):
+    """The bell on Home, the notification center it opens (the test entries made in Developer tools), and back."""
+    problems = []
+    try:
+        tap_text(S["bell_desc"], scroll=False, contains=True)
+        time.sleep(1.2)
+        find(S["center_title"], scroll=False, timeout=8)
+        screenshot(f"{name}-notification-center")
+        find("Today: 3 to confirm", scroll=False, timeout=8, contains=True)
+        sh("input keyevent 4")  # Back closes the center
+        time.sleep(1)
+        screenshot(f"{name}-home-bell-read")
+    except NotFound as e:
+        screenshot(f"{name}-notification-center-FAILED")
+        print("  notification walk:", e)
+        sh("input keyevent 4")
+        problems.append(f"{name}: notification walk: {e}")
+    return problems
+
+
 def run_config(name, night, font, size, density):
     print(f"== {name}: night={night} font={font} size={size or 'default'}")
     configure(night, font, size, density)
@@ -590,6 +614,9 @@ def run_config(name, night, font, size, density):
         tap_text(TEXT_SETTINGS, scroll=False)
         tap_text(TEXT_LOAD_SAMPLE, timeout=60)  # scrolls down to the developer tools card (a long screen at large fonts)
         time.sleep(2.5)
+        tap_text(S["debug_send_test"], timeout=20)  # a sample notification (and bell entry) for the notification center
+        tap_text(S["debug_run_check"], timeout=20)
+        time.sleep(1.5)
         tap_text(TEXT_HOME, scroll=False)
         time.sleep(4)  # the count-up finishes
         screenshot(f"{name}-home")
@@ -598,6 +625,7 @@ def run_config(name, night, font, size, density):
         if spoken_available() != str(REF_BALANCE):
             extra.append(f"{name}: Available should be {REF_BALANCE} while nothing is accepted, but is {spoken_available()}")
         # Tapping a waiting card opens the accept sheet: a red cross and a green check.
+        extra += notification_walk(name)
         scroll_to_top(3)
         tap_text_midscreen("Sunday expense")
         time.sleep(1.2)

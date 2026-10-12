@@ -25,7 +25,10 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.border
 import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.layout.size
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
 import androidx.compose.foundation.layout.fillMaxSize
@@ -81,6 +84,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.cashflow.app.R
+import com.cashflow.app.ui.notifications.LocalNotificationPermission
 import com.cashflow.app.ui.components.selectedChipColors
 import com.cashflow.app.engine.AmountInput
 import com.cashflow.app.engine.AppDates
@@ -166,6 +170,7 @@ fun EntryComposer(
     day: LocalDate? = null,
 ) {
     val scope = rememberCoroutineScope()
+    val permission = LocalNotificationPermission.current
     val haptics = rememberHaptics()
     val colors = MaterialTheme.cashflow
     val isExpense = kind == TxKind.EXPENSE
@@ -233,6 +238,7 @@ fun EntryComposer(
         scope.launch {
             saving = true
             onSave(built)
+            permission?.onPaymentAdded() // the first payment is the moment to ask for the notification permission
             haptics.confirm()
             onSaved(savedMessage)
             onDismiss()
@@ -672,39 +678,42 @@ private fun timingLine(form: EntryFormState): String = when (form.timing) {
     }
 }
 
-private val WeekdayShape = RoundedCornerShape(8.dp)
-
-/** The seven weekdays in an even grid: rows of four and three, every cell the same width and 48 dp tall. */
+/** The seven days as round buttons in ONE row, equal widths, in the week's order for the region. */
 @Composable
 private fun WeekdayGrid(selected: Set<DayOfWeek>, onToggle: (DayOfWeek) -> Unit) {
-    val days = DayOfWeek.entries
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        for (row in days.chunked(4)) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                for (dow in row) WeekdayCell(dow, dow in selected, { onToggle(dow) }, Modifier.weight(1f))
-                repeat(4 - row.size) { Spacer(Modifier.weight(1f)) }
-            }
-        }
+    Row(Modifier.fillMaxWidth()) {
+        for (dow in AppDates.weekOrder()) WeekdayCircle(dow, dow in selected, { onToggle(dow) }, Modifier.weight(1f))
     }
 }
 
-/** Selected: accent fill with dark label. Unselected: transparent with a visible outline and a normal label. */
+/**
+ * The tap area is the full column width by 48 dp; the visible circle is 38 dp. Selected: accent fill with a dark bold
+ * letter. Unselected: an outline. Spoken as the full day name.
+ */
 @Composable
-private fun WeekdayCell(dow: DayOfWeek, selected: Boolean, onClick: () -> Unit, modifier: Modifier) {
+private fun WeekdayCircle(dow: DayOfWeek, selected: Boolean, onClick: () -> Unit, modifier: Modifier) {
     val colors = MaterialTheme.colorScheme
+    val name = AppDates.weekdayFull(dow)
     Box(
-        modifier.height(48.dp).clip(WeekdayShape)
-            .background(if (selected) colors.primary else Color.Transparent)
-            .border(1.dp, if (selected) colors.primary else colors.outline, WeekdayShape)
-            .selectable(selected = selected, onClick = onClick, role = Role.Checkbox),
+        modifier.height(48.dp)
+            .selectable(selected = selected, onClick = onClick, role = Role.Checkbox)
+            .semantics { contentDescription = name },
         contentAlignment = Alignment.Center,
     ) {
-        Text(
-            AppDates.weekdayShort(dow),
-            style = MaterialTheme.typography.titleSmall,
-            color = if (selected) colors.onPrimary else colors.onSurface,
-            fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
-            maxLines = 1,
-        )
+        Box(
+            Modifier.size(38.dp).clip(CircleShape)
+                .background(if (selected) colors.primary else Color.Transparent)
+                .border(1.dp, if (selected) colors.primary else colors.outline, CircleShape),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                AppDates.weekdayLetter(dow),
+                style = MaterialTheme.typography.titleSmall,
+                color = if (selected) colors.onPrimary else colors.onSurface,
+                fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+                maxLines = 1,
+                modifier = Modifier.clearAndSetSemantics {},
+            )
+        }
     }
 }

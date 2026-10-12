@@ -15,7 +15,7 @@ android {
         targetSdk = 35
         // CI run number so every build can install over the previous one; 1 for local builds.
         versionCode = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 1
-        versionName = "0.6.3"
+        versionName = "0.7.0"
     }
 
     // A fixed, committed debug key: every CI build is signed identically and updates in place.
@@ -94,6 +94,8 @@ dependencies {
     implementation("androidx.room:room-runtime:$room")
     implementation("androidx.room:room-ktx:$room")
     ksp("androidx.room:room-compiler:$room")
+
+    implementation("androidx.work:work-runtime-ktx:2.9.1")
 
     testImplementation("junit:junit:4.13.2")
 }

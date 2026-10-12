@@ -310,4 +310,36 @@
     <string name="clear_title">Erase everything?</string>
     <string name="clear_body">Erases all entries, repeating items and settings. This cannot be undone.</string>
     <string name="clear_confirm">Erase everything</string>
+
+    <!-- Notifications, bell, notification center -->
+    <string name="bell_desc">Notifications</string>
+    <string name="bell_desc_unread">Notifications, %1$d unread</string>
+    <string name="center_title">Notifications</string>
+    <string name="center_mark_all">Mark all read</string>
+    <string name="center_empty">Nothing here yet.</string>
+    <string name="center_today">Today</string>
+    <string name="center_earlier">Earlier</string>
+    <string name="center_back">Back</string>
+    <string name="center_remove">Remove</string>
+    <string name="center_unread_marker">Unread</string>
+    <string name="channel_payments">Payments</string>
+    <string name="channel_heads_up">Heads-up</string>
+    <string name="notif_card_title">Notifications</string>
+    <string name="notif_master_title">Notifications</string>
+    <string name="notif_master_helper">Reminders about payments and shortages. Quiet from 22:00 to 08:00.</string>
+    <string name="notif_headsup_title">Heads-up</string>
+    <string name="notif_headsup_helper">A week and a day before a payment.</string>
+    <string name="notif_keep_title">Keep reminding every 2 hours</string>
+    <string name="notif_keep_helper">Until what is due today is answered.</string>
+    <string name="notif_shortage_title">Shortage alerts</string>
+    <string name="notif_shortage_helper">When money runs short in the next 60 days.</string>
+    <string name="notif_perm_ok">Allowed by the system.</string>
+    <string name="notif_perm_blocked">Blocked by the system. The bell still works.</string>
+    <string name="notif_perm_open">Open notification settings</string>
+    <string name="notif_battery_hint">Battery saver can delay reminders. Allow background use in the app info.</string>
+    <string name="notif_battery_open">Open app info</string>
+    <string name="debug_send_test">Send test notification</string>
+    <string name="debug_run_check">Run reminder check now</string>
+    <string name="debug_check_done">Reminder check done: %1$d new</string>
+    <string name="weekday_circle_selected">%1$s, selected</string>
 </resources>

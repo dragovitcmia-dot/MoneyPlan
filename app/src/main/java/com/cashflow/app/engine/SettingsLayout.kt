@@ -13,7 +13,7 @@ object SettingsConfig {
 }
 
 /** Settings is only about the app itself: repeating payments are made and managed from Home and an item's details. */
-enum class SettingsCard { INCOME, STARTING_POINT, APP_UPDATES, DEVELOPER_TOOLS }
+enum class SettingsCard { INCOME, NOTIFICATIONS, STARTING_POINT, APP_UPDATES, DEVELOPER_TOOLS }
 
 /** What the Settings screen shows, decided without any UI. */
 data class SettingsLayout(
@@ -31,6 +31,7 @@ object SettingsPlan {
     ): SettingsLayout = SettingsLayout(
         cards = buildList {
             add(SettingsCard.INCOME)
+            add(SettingsCard.NOTIFICATIONS)
             add(SettingsCard.STARTING_POINT)
             add(SettingsCard.APP_UPDATES)
             if (showDeveloperTools) add(SettingsCard.DEVELOPER_TOOLS) // always last

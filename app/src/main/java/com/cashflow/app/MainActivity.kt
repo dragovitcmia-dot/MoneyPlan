@@ -4,7 +4,10 @@ import android.os.Bundle
 import android.util.Log
 import android.provider.Settings
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.tween
@@ -31,6 +34,16 @@ import androidx.compose.ui.unit.Density
 import com.cashflow.app.ui.calendar.CalendarScreen
 import com.cashflow.app.ui.calendar.CalendarViewModel
 import com.cashflow.app.ui.components.BottomTabBar
+import com.cashflow.app.ui.notifications.AppTopBar
+import com.cashflow.app.ui.notifications.LocalNotificationPermission
+import com.cashflow.app.ui.notifications.NotificationCenterScreen
+import com.cashflow.app.ui.notifications.NotificationPermission
+import com.cashflow.app.engine.NotificationRoute
+import androidx.compose.runtime.mutableStateOf
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.runtime.rememberCoroutineScope
+import java.time.LocalDate
+import java.time.YearMonth
 import com.cashflow.app.ui.components.NavTab
 import com.cashflow.app.ui.upcoming.UpcomingScreen
 import com.cashflow.app.ui.upcoming.UpcomingViewModel
@@ -69,9 +82,28 @@ class MainActivity : ComponentActivity() {
         super.attachBaseContext(newBase.createConfigurationContext(config))
     }
 
+    /** A tap on a notification: where to go (Upcoming, or the Calendar on a date). Consumed by the composition. */
+    private var navRequest by mutableStateOf<NavRequest?>(null)
+
+    private class NavRequest(val route: NotificationRoute, val date: LocalDate?)
+
+    private fun readRequest(intent: android.content.Intent?) {
+        val route = intent?.getStringExtra(EXTRA_ROUTE)?.let { runCatching { NotificationRoute.valueOf(it) }.getOrNull() } ?: return
+        val date = intent.getStringExtra(EXTRA_DATE)?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
+        intent.removeExtra(EXTRA_ROUTE)
+        navRequest = NavRequest(route, date)
+    }
+
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        readRequest(intent)
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        if (savedInstanceState == null) readRequest(intent)
         val app = application as CashflowApp
         val freshLaunch = savedInstanceState == null
         setContent {
@@ -86,7 +118,42 @@ class MainActivity : ComponentActivity() {
                 val upcomingList = rememberLazyListState()
                 val settingsScroll = rememberScrollState()
                 var tab by rememberSaveable { mutableIntStateOf(0) }
+                var showCenter by rememberSaveable { mutableStateOf(false) }
                 val snackbar = remember { SnackbarHostState() }
+                val unread by app.notificationCenter.unread.collectAsStateWithLifecycle(0)
+
+                // The notification permission is asked in context (after the first payment, when reminders are switched on).
+                val permissionHolder = remember { arrayOfNulls<NotificationPermission>(1) }
+                val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
+                    permissionHolder[0]?.refresh()
+                }
+                val permission = remember {
+                    NotificationPermission(app.notificationPoster, app.notificationPrefs) {
+                        launcher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+                    }.also { permissionHolder[0] = it }
+                }
+
+                fun navigate(route: NotificationRoute, date: LocalDate?) {
+                    showCenter = false
+                    when (route) {
+                        NotificationRoute.UPCOMING -> tab = 2
+                        NotificationRoute.CALENDAR -> {
+                            tab = 1
+                            if (date != null) {
+                                calendar.showMonth(YearMonth.from(date))
+                                calendar.select(date)
+                            }
+                        }
+                    }
+                }
+                val request = navRequest
+                LaunchedEffect(request) {
+                    if (request != null) {
+                        navigate(request.route, request.date)
+                        navRequest = null
+                    }
+                }
+                BackHandler(enabled = showCenter) { showCenter = false }
 
                 // The hero odometer lives here, above the tabs, so switching tabs never touches it. The launch
                 // count-down plays ONLY on a fresh start (no saved state); returning from the background,
@@ -105,9 +172,11 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
+                CompositionLocalProvider(LocalNotificationPermission provides permission) {
                 Scaffold(
                     containerColor = MaterialTheme.colorScheme.background,
                     snackbarHost = { SnackbarHost(snackbar) },
+                    topBar = { AppTopBar(unread = unread, onBell = { showCenter = !showCenter }) },
                     bottomBar = {
                         // Four labelled tabs. The labels follow the font size up to 1.3x and then shrink to fit,
                         // so "Calendar" and "Upcoming" never get cut off.
@@ -136,13 +205,24 @@ class MainActivity : ComponentActivity() {
                                 else -> SettingsScreen(settings, app.repository, app.updateManager, padding, settingsScroll)
                             }
                         }
-                        // Content that scrolls up slides under a solid strip, never under the clock and icons.
-                        Box(
-                            Modifier.align(Alignment.TopStart).fillMaxWidth()
-                                .height(WindowInsets.statusBars.asPaddingValues().calculateTopPadding())
-                                .background(MaterialTheme.colorScheme.background),
-                        )
+                        if (showCenter) {
+                            // The notification center covers the tab content (the bars stay); Back or the arrow closes it.
+                            Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+                                NotificationCenterScreen(
+                                    app = app,
+                                    contentPadding = padding,
+                                    onClose = { showCenter = false },
+                                    onOpen = { entry ->
+                                        navigate(
+                                            entry.type.routeOf(),
+                                            entry.relatedDate,
+                                        )
+                                    },
+                                )
+                            }
+                        }
                     }
+                }
                 }
             }
         }
@@ -151,4 +231,13 @@ class MainActivity : ComponentActivity() {
     /** False when the user turned system animations off (animator duration scale 0): show final values at once. */
     private fun animationsEnabled(): Boolean =
         Settings.Global.getFloat(contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) > 0f
+
+    companion object {
+        const val EXTRA_ROUTE = "notification_route"
+        const val EXTRA_DATE = "notification_date"
+    }
 }
+
+/** Shortage entries open the Calendar on their date; everything else opens Upcoming. */
+private fun com.cashflow.app.engine.NotificationType.routeOf(): NotificationRoute =
+    if (this == com.cashflow.app.engine.NotificationType.SHORTAGE) NotificationRoute.CALENDAR else NotificationRoute.UPCOMING

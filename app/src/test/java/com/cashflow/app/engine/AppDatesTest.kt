@@ -63,4 +63,16 @@ class AppDatesTest {
         }
         assertTrue(AppDates.LOCALE == Locale.ENGLISH)
     }
+
+    @Test fun the_week_starts_where_asked_and_has_seven_distinct_days() {
+        assertEquals(listOf("M", "T", "W", "T", "F", "S", "S"), AppDates.weekOrder(java.time.DayOfWeek.MONDAY).map(AppDates::weekdayLetter))
+        assertEquals(listOf("S", "M", "T", "W", "T", "F", "S"), AppDates.weekOrder(java.time.DayOfWeek.SUNDAY).map(AppDates::weekdayLetter))
+        assertEquals(listOf("S", "S", "M", "T", "W", "T", "F"), AppDates.weekOrder(java.time.DayOfWeek.SATURDAY).map(AppDates::weekdayLetter))
+        assertEquals(7, AppDates.weekOrder(java.time.DayOfWeek.WEDNESDAY).toSet().size)
+    }
+
+    @Test fun spoken_day_names_are_the_full_english_names() {
+        assertEquals("Monday", AppDates.weekdayFull(java.time.DayOfWeek.MONDAY))
+        assertEquals("Sunday", AppDates.weekdayFull(java.time.DayOfWeek.SUNDAY))
+    }
 }

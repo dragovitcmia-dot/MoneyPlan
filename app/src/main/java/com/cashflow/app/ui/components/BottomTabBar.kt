@@ -77,7 +77,7 @@ private fun TabCell(tab: NavTab, selected: Boolean, onClick: () -> Unit, modifie
             onClick = onClick,
             role = Role.Tab,
             interactionSource = source,
-            indication = ripple(bounded = true),
+            indication = ripple(bounded = true, color = colors.onSurface.copy(alpha = 0.10f)), // a very faint press feedback
         ),
         contentAlignment = Alignment.Center,
     ) {
@@ -90,22 +90,16 @@ private fun TabCell(tab: NavTab, selected: Boolean, onClick: () -> Unit, modifie
             )
         }
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Box(
-                Modifier.width(56.dp).height(32.dp).clip(RoundedCornerShape(10.dp))
-                    .background(if (selected) colors.primaryContainer else colors.surface),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    tab.icon,
-                    contentDescription = null,
-                    modifier = Modifier.size(NavBarSpec.ICON_DP.dp),
-                    tint = if (selected) colors.onPrimaryContainer else colors.onSurfaceVariant,
-                )
-            }
-            Spacer(Modifier.height(2.dp))
+            Icon(
+                tab.icon,
+                contentDescription = null,
+                modifier = Modifier.size(NavBarSpec.ICON_DP.dp),
+                tint = if (selected) colors.primary else colors.onSurfaceVariant,
+            )
+            Spacer(Modifier.height(4.dp))
             FitText(
                 stringResource(tab.label),
-                if (selected) colors.onSurface else colors.onSurfaceVariant,
+                if (selected) colors.primary else colors.onSurfaceVariant,
                 MaterialTheme.typography.labelMedium.copy(fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium),
             )
         }

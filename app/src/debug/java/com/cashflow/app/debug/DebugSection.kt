@@ -16,6 +16,9 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import android.widget.Toast
+import androidx.compose.ui.platform.LocalContext
+import com.cashflow.app.CashflowApp
 import com.cashflow.app.R
 import com.cashflow.app.data.LedgerRepository
 import com.cashflow.app.ui.components.AppButton
@@ -28,6 +31,8 @@ import java.time.LocalDate
 @Composable
 fun DebugSection(repository: LedgerRepository, onDataChanged: () -> Unit) {
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+    val app = context.applicationContext as CashflowApp
     var confirmClear by remember { mutableStateOf(false) }
 
     SectionCard {
@@ -46,6 +51,23 @@ fun DebugSection(repository: LedgerRepository, onDataChanged: () -> Unit) {
                 }
             },
             modifier = Modifier.fillMaxWidth(),
+        )
+        AppButton(
+            stringResource(R.string.debug_send_test),
+            onClick = { scope.launch { app.reminderRunner.sendTest() } },
+            modifier = Modifier.fillMaxWidth(),
+            style = AppButtonStyle.Outlined,
+        )
+        AppButton(
+            stringResource(R.string.debug_run_check),
+            onClick = {
+                scope.launch {
+                    val done = app.reminderRunner.run()
+                    Toast.makeText(context, context.getString(R.string.debug_check_done, done.size), Toast.LENGTH_SHORT).show()
+                }
+            },
+            modifier = Modifier.fillMaxWidth(),
+            style = AppButtonStyle.Outlined,
         )
         AppButton(
             stringResource(R.string.debug_clear_all),
