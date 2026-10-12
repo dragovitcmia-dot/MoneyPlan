@@ -142,6 +142,28 @@ def tap_text(text, **kw):
     time.sleep(0.8)
 
 
+def tap_text_midscreen(text, attempts=8):
+    """Scrolls until `text` is in the middle band of the screen (clear of the bottom bar), then taps it."""
+    for _ in range(attempts):
+        nodes = dump_nodes() or []
+        hits = [b for t, d, b in nodes if t.strip() == text or d.strip() == text]
+        if hits:
+            _, h = screen_size(nodes)
+            x1, y1, x2, y2 = sorted(hits, key=lambda b: (b[1], b[0]))[0]
+            cy = (y1 + y2) // 2
+            if h * 0.15 < cy < h * 0.65:
+                sh(f"input tap {(x1 + x2) // 2} {cy}")
+                time.sleep(0.8)
+                return
+            if cy >= h * 0.65:
+                swipe_up(0.7, 0.4)
+            else:
+                swipe_down()
+        else:
+            swipe_up(0.7, 0.4)
+    raise NotFound(f"text {text!r} never reached the middle of the screen")
+
+
 def configure(night, font, size, density):
     sh(f"cmd uimode night {'yes' if night else 'no'}")
     sh(f"settings put system font_scale {font}")
@@ -440,6 +462,8 @@ def settings_flow(name):
         time.sleep(1)
     except NotFound as e:
         problems.append(f"{name}: the ending income series is not listed with an end date ({e})")
+    scroll_to_top()
+    find(TEXT_REPEATING, scroll=True)
     tap_text("Sunday expense", scroll=True)
     time.sleep(1)
     screenshot(f"{name}-repeating-edit")
@@ -514,11 +538,15 @@ def run_config(name, night, font, size, density):
         if spoken_available() != str(REF_BALANCE):
             extra.append(f"{name}: Available should be {REF_BALANCE} while nothing is accepted, but is {spoken_available()}")
         # Tapping a waiting card opens the accept sheet: a red cross and a green check.
-        tap_text("Sunday expense", scroll=True)
-        time.sleep(1)
-        find(S["action_accept"], scroll=True, timeout=15)
-        find(S["action_reject"], scroll=False, timeout=8)
+        scroll_to_top(3)
+        tap_text_midscreen("Sunday expense")
+        time.sleep(1.2)
         screenshot(f"{name}-home-accept-sheet")
+        try:
+            find(S["action_accept"], scroll=False, timeout=6)
+        except NotFound:
+            find(S["action_accept"], scroll=True, timeout=15)  # a short screen: the sheet scrolls
+        find(S["action_reject"], scroll=False, timeout=8)
         sh("input keyevent 4")
         time.sleep(1.2)
         tap_text(TEXT_EXPENSE)
