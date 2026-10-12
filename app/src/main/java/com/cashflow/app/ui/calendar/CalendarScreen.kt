@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -44,6 +45,8 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -79,7 +82,8 @@ import com.cashflow.app.ui.components.AppButtonStyle
 import com.cashflow.app.ui.home.EntryComposer
 import com.cashflow.app.ui.home.HomeViewModel
 import com.cashflow.app.ui.items.ItemEditSheet
-import com.cashflow.app.ui.items.RuleEditorHost
+import com.cashflow.app.ui.items.ItemDetails
+import com.cashflow.app.ui.items.RejectConfirmDialog
 import com.cashflow.app.ui.items.rememberItemActions
 import com.cashflow.app.ui.rememberHaptics
 import com.cashflow.app.ui.settings.SettingsViewModel
@@ -134,7 +138,7 @@ fun CalendarScreen(
     var sheetDate by rememberSaveable { mutableStateOf<String?>(null) }
     var composerKind by rememberSaveable { mutableStateOf<String?>(null) }
     var editing by remember { mutableStateOf<Transaction?>(null) }
-    var editingSeries by remember { mutableStateOf<Long?>(null) }
+    var changing by remember { mutableStateOf<Transaction?>(null) }
 
     fun goToMonth(month: YearMonth) {
         scope.launch { pager.animateScrollToPage(MonthPages.pageOf(month)) }
@@ -154,24 +158,21 @@ fun CalendarScreen(
 
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val cellWidth = (maxWidth - GridPadding * 2) / CalendarGrid.DAYS_PER_WEEK
+        // From 1.5x text the content cannot be made to fit, so the screen may scroll (the only case it does).
+        val scrollMode = density.fontScale >= 1.5f
         // Amounts only when a typical one fits; otherwise (large font, very narrow cells) coloured dots.
-        val dots = remember(density, cellWidth, amountStyle) {
-            density.fontScale >= 1.5f ||
+        val widthDots = remember(density, cellWidth, amountStyle) {
+            scrollMode ||
                 measurer.measure("-8888", amountStyle).size.width > with(density) { (cellWidth - CellGap * 2 - 2.dp).toPx() }
         }
         val dayLine = with(density) { (16.sp * 1.3f).toDp() }
         val amountLine = with(density) { (13.sp * 1.3f).toDp() }
-        // Normal size: about 92dp (day number, expense, income, and the day's balance at the bottom).
-        val rowHeight = if (dots) dayLine + 6.dp + 12.dp + 6.dp else maxOf(92.dp, dayLine + amountLine * 3 + 22.dp)
+        // A cell with day number, expense, income and the day's balance needs about this much height.
+        val amountsRow = maxOf(92.dp, dayLine + amountLine * 3 + 22.dp)
+        val topPad = padding.calculateTopPadding() + 12.dp
 
-        Column(
-            Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(
-                top = padding.calculateTopPadding() + 12.dp,
-                bottom = padding.calculateBottomPadding() + 24.dp,
-            ),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            // Month title with its arrows; the Today button sits under it (the same layout at every font size).
+        // Month title with its arrows; the Today button sits under it (the same layout at every font size).
+        val header: @Composable () -> Unit = {
             Column(
                 Modifier.fillMaxWidth().padding(horizontal = 12.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
@@ -201,18 +202,18 @@ fun CalendarScreen(
                     style = AppButtonStyle.Tonal,
                 )
             }
-
             shortDay?.let { day -> ShortBanner(day) {
                 haptics.tick()
                 calendar.select(day)
                 goToMonth(YearMonth.from(day))
             } }
-
             WeekdayHeader(firstDay)
+        }
 
+        val pages: @Composable (Modifier, Boolean, Dp?) -> Unit = { modifier, dots, fixedRow ->
             HorizontalPager(
                 state = pager,
-                modifier = Modifier.fillMaxWidth().height(rowHeight * CalendarGrid.FIXED_ROWS),
+                modifier = modifier,
                 key = { it },
                 verticalAlignment = Alignment.Top,
             ) { page ->
@@ -220,7 +221,7 @@ fun CalendarScreen(
                     summary = months[MonthPages.monthOf(page)],
                     selected = selected,
                     dots = dots,
-                    rowHeight = rowHeight,
+                    fixedRowHeight = fixedRow,
                     dayLine = dayLine,
                     amountStyle = amountStyle,
                     onDayClick = { day ->
@@ -229,14 +230,38 @@ fun CalendarScreen(
                     },
                 )
             }
+        }
 
-            if (dots) {
+        if (scrollMode) {
+            Column(
+                Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(
+                    top = topPad,
+                    bottom = padding.calculateBottomPadding() + 24.dp,
+                ),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                header()
+                val rowHeight = dayLine + 6.dp + 12.dp + 6.dp
+                pages(Modifier.fillMaxWidth().height(rowHeight * CalendarGrid.FIXED_ROWS), true, rowHeight)
                 Text(
                     stringResource(R.string.calendar_dots_hint),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(horizontal = 20.dp),
                 )
+            }
+        } else {
+            // The grid takes exactly the height between the header and the bottom bar: no scrolling, no dead space.
+            Column(
+                Modifier.fillMaxSize().padding(top = topPad, bottom = padding.calculateBottomPadding() + 4.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                header()
+                BoxWithConstraints(Modifier.fillMaxWidth().weight(1f)) {
+                    // Judged for the tallest month (6 rows): too short for amounts means dots, like narrow cells.
+                    val shortRows = CalendarGrid.rowHeight(maxHeight.value, CalendarGrid.FIXED_ROWS).dp < amountsRow
+                    pages(Modifier.fillMaxSize(), widthDots || shortRows, null)
+                }
             }
         }
     }
@@ -272,18 +297,19 @@ fun CalendarScreen(
     }
 
     editing?.let { tx ->
-        ItemEditSheet(
+        ItemDetails(
             tx = tx,
+            home = home,
             actions = actions,
-            onDismiss = { editing = null },
-            onEditSeries = { editingSeries = tx.recurringRuleId },
             today = today,
+            onDismiss = { editing = null },
+            onEdit = { changing = tx },
         )
     }
-
-    editingSeries?.let { ruleId ->
-        RuleEditorHost(ruleId = ruleId, settings = settings, onDismiss = { editingSeries = null })
+    changing?.let { tx ->
+        ItemEditSheet(tx = tx, actions = actions, onDismiss = { changing = null }, today = today)
     }
+    RejectConfirmDialog(actions)
 }
 
 @Composable
@@ -333,21 +359,42 @@ private fun MonthGrid(
     summary: MonthSummary?,
     selected: LocalDate?,
     dots: Boolean,
-    rowHeight: Dp,
+    /** A fixed row height (the scrolling fallback); null: the rows share the available height equally. */
+    fixedRowHeight: Dp?,
     dayLine: Dp,
     amountStyle: androidx.compose.ui.text.TextStyle,
     onDayClick: (DaySummary) -> Unit,
 ) {
+    val fill = if (fixedRowHeight == null) Modifier.fillMaxSize() else Modifier.fillMaxWidth()
     if (summary == null) {
         // Nothing numeric until this month has been computed.
-        Box(Modifier.fillMaxWidth().height(rowHeight * CalendarGrid.FIXED_ROWS), contentAlignment = Alignment.Center) {
+        Box(fill, contentAlignment = Alignment.Center) {
             Text(stringResource(R.string.cal_loading), color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         return
     }
-    Column(Modifier.fillMaxWidth().padding(horizontal = GridPadding)) {
+    val rows = summary.weeks.size
+    val horizontalLine = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.35f)
+    val verticalLine = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)
+    Column(
+        (if (fixedRowHeight == null) fill else Modifier.fillMaxWidth().height(fixedRowHeight * rows))
+            .padding(horizontal = GridPadding)
+            .drawBehind {
+                // Thick lines between the week rows, faint ones between the day columns.
+                val thick = 2.dp.toPx()
+                val thin = 1.dp.toPx()
+                for (i in 1 until CalendarGrid.DAYS_PER_WEEK) {
+                    val x = size.width * i / CalendarGrid.DAYS_PER_WEEK
+                    drawLine(verticalLine, Offset(x, 0f), Offset(x, size.height), strokeWidth = thin)
+                }
+                for (j in 1 until rows) {
+                    val y = size.height * j / rows
+                    drawLine(horizontalLine, Offset(0f, y), Offset(size.width, y), strokeWidth = thick)
+                }
+            },
+    ) {
         for (week in summary.weeks) {
-            Row(Modifier.fillMaxWidth()) {
+            Row(if (fixedRowHeight == null) Modifier.fillMaxWidth().weight(1f) else Modifier.fillMaxWidth().height(fixedRowHeight)) {
                 for (day in week) {
                     DayCell(
                         day = day,
@@ -356,7 +403,7 @@ private fun MonthGrid(
                         dayLine = dayLine,
                         amountStyle = amountStyle,
                         onClick = onDayClick,
-                        modifier = Modifier.weight(1f).height(rowHeight),
+                        modifier = Modifier.weight(1f).fillMaxHeight(),
                     )
                 }
             }

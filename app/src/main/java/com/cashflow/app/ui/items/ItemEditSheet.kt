@@ -51,7 +51,6 @@ fun ItemEditSheet(
     tx: Transaction,
     actions: ItemActions,
     onDismiss: () -> Unit,
-    onEditSeries: () -> Unit,
     today: LocalDate,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -86,9 +85,6 @@ fun ItemEditSheet(
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                TextButton(onClick = onEditSeries, modifier = Modifier.heightIn(min = 56.dp)) {
-                    Text(stringResource(R.string.item_edit_series), style = MaterialTheme.typography.titleSmall)
-                }
             }
 
             LabeledTextField(
@@ -119,7 +115,7 @@ fun ItemEditSheet(
             if (ItemEdits.canAnswer(tx, today)) {
                 // Red cross rejects (the edits are dropped), green check saves the edits and accepts.
                 AnswerButtons(
-                    onReject = { close { actions.skip(tx) } },
+                    onReject = { close { actions.requestReject(tx) } },
                     onAccept = { amount?.let { a -> close { actions.done(tx, a, description, date) } } },
                     acceptEnabled = amount != null,
                 )

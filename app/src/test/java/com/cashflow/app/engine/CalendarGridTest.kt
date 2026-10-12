@@ -93,4 +93,28 @@ class CalendarGridTest {
         val g = grid(2026, 10, DayOfWeek.MONDAY)
         assertTrue(g.flatten().all { it is LocalDate })
     }
+
+    @Test fun a_month_always_has_five_or_six_rows() {
+        for (month in 1..12) {
+            val rows = CalendarGrid.weeks(YearMonth.of(2027, month), DayOfWeek.MONDAY, CalendarGrid.MIN_ROWS).size
+            assertTrue("month $month has $rows rows", rows == 5 || rows == 6)
+        }
+    }
+
+    @Test fun row_height_divides_the_available_height_exactly() {
+        // small phone (about 300 dp for the grid) and large phone (about 640 dp), 5 and 6 rows
+        assertEquals(60f, CalendarGrid.rowHeight(300f, 5), 0.001f)
+        assertEquals(50f, CalendarGrid.rowHeight(300f, 6), 0.001f)
+        assertEquals(128f, CalendarGrid.rowHeight(640f, 5), 0.001f)
+        assertEquals(640f / 6, CalendarGrid.rowHeight(640f, 6), 0.001f)
+        for (rows in 5..6) for (h in listOf(300f, 480f, 640f, 900f)) {
+            assertEquals(h, CalendarGrid.rowHeight(h, rows) * rows, 0.001f) // the rows add up to the space: no dead space
+        }
+    }
+
+    @Test fun row_height_of_nothing_is_zero() {
+        assertEquals(0f, CalendarGrid.rowHeight(0f, 6), 0f)
+        assertEquals(0f, CalendarGrid.rowHeight(-5f, 6), 0f)
+        assertEquals(0f, CalendarGrid.rowHeight(300f, 0), 0f)
+    }
 }

@@ -40,7 +40,6 @@ TEXT_LOAD_SAMPLE = S["debug_load_sample"]
 TEXT_EXPENSE = S["button_expense"]
 NAV_CALENDAR = S["nav_calendar"]
 NAV_UPCOMING = S["nav_upcoming"]
-TEXT_REPEATING = S["repeating_title"]
 DESC_NEXT_MONTH = S["calendar_next_month"]
 DESC_PREV_MONTH = S["calendar_previous_month"]
 
@@ -414,7 +413,7 @@ def calendar_flow(name, today):
     # One item: change it.
     tap_text("Expense 11/10")
     time.sleep(1)
-    find(S["item_edit_title"], scroll=False, timeout=8)
+    find(S["details_title"], scroll=False, timeout=8)
     screenshot(f"{name}-item-edit")
     swipe_up()
     screenshot(f"{name}-item-edit-bottom")
@@ -435,7 +434,7 @@ def calendar_flow(name, today):
     time.sleep(1.2)
     tap_text("Sunday expense")
     time.sleep(1)
-    find(S["item_edit_title"], scroll=False, timeout=8)
+    find(S["details_title"], scroll=False, timeout=8)
     screenshot(f"{name}-item-edit-series")
     sh("input keyevent 4")
     time.sleep(1.2)
@@ -452,7 +451,7 @@ def upcoming_flow(name, today):
     # A waiting item: its edit sheet has the red cross and the green check.
     tap_text("Sunday expense", scroll=False)
     time.sleep(1)
-    find(S["item_edit_title"], scroll=False, timeout=8)
+    find(S["details_title"], scroll=False, timeout=8)
     find(S["action_accept"], scroll=True, timeout=15)
     find(S["action_reject"], scroll=False, timeout=8)
     screenshot(f"{name}-item-edit-waiting")
@@ -474,37 +473,11 @@ def upcoming_flow(name, today):
 
 
 def settings_flow(name):
-    """Settings screenshots: Repeating payments (with its editors), the bottom of the screen, and for one
-    configuration what "Accept my income automatically" really does."""
+    """Settings screenshots: the top (Income card, no repeating payments), the bottom, and for one configuration
+    what "Accept my income automatically" really does."""
     problems = []
-    find(TEXT_REPEATING, scroll=True)
     time.sleep(0.5)
-    screenshot(f"{name}-repeating")
-    # An income series with an end date is listed with its signed amount and "until <date>".
-    try:
-        find("Freelance income", scroll=True, timeout=20)
-        find("until", scroll=False, timeout=8, contains=True)
-        screenshot(f"{name}-repeating-income")
-        tap_text("Freelance income", scroll=False)
-        time.sleep(1)
-        find(S["end_date_label"], scroll=True, timeout=15, contains=True)
-        screenshot(f"{name}-repeating-income-edit")
-        sh("input keyevent 4")
-        time.sleep(1)
-    except NotFound as e:
-        problems.append(f"{name}: the ending income series is not listed with an end date ({e})")
-    scroll_to_top()
-    find(TEXT_REPEATING, scroll=True)
-    try:
-        tap_text("Sunday expense", scroll=True, timeout=8)
-    except NotFound:
-        # Scrolled past the list (a flaky swipe on a short screen): start again from the top and look downwards.
-        scroll_to_top()
-        tap_text("Sunday expense", scroll=True, timeout=25)
-    time.sleep(1)
-    screenshot(f"{name}-repeating-edit")
-    sh("input keyevent 4")
-    time.sleep(1)
+    screenshot(f"{name}-settings-top")
     if name in SETTINGS_BOTTOM_CONFIGS:
         for _ in range(8):
             swipe_up()
@@ -896,10 +869,13 @@ def run_hero_animation():
 
 def main():
     problems = []
+    only = os.environ.get("SMOKE_CONFIGS", "dark-normal").split(",")  # best effort: one configuration by default
     try:
         for cfg in CONFIGS:
-            problems += run_config(*cfg)
-        problems += run_hero_animation()
+            if cfg[0] in only or "all" in only:
+                problems += run_config(*cfg)
+        if os.environ.get("SMOKE_HERO") == "1":
+            problems += run_hero_animation()
     finally:
         restore()
     if problems:

@@ -12,6 +12,15 @@ object CalendarGrid {
     /** Rows shown for every month so the pager page never changes height. */
     const val FIXED_ROWS = 6
 
+    /** The grid never has fewer rows than this: a month shows 5 or 6 week rows. */
+    const val MIN_ROWS = 5
+
+    /**
+     * Height of one week row when [rows] rows share [available] height exactly (any unit). The Calendar tab's
+     * grid fills the space between its header and the bottom bar, so there is nothing to scroll and no dead space.
+     */
+    fun rowHeight(available: Float, rows: Int): Float = if (rows <= 0 || available <= 0f) 0f else available / rows
+
     /**
      * The weeks that cover [month]: each row has 7 consecutive days starting on [firstDayOfWeek], with
      * the leading days of the previous month and the trailing days of the next one filling the first

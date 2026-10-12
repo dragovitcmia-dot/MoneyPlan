@@ -46,13 +46,13 @@ data class MonthSummary(val month: YearMonth, val weeks: List<List<DaySummary>>)
 }
 
 object CalendarSummaries {
-    /** Summaries of the whole grid of [month] (6 rows by default), built from the engine's forecast. */
+    /** Summaries of the whole grid of [month] (5 or 6 rows), built from the engine's forecast. */
     fun month(
         engine: BalanceEngine,
         rules: List<RecurringRule>,
         month: YearMonth,
         firstDayOfWeek: DayOfWeek,
-        minRows: Int = CalendarGrid.FIXED_ROWS,
+        minRows: Int = CalendarGrid.MIN_ROWS,
     ): MonthSummary {
         val grid = CalendarGrid.weeks(month, firstDayOfWeek, minRows)
         val from = grid.first().first()

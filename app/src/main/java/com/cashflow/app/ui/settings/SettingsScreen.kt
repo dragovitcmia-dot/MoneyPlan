@@ -15,6 +15,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
+import androidx.compose.material3.SelectableDates
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -88,7 +89,6 @@ fun SettingsScreen(
             for (card in layout.cards) {
                 when (card) {
                     SettingsCard.INCOME -> key(generation) { IncomeCard(viewModel, current) }
-                    SettingsCard.REPEATING_PAYMENTS -> RepeatingPaymentsCard(viewModel)
                     SettingsCard.STARTING_POINT -> key(generation) { StartingPointCard(viewModel, current, layout) }
                     SettingsCard.APP_UPDATES -> AppUpdatesSection(updateManager)
                     SettingsCard.DEVELOPER_TOOLS -> DebugSection(repository) { viewModel.reload { generation++ } }
@@ -158,7 +158,6 @@ private fun AmountField(label: String, initial: Long, allowNegative: Boolean, on
     )
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun DateField(label: String, value: LocalDate, display: String? = null, onPick: (LocalDate) -> Unit) {
     var open by remember { mutableStateOf(false) }
@@ -166,23 +165,34 @@ internal fun DateField(label: String, value: LocalDate, display: String? = null,
         Text(stringResource(R.string.field_value_format, label, display ?: value.format(DateFormat)))
     }
     if (open) {
-        val state = rememberDatePickerState(
-            initialSelectedDateMillis = value.atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli(),
-        )
-        DatePickerDialog(
-            onDismissRequest = { open = false },
-            confirmButton = {
-                TextButton(onClick = {
-                    state.selectedDateMillis?.let { ms ->
-                        // The picker works in UTC midnights; read the calendar date back in UTC.
-                        onPick(Instant.ofEpochMilli(ms).atZone(ZoneOffset.UTC).toLocalDate())
-                    }
-                    open = false
-                }) { Text(stringResource(R.string.action_ok)) }
-            },
-            dismissButton = { TextButton(onClick = { open = false }) { Text(stringResource(R.string.action_cancel)) } },
-        ) { DatePicker(state = state) }
+        DatePickerDialogFor(initial = value, onPick = onPick, onDismiss = { open = false })
     }
+}
+
+/** The date picker in a dialog. Days before [earliest] cannot be chosen. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+internal fun DatePickerDialogFor(initial: LocalDate, onPick: (LocalDate) -> Unit, onDismiss: () -> Unit, earliest: LocalDate? = null) {
+    val earliestMillis = earliest?.atStartOfDay(ZoneOffset.UTC)?.toInstant()?.toEpochMilli()
+    val state = rememberDatePickerState(
+        initialSelectedDateMillis = initial.atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli(),
+        selectableDates = object : SelectableDates {
+            override fun isSelectableDate(utcTimeMillis: Long) = earliestMillis == null || utcTimeMillis >= earliestMillis
+        },
+    )
+    DatePickerDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {
+            TextButton(onClick = {
+                state.selectedDateMillis?.let { ms ->
+                    // The picker works in UTC midnights; read the calendar date back in UTC.
+                    onPick(Instant.ofEpochMilli(ms).atZone(ZoneOffset.UTC).toLocalDate())
+                }
+                onDismiss()
+            }) { Text(stringResource(R.string.action_ok)) }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) } },
+    ) { DatePicker(state = state) }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)

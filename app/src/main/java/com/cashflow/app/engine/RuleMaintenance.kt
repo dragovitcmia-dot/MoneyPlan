@@ -66,6 +66,17 @@ object RuleMaintenance {
     fun stop(rule: RecurringRule, rows: List<Transaction>, today: LocalDate): RuleChange =
         RuleChange(rule.copy(endDate = minOf(today, rule.endDate ?: today)), futurePending(rows, today), emptyList())
 
+    /**
+     * "End series" from [from]: the last occurrence is the day before. PENDING occurrences dated [from] or later
+     * (and after today) are removed; everything dated today or earlier, and everything accepted or rejected, stays.
+     * A series that already ends earlier keeps its earlier end.
+     */
+    fun endFrom(rule: RecurringRule, rows: List<Transaction>, from: LocalDate, today: LocalDate): RuleChange {
+        val last = from.minusDays(1)
+        val removed = rows.filter { it.status == TxStatus.PENDING && it.date.isAfter(today) && !it.date.isBefore(from) }.map { it.id }
+        return RuleChange(rule.copy(endDate = minOf(last, rule.endDate ?: last)), removed, emptyList())
+    }
+
     /** A series that still produces (or may produce) occurrences: not ended before today. */
     fun isRunning(rule: RecurringRule, today: LocalDate): Boolean = rule.endDate == null || !rule.endDate.isBefore(today)
 
