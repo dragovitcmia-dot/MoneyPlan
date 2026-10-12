@@ -26,19 +26,15 @@ import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
 import com.cashflow.app.ui.calendar.CalendarScreen
 import com.cashflow.app.ui.calendar.CalendarViewModel
-import com.cashflow.app.ui.components.FitText
+import com.cashflow.app.ui.components.BottomTabBar
+import com.cashflow.app.ui.components.NavTab
 import com.cashflow.app.ui.upcoming.UpcomingScreen
 import com.cashflow.app.ui.upcoming.UpcomingViewModel
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -117,40 +113,16 @@ class MainActivity : ComponentActivity() {
                         // so "Calendar" and "Upcoming" never get cut off.
                         val density = LocalDensity.current
                         CompositionLocalProvider(LocalDensity provides Density(density.density, minOf(density.fontScale, 1.3f))) {
-                            NavigationBar(
-                                containerColor = MaterialTheme.colorScheme.surface,
-                                tonalElevation = 0.dp,
-                            ) {
-                                val colors = NavigationBarItemDefaults.colors(
-                                    indicatorColor = MaterialTheme.colorScheme.primaryContainer,
-                                    selectedIconColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                                    selectedTextColor = MaterialTheme.colorScheme.onSurface,
-                                    unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                                val tabs: List<Triple<Int, ImageVector, Int>> = listOf(
-                                    Triple(0, Icons.Filled.Home, R.string.nav_home),
-                                    Triple(1, Icons.Filled.DateRange, R.string.nav_calendar),
-                                    Triple(2, Icons.AutoMirrored.Filled.List, R.string.nav_upcoming),
-                                    Triple(3, Icons.Filled.Settings, R.string.nav_settings),
-                                )
-                                for ((index, icon, label) in tabs) {
-                                    NavigationBarItem(
-                                        selected = tab == index,
-                                        onClick = { tab = index },
-                                        icon = { Icon(icon, contentDescription = null) },
-                                        label = {
-                                            FitText(
-                                                stringResource(label),
-                                                if (tab == index) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
-                                                MaterialTheme.typography.labelMedium,
-                                            )
-                                        },
-                                        alwaysShowLabel = true,
-                                        colors = colors,
-                                    )
-                                }
-                            }
+                            BottomTabBar(
+                                tabs = listOf(
+                                    NavTab(Icons.Filled.Home, R.string.nav_home),
+                                    NavTab(Icons.Filled.DateRange, R.string.nav_calendar),
+                                    NavTab(Icons.AutoMirrored.Filled.List, R.string.nav_upcoming),
+                                    NavTab(Icons.Filled.Settings, R.string.nav_settings),
+                                ),
+                                selected = tab,
+                                onSelect = { tab = it },
+                            )
                         }
                     },
                 ) { padding ->

@@ -54,6 +54,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.cashflow.app.R
+import com.cashflow.app.ui.components.selectedChipColors
 import com.cashflow.app.engine.AppDates
 import com.cashflow.app.engine.Money
 import com.cashflow.app.engine.Transaction
@@ -62,6 +63,7 @@ import com.cashflow.app.engine.UpcomingFilter
 import com.cashflow.app.engine.UpcomingGroupKey
 import com.cashflow.app.engine.UpcomingRow
 import com.cashflow.app.ui.components.AppCard
+import com.cashflow.app.ui.components.selectedChipColors
 import com.cashflow.app.ui.components.quantityString
 import com.cashflow.app.ui.home.HomeViewModel
 import com.cashflow.app.ui.items.ItemEditSheet
@@ -124,6 +126,7 @@ fun UpcomingScreen(
                         onClick = { haptics.tick(); upcoming.setFilter(value) },
                         label = { Text(stringResource(label), style = MaterialTheme.typography.titleSmall) },
                         modifier = Modifier.heightIn(min = 56.dp),
+                        colors = selectedChipColors(),
                     )
                 }
             }
