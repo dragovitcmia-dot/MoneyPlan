@@ -276,6 +276,7 @@ fun EntryComposer(
                 modifier = Modifier.fillMaxWidth(),
                 color = accentFill,
                 trackColor = MaterialTheme.colorScheme.surfaceVariant,
+                drawStopIndicator = {},
             )
             Text(
                 stringResource(R.string.wizard_step_of, position, total),

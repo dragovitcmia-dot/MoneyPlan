@@ -256,7 +256,7 @@ def launch():
 
 # ---- calendar / upcoming / settings walk-through -------------------------------------------------------
 
-MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
+MONTHS = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"]  # the app writes dates like 05 OCT 2026
 
 
 def swipe_up(fraction_from=0.75, fraction_to=0.3):
@@ -283,7 +283,7 @@ def scroll_to_top(times=10):
 def visible_month_title():
     """(year, month) of the calendar title that is on screen, or None."""
     for t, _, _ in dump_nodes() or []:
-        m = re.fullmatch(r"([A-Z][a-z]+) (\d{4})", t.strip())
+        m = re.fullmatch(r"([A-Z]{3}) (\d{4})", t.strip())
         if m and m.group(1) in MONTHS:
             return int(m.group(2)), MONTHS.index(m.group(1)) + 1
     return None
@@ -306,13 +306,13 @@ def go_to_month(year, month):
 def cell_descriptions():
     """{date: content description} of the calendar cells, scrolling the tab once to reach the lower rows."""
     out = {}
-    pattern = re.compile(r"^[A-Za-z]+, ([A-Za-z]+) (\d+), (\d{4})")
+    pattern = re.compile(r"^[A-Z]{3} (\d{2}) ([A-Z]{3}) (\d{4})")
 
     def collect():
         for _, d, _ in dump_nodes() or []:
             m = pattern.match(d)
-            if m and m.group(1) in MONTHS:
-                out[(int(m.group(3)), MONTHS.index(m.group(1)) + 1, int(m.group(2)))] = d
+            if m and m.group(2) in MONTHS:
+                out[(int(m.group(3)), MONTHS.index(m.group(2)) + 1, int(m.group(1)))] = d
 
     collect()
     swipe_up()
@@ -410,7 +410,7 @@ def calendar_flow(name, today):
     problems += check_sample_numbers(name, today)
 
     # Day sheet of Nov 10: the closing balance sentence must match the reference model.
-    tap_text("November 10, 2026", scroll=False, contains=True)
+    tap_text("10 NOV 2026", scroll=False, contains=True)
     time.sleep(1.2)
     screenshot(f"{name}-day-sheet")
     nov10 = ref_closing(_dt.date(2026, 11, 10), today)
@@ -436,7 +436,7 @@ def calendar_flow(name, today):
     time.sleep(1.2)
 
     # An item that comes from a repeating payment (Sunday Nov 8).
-    tap_text("November 8, 2026", scroll=False, contains=True)
+    tap_text("08 NOV 2026", scroll=False, contains=True)
     time.sleep(1.2)
     tap_text("Sunday expense")
     time.sleep(1)

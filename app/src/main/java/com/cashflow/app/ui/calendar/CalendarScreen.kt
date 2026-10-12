@@ -301,7 +301,7 @@ private fun ShortBanner(day: LocalDate, onClick: () -> Unit) {
     Surface(
         onClick = onClick,
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).semantics { role = Role.Button; contentDescription = "$text. $action" },
-        shape = MaterialTheme.shapes.large,
+        shape = CellShape,
         color = MaterialTheme.colorScheme.errorContainer,
         contentColor = MaterialTheme.colorScheme.onErrorContainer,
     ) {
