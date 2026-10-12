@@ -5,10 +5,10 @@ import java.time.LocalDate
 
 enum class Timing { NOW, LATER, REPEATS }
 
-enum class PatternChoice { DAILY, WEEKLY, EVERY_N, MONTH_FIRST, MONTH_LAST, MONTH_DAY }
+enum class PatternChoice { DAILY, WEEKLY, EVERY_N, MONTH_FIRST, MONTH_LAST, MONTH_DAY, EVERY_2_WEEKS, YEARLY }
 
 /** A specific field that needs fixing, so the UI can highlight it with a plain-language message. */
-enum class FormProblem { AMOUNT_MISSING, EVERY_N_INVALID, DAY_OF_MONTH_INVALID, END_BEFORE_START }
+enum class FormProblem { AMOUNT_MISSING, EVERY_N_INVALID, DAY_OF_MONTH_INVALID, END_BEFORE_START, NAME_MISSING, DATE_IN_PAST }
 
 /**
  * Everything the Add expense / Add income form holds. The defaults are a valid form once an amount
@@ -68,13 +68,13 @@ sealed interface FormResult {
 }
 
 object EntryForm {
-    /** Schedule choices offered for [kind]: "every day" is for income, "every N days" for expenses. */
+    /**
+     * Frequencies offered for [kind]: the same five for expenses and income. "Monthly" is [PatternChoice.MONTH_DAY]
+     * on the start date's day of the month; "Every 2 weeks" and "Yearly" count from the start date.
+     */
+    @Suppress("UNUSED_PARAMETER")
     fun choicesFor(kind: TxKind): List<PatternChoice> =
-        if (kind == TxKind.INCOME) {
-            listOf(PatternChoice.WEEKLY, PatternChoice.DAILY, PatternChoice.MONTH_FIRST, PatternChoice.MONTH_LAST, PatternChoice.MONTH_DAY)
-        } else {
-            listOf(PatternChoice.WEEKLY, PatternChoice.EVERY_N, PatternChoice.MONTH_FIRST, PatternChoice.MONTH_LAST, PatternChoice.MONTH_DAY)
-        }
+        listOf(PatternChoice.DAILY, PatternChoice.WEEKLY, PatternChoice.EVERY_2_WEEKS, PatternChoice.MONTH_DAY, PatternChoice.YEARLY)
 
     /**
      * Turns the form into an entry, or lists exactly which fields are wrong.
@@ -104,6 +104,8 @@ object EntryForm {
                     PatternChoice.MONTH_FIRST -> RecurrencePattern.MonthFirst
                     PatternChoice.MONTH_LAST -> RecurrencePattern.MonthLast
                     PatternChoice.MONTH_DAY -> day?.let { RecurrencePattern.DayOfMonth(it) }
+                    PatternChoice.EVERY_2_WEEKS -> RecurrencePattern.EveryNDays(14, state.startDate)
+                    PatternChoice.YEARLY -> RecurrencePattern.Yearly(state.startDate.monthValue, state.startDate.dayOfMonth)
                 }
                 if (state.choice == PatternChoice.EVERY_N && n == null) problems += FormProblem.EVERY_N_INVALID
                 if (state.choice == PatternChoice.MONTH_DAY && day == null) problems += FormProblem.DAY_OF_MONTH_INVALID

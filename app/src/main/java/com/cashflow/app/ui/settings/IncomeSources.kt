@@ -34,6 +34,7 @@ internal fun scheduleSummary(p: RecurrencePattern): String = when (p) {
     RecurrencePattern.MonthFirst -> stringResource(R.string.sched_first)
     RecurrencePattern.MonthLast -> stringResource(R.string.sched_last)
     is RecurrencePattern.EveryNDays -> stringResource(R.string.sched_every_n, p.n)
+    is RecurrencePattern.Yearly -> stringResource(R.string.sched_yearly, java.time.LocalDate.of(2000, p.month, minOf(p.day, java.time.YearMonth.of(2000, p.month).lengthOfMonth())).format(java.time.format.DateTimeFormatter.ofPattern("d MMMM", Locale.getDefault())))
 }
 
 /**

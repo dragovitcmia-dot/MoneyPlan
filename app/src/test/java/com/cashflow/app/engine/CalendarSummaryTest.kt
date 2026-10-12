@@ -156,6 +156,15 @@ class CalendarSummaryTest {
         assertEquals(1, day.items.size)
         assertTrue(day.items.single().fromSeries)
     }
+
+    @Test fun every_day_from_the_start_date_has_a_balance_to_show() {
+        val m = month(listOf(tx(d(2026, 10, 12), 30, id = 1)))
+        for (day in m.weeks.flatten()) {
+            assertEquals("${day.date}", !day.date.isBefore(start), day.hasForecast)
+        }
+        assertEquals(tnd(70), m.day(d(2026, 10, 12))!!.closing)
+        assertEquals(tnd(70), m.day(d(2026, 10, 31))!!.closing) // the balance carries on after the expense
+    }
 }
 
 class CompactAmountTest {

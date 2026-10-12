@@ -3,6 +3,8 @@ package com.cashflow.app.ui
 import com.cashflow.app.ui.theme.Contrast
 import com.cashflow.app.ui.theme.Palette
 import com.cashflow.app.ui.theme.ThemePalette
+import com.cashflow.app.ui.theme.blend
+import com.cashflow.app.ui.theme.faintDayNumberPairs
 import com.cashflow.app.ui.theme.graphicPairs
 import com.cashflow.app.ui.theme.textPairs
 import org.junit.Assert.assertEquals
@@ -91,5 +93,42 @@ class ContrastTest {
             assertTrue(Contrast.ratio(p.keyAction, p.keyDigit) >= 1.1) // backspace reads as a different key
             assertTrue(Contrast.ratio(p.keyPressed, p.keyDigit) >= 1.1) // pressed is visibly different
         }
+    }
+
+    @Test fun calendar_balances_and_todays_number_reach_4_5_to_1() {
+        for (p in listOf(Palette.dark, Palette.light)) {
+            val pairs = p.textPairs()
+            val balances = pairs.filter { it.name.startsWith("calendar balance") || it.name.startsWith("calendar negative balance") }
+            assertTrue(balances.size >= 7)
+            for (b in balances) {
+                assertTrue("${b.name} is a normal-size text pair", !b.large)
+                assertTrue("${b.name}: %.2f".format(Contrast.ratio(b.foreground, b.background)), Contrast.ratio(b.foreground, b.background) >= 4.5)
+            }
+            val today = pairs.single { it.name.startsWith("today's day number") }
+            assertTrue(Contrast.ratio(today.foreground, today.background) >= 4.5)
+        }
+    }
+
+    /**
+     * Day-of-month numbers are faint on purpose (decorative hierarchy: the money is the content), so they are held to
+     * 3:1 instead of 4.5:1. They are still clearly weaker than the balances.
+     */
+    @Test fun faint_day_numbers_reach_3_to_1_but_stay_weaker_than_the_balances() {
+        assertEquals(0.55f, Palette.DAY_NUMBER_ALPHA, 0f)
+        for (p in listOf(Palette.dark, Palette.light)) {
+            val faint = p.faintDayNumberPairs()
+            assertEquals(4, faint.size)
+            for (f in faint) {
+                assertTrue(f.large) // the 3:1 bar
+                assertTrue("${f.name}: %.2f".format(Contrast.ratio(f.foreground, f.background)), Contrast.ratio(f.foreground, f.background) >= 3.0)
+                assertTrue(Contrast.ratio(p.text, f.background) > Contrast.ratio(f.foreground, f.background))
+            }
+        }
+    }
+
+    @Test fun blend_mixes_by_alpha() {
+        assertEquals(0xFF808080L, blend(0xFFFFFFFF, 0xFF000000, 0.5f) and 0xFFFFFFFFL)
+        assertEquals(0xFFFFFFFFL, blend(0xFFFFFFFF, 0xFF000000, 1f))
+        assertEquals(0xFF000000L, blend(0xFFFFFFFF, 0xFF000000, 0f))
     }
 }

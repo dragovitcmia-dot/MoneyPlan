@@ -7,15 +7,21 @@ import com.cashflow.app.EngineFactory
 import com.cashflow.app.data.LedgerRepository
 import com.cashflow.app.engine.BalanceEngine
 import com.cashflow.app.engine.DeleteOutcome
+import com.cashflow.app.engine.EntryFormState
 import com.cashflow.app.engine.EntryPlanner
+import com.cashflow.app.engine.EntryWizard
+import com.cashflow.app.engine.LiveCalendar
+import com.cashflow.app.engine.LiveMonth
+import com.cashflow.app.engine.NameSuggestions
+import com.cashflow.app.engine.RedDip
+import com.cashflow.app.engine.RedDipCheck
+import com.cashflow.app.engine.TxKind
 import com.cashflow.app.engine.NewEntry
 import com.cashflow.app.engine.NextExpense
 import com.cashflow.app.engine.RecurringRule
 import com.cashflow.app.engine.RuleMaintenance
 import com.cashflow.app.engine.Transaction
 import com.cashflow.app.engine.TxStatus
-import com.cashflow.app.engine.WhatIfResult
-import com.cashflow.app.engine.whatIf
 import com.cashflow.app.ui.UiPrefs
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -29,9 +35,11 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.time.DayOfWeek
 import java.time.Duration
 import java.time.LocalDate
 import java.time.LocalDateTime
+import java.time.YearMonth
 
 @Immutable
 data class HomeUiState(
@@ -44,6 +52,9 @@ data class HomeUiState(
     /** Default start date for a new recurring income source. */
     val newSourceStart: LocalDate,
     val balanceStartDate: LocalDate,
+    /** Recently used names, newest first, for the wizard's name step. */
+    val expenseNames: List<String> = emptyList(),
+    val incomeNames: List<String> = emptyList(),
 )
 
 class HomeViewModel(
@@ -72,6 +83,8 @@ class HomeViewModel(
             today = day,
             newSourceStart = RuleMaintenance.newSourceStartDate(settings, day),
             balanceStartDate = settings.balanceStartDate,
+            expenseNames = NameSuggestions.recent(transactions, TxKind.EXPENSE),
+            incomeNames = NameSuggestions.recent(transactions, TxKind.INCOME),
         )
     }.flowOn(Dispatchers.Default) // the engine runs off the main thread
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
@@ -164,12 +177,17 @@ class HomeViewModel(
         viewModelScope.launch { repository.restoreItem(tx) }
     }
 
-    /** "What if I save this?" against the current data; null if there is no data yet. */
-    suspend fun whatIf(entry: NewEntry): WhatIfResult? = withContext(Dispatchers.Default) {
-        val e = engine ?: return@withContext null
-        EntryPlanner.transactionFor(entry, e.today)?.let { e.whatIf(newTransactions = listOf(it)) }
-            ?: EntryPlanner.ruleFor(entry)?.let { e.whatIf(newRule = it) }
+    /** The below-zero check run when the user presses Add: null when nothing goes (more) negative. */
+    suspend fun redDip(entry: NewEntry): RedDip? = withContext(Dispatchers.Default) {
+        engine?.let { RedDipCheck.check(it, entry) }
     }
+
+    /** One month of the wizard's live calendar: balances with the form's item applied on [selected]. */
+    suspend fun liveMonth(form: EntryFormState, month: YearMonth, selected: LocalDate?, firstDay: DayOfWeek): LiveMonth? =
+        withContext(Dispatchers.Default) {
+            val e = engine ?: return@withContext null
+            LiveCalendar.project(e, month, firstDay, selected) { date -> EntryWizard.entryAt(form, date, "x", e.settings.balanceStartDate) }
+        }
 
     /** Stores a validated entry. Recurring entries become rules / income sources and materialize. */
     suspend fun save(entry: NewEntry) {

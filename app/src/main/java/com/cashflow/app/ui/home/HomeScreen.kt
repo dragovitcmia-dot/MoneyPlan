@@ -202,7 +202,8 @@ private fun HomeContent(
         EntryComposer(
             kind = TxKind.valueOf(name),
             ui = ui,
-            whatIf = viewModel::whatIf,
+            redDip = viewModel::redDip,
+            liveMonth = viewModel::liveMonth,
             onSave = viewModel::save,
             onSaved = { message -> actions.announce(message) },
             onDismiss = { composerKind = null },

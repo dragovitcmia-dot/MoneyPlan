@@ -11,11 +11,23 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.TextUnit
 
-/** One line of text that shrinks (down to 60%) instead of clipping or wrapping when it does not fit its width. */
+/**
+ * One line of text that shrinks instead of clipping or wrapping when it does not fit its width. It never gets an
+ * ellipsis. By default it shrinks to 60% of [style]'s size; with [minSize] it shrinks until that size (e.g. 9sp)
+ * is reached, so a number stays readable and visible instead of being replaced by something else.
+ */
 @Composable
-fun FitText(text: String, color: Color, style: TextStyle, modifier: Modifier = Modifier) {
+fun FitText(
+    text: String,
+    color: Color,
+    style: TextStyle,
+    modifier: Modifier = Modifier,
+    minSize: TextUnit = TextUnit.Unspecified,
+) {
     var scale by remember(text, style) { mutableFloatStateOf(1f) }
+    val floor = if (minSize == TextUnit.Unspecified) 0.6f else (minSize.value / style.fontSize.value).coerceIn(0.1f, 1f)
     Text(
         text = text,
         color = color,
@@ -25,6 +37,6 @@ fun FitText(text: String, color: Color, style: TextStyle, modifier: Modifier = M
         softWrap = false,
         overflow = TextOverflow.Clip,
         textAlign = TextAlign.Center,
-        onTextLayout = { if (it.didOverflowWidth && scale > 0.6f) scale *= 0.88f },
+        onTextLayout = { if (it.didOverflowWidth && scale > floor) scale = maxOf(floor, scale * 0.88f) },
     )
 }

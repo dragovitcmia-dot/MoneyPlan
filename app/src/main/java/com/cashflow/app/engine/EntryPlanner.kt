@@ -40,12 +40,9 @@ sealed interface NewEntry {
 object EntryPlanner {
     fun defaultDescription(kind: TxKind) = if (kind == TxKind.EXPENSE) "Expense" else "Income"
 
-    /** Daily is for income only; "every N days" is for expenses only. */
-    fun isPatternAllowed(kind: TxKind, pattern: RecurrencePattern): Boolean = when (pattern) {
-        RecurrencePattern.Daily -> kind == TxKind.INCOME
-        is RecurrencePattern.EveryNDays -> kind == TxKind.EXPENSE
-        else -> true
-    }
+    /** Every schedule is available for expenses and income alike (daily, weekly, every 2 weeks, monthly, yearly, ...). */
+    @Suppress("UNUSED_PARAMETER")
+    fun isPatternAllowed(kind: TxKind, pattern: RecurrencePattern): Boolean = true
 
     /** A human-readable problem with the entry, or null when it can be saved. */
     fun validate(entry: NewEntry): String? {
