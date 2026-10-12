@@ -44,7 +44,7 @@ data class TransactionEntity(
     val isPlanned: Boolean,
 )
 
-enum class PatternType { DAILY, WEEKLY, EVERY_N_DAYS, MONTH_FIRST, MONTH_LAST, DAY_OF_MONTH }
+enum class PatternType { DAILY, WEEKLY, EVERY_N_DAYS, MONTH_FIRST, MONTH_LAST, DAY_OF_MONTH, YEARLY }
 
 @Entity(tableName = "recurring_rules")
 data class RecurringRuleEntity(
@@ -53,7 +53,7 @@ data class RecurringRuleEntity(
     val kind: TxKind,
     val description: String,
     val patternType: PatternType,
-    /** WEEKLY: ISO day of week 1..7; EVERY_N_DAYS: n; DAY_OF_MONTH: day 1..31; else null. */
+    /** WEEKLY: ISO day of week 1..7; EVERY_N_DAYS: n; DAY_OF_MONTH: day 1..31; YEARLY: month * 100 + day; else null. */
     val patternValue: Int?,
     /** EVERY_N_DAYS only. */
     val anchorDate: LocalDate?,
@@ -99,6 +99,7 @@ fun RecurringRuleEntity.toDomain(): RecurringRule {
         PatternType.MONTH_FIRST -> RecurrencePattern.MonthFirst
         PatternType.MONTH_LAST -> RecurrencePattern.MonthLast
         PatternType.DAY_OF_MONTH -> RecurrencePattern.DayOfMonth(patternValue!!)
+        PatternType.YEARLY -> RecurrencePattern.Yearly(patternValue!! / 100, patternValue % 100)
     }
     return RecurringRule(
         id, amount, kind, description, pattern, startDate, endDate, enabled,
@@ -117,6 +118,7 @@ fun RecurringRule.toEntity(): RecurringRuleEntity {
         RecurrencePattern.MonthFirst -> type = PatternType.MONTH_FIRST
         RecurrencePattern.MonthLast -> type = PatternType.MONTH_LAST
         is RecurrencePattern.DayOfMonth -> { type = PatternType.DAY_OF_MONTH; value = p.day }
+        is RecurrencePattern.Yearly -> { type = PatternType.YEARLY; value = p.month * 100 + p.day }
     }
     return RecurringRuleEntity(
         id, amount, kind, description, type, value, anchor, startDate, endDate, enabled,

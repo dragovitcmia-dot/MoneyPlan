@@ -127,6 +127,51 @@
     <string name="item_deleted">Deleted %1$s</string>
     <string name="item_skipped_this_day">Rejected %1$s for this day only</string>
 
+    <!-- Add wizard -->
+    <string name="wizard_step_of">Step %1$d of %2$d</string>
+    <string name="wizard_back">Back</string>
+    <string name="wizard_next">Next</string>
+    <string name="wizard_add_expense">Add expense</string>
+    <string name="wizard_add_income">Add income</string>
+    <string name="wizard_amount_title">How much?</string>
+    <string name="wizard_name_title">What is it called?</string>
+    <string name="name_label_required">Name</string>
+    <string name="name_label_optional">Name (optional)</string>
+    <string name="wizard_recent_names">Recent names</string>
+    <string name="problem_name">Give it a name first.</string>
+    <string name="problem_date_past">Choose today or a later day.</string>
+    <string name="wizard_when_title">When does it happen?</string>
+    <string name="when_later_hint">Pick a day on the calendar and see what it does to your money.</string>
+    <string name="when_repeats_hint">Every day, week, month or year, with an optional last day.</string>
+    <string name="wizard_later_title">Pick the day</string>
+    <string name="wizard_freq_title">How often?</string>
+    <string name="choice_every_2_weeks">Every 2 weeks</string>
+    <string name="choice_monthly">Every month</string>
+    <string name="choice_yearly">Every year</string>
+    <string name="wizard_start_title">First day</string>
+    <string name="wizard_end_title">Last day</string>
+    <string name="wizard_end_hint">Leave this off and it keeps repeating until you end it.</string>
+    <string name="wizard_next_dates">Next dates</string>
+    <string name="wizard_review_title">Check and add</string>
+    <string name="review_when_now">Today</string>
+    <string name="review_when_repeats">%1$s, from %2$s</string>
+    <string name="review_until">Until %1$s</string>
+    <string name="review_no_end">No end date</string>
+    <string name="live_summary">On %1$s you will have %2$s TND. The lowest it gets after that is %3$s TND on %4$s.</string>
+    <string name="live_summary_empty">Tap a day to see what happens to your money.</string>
+    <string name="live_loading">Calculating…</string>
+    <string name="live_cell_description">Balance %1$s dinars.</string>
+    <string name="live_cell_negative">Below zero.</string>
+
+    <!-- Below-zero warning (only when adding) -->
+    <string name="dip_title">This would take you below zero</string>
+    <string name="dip_lowest">Lowest balance: %1$s TND on %2$s</string>
+    <string name="dip_shortfall">You would be short by %1$s TND</string>
+    <string name="dip_days_header">Days below zero</string>
+    <string name="dip_more">and %1$d more days</string>
+    <string name="dip_add_anyway">Add anyway</string>
+    <string name="dip_change_date">Change date</string>
+
     <!-- Reject warning -->
     <string name="reject_title">Reject this?</string>
     <string name="reject_body">This is permanent. It will be removed from your plan.</string>
@@ -203,6 +248,7 @@
     <string name="sched_month_day">Day %1$d of each month</string>
     <string name="sched_first">First day of each month</string>
     <string name="sched_last">Last day of each month</string>
+    <string name="sched_yearly">Every year on %1$s</string>
     <string name="sched_every_n">Every %1$d days</string>
 
     <!-- Settings cards -->

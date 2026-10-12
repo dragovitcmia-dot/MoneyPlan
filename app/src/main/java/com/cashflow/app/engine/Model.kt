@@ -46,6 +46,13 @@ sealed interface RecurrencePattern {
     data object MonthFirst : RecurrencePattern
     data object MonthLast : RecurrencePattern
 
+    /** Once a year on [month]/[day]; 29 February falls on 28 February in years that have no 29th. */
+    data class Yearly(val month: Int, val day: Int) : RecurrencePattern {
+        init {
+            require(month in 1..12 && day in 1..31) { "month 1..12 and day 1..31 required" }
+        }
+    }
+
     /** Clamps to the last day of shorter months (31 in February = Feb 28/29). */
     data class DayOfMonth(val day: Int) : RecurrencePattern {
         init {

@@ -24,6 +24,7 @@ object Recurrence {
             RecurrencePattern.MonthFirst -> monthly(lo, hi) { it.atDay(1) }
             RecurrencePattern.MonthLast -> monthly(lo, hi) { it.atEndOfMonth() }
             is RecurrencePattern.DayOfMonth -> monthly(lo, hi) { it.atDay(minOf(p.day, it.lengthOfMonth())) }
+            is RecurrencePattern.Yearly -> yearly(lo, hi, p)
         }
     }
 
@@ -58,6 +59,16 @@ object Recurrence {
             val d = pick(ym)
             if (!d.isBefore(lo) && !d.isAfter(hi)) out += d
             ym = ym.plusMonths(1)
+        }
+        return out
+    }
+
+    private fun yearly(lo: LocalDate, hi: LocalDate, p: RecurrencePattern.Yearly): List<LocalDate> {
+        val out = ArrayList<LocalDate>()
+        for (year in lo.year..hi.year) {
+            val ym = YearMonth.of(year, p.month)
+            val d = ym.atDay(minOf(p.day, ym.lengthOfMonth()))
+            if (!d.isBefore(lo) && !d.isAfter(hi)) out += d
         }
         return out
     }

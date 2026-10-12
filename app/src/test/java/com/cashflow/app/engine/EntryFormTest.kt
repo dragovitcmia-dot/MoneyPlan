@@ -75,12 +75,35 @@ class EntryFormTest {
         assertEquals(start.plusDays(1), entry.startDate)
     }
 
-    @Test fun daily_is_not_offered_for_expenses_and_every_n_days_not_for_income() {
-        assertFalse(PatternChoice.DAILY in EntryForm.choicesFor(TxKind.EXPENSE))
-        assertTrue(PatternChoice.EVERY_N in EntryForm.choicesFor(TxKind.EXPENSE))
-        assertTrue(PatternChoice.DAILY in EntryForm.choicesFor(TxKind.INCOME))
-        assertFalse(PatternChoice.EVERY_N in EntryForm.choicesFor(TxKind.INCOME))
-        assertTrue(build(minimal(TxKind.EXPENSE, Timing.REPEATS).copy(choice = PatternChoice.DAILY)) is FormResult.Invalid)
+    @Test fun the_same_five_frequencies_are_offered_for_expenses_and_income() {
+        val five = listOf(PatternChoice.DAILY, PatternChoice.WEEKLY, PatternChoice.EVERY_2_WEEKS, PatternChoice.MONTH_DAY, PatternChoice.YEARLY)
+        assertEquals(five, EntryForm.choicesFor(TxKind.EXPENSE))
+        assertEquals(five, EntryForm.choicesFor(TxKind.INCOME))
+        assertTrue(build(minimal(TxKind.EXPENSE, Timing.REPEATS).copy(choice = PatternChoice.DAILY)) is FormResult.Valid)
+    }
+
+    @Test fun every_frequency_for_both_kinds_is_persisted_and_visible_in_the_balance() {
+        for (kind in TxKind.entries) for (choice in EntryForm.choicesFor(kind)) {
+            val form = EntryWizard.withFrequency(minimal(kind, Timing.REPEATS).copy(startDate = today), choice)
+            val entry = (build(form) as FormResult.Valid).entry as NewEntry.Recurring
+            val rule = EntryPlanner.ruleFor(entry)!!
+            val rows = RuleMaintenance.materialize(rule, emptyList(), today)
+            assertTrue("$kind/$choice produced no rows", rows.isNotEmpty())
+            assertEquals("$kind/$choice first occurrence is the start day", today, rows.first().date)
+            val engine = BalanceEngine(settings(start, 100), rows, today)
+            val sign = if (kind == TxKind.EXPENSE) -1 else 1
+            val end = engine.forecast(today, today.plusDays(30)).last().closing
+            assertTrue("$kind/$choice did not change the forecast", (end - tnd(100)) * sign > 0)
+        }
+    }
+
+    @Test fun every_wizard_path_ends_in_a_stored_row_or_rule() {
+        for (kind in TxKind.entries) for (timing in Timing.entries) {
+            var s = EntryWizard.update(EntryWizard.start(kind, today)) { it.copy(amountText = "12.5", description = "Thing", timing = timing) }
+            while (s.step != WizardStep.REVIEW) s = EntryWizard.next(s)
+            val entry = (EntryForm.build(s.form, "x", start) as FormResult.Valid).entry
+            assertTrue("$kind/$timing", (EntryPlanner.transactionFor(entry, today) != null) xor (EntryPlanner.ruleFor(entry) != null))
+        }
     }
 
     @Test fun later_accepts_today_and_earlier() {

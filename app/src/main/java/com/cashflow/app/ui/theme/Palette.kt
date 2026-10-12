@@ -49,6 +49,12 @@ object Palette {
     const val INCOME_GREEN = 0xFF008800L
     const val KIND_LABEL = 0xFFFFFFFFL
 
+    /**
+     * Day-of-month numbers in the calendar are faint on purpose (the money numbers are the content); only today's
+     * number is full contrast and bold. Decorative hierarchy: the ContrastTest asks 3:1 for these, not 4.5:1.
+     */
+    const val DAY_NUMBER_ALPHA = 0.55f
+
     val dark = ThemePalette(
         background = 0xFF0B0D10, surface = 0xFF14171C, elevated = 0xFF1B1F26, hairline = 0xFF262B33,
         text = 0xFFF2F4F7, textSecondary = 0xFF8A93A0,
@@ -144,7 +150,33 @@ fun ThemePalette.textPairs(): List<TextPair> = listOf(
     TextPair("calendar expense amount on the selected day", negativeText, daySelectedFill),
     TextPair("calendar income amount on the selected day", cellIncome, daySelectedFill),
     TextPair("today's day number on the today circle", onAccent, accent),
+    // The day's balance (full contrast, never dimmed): normal text on every cell background, red when negative.
+    TextPair("calendar balance on background", text, background),
+    TextPair("calendar balance on surface", text, surface),
+    TextPair("calendar balance on the selected day", text, daySelectedFill),
+    TextPair("calendar balance on a negative day (not shown in normal text, kept as a floor)", text, dayNegativeFill),
+    TextPair("calendar negative balance on background", negativeText, background),
+    TextPair("calendar negative balance on a negative day", negativeText, dayNegativeFill),
+    TextPair("calendar negative balance on the selected day", negativeText, daySelectedFill),
 )
+
+/** [fg] drawn over [bg] with [alpha] opacity, as an opaque ARGB color. */
+fun blend(fg: Long, bg: Long, alpha: Float): Long {
+    fun ch(shift: Int): Long {
+        val f = (fg shr shift) and 0xFF
+        val b = (bg shr shift) and 0xFF
+        return Math.round(f * alpha + b * (1 - alpha)).toLong()
+    }
+    return 0xFF000000L or (ch(16) shl 16) or (ch(8) shl 8) or ch(0)
+}
+
+/**
+ * The faint day-of-month numbers on each cell background. They are decorative hierarchy, so the bar is 3:1 (the
+ * large-text bar), documented here and checked in the ContrastTest.
+ */
+fun ThemePalette.faintDayNumberPairs(): List<TextPair> = listOf(
+    "background" to background, "surface" to surface, "a negative day" to dayNegativeFill, "the selected day" to daySelectedFill,
+).map { (name, bg) -> TextPair("faint day number on $name", blend(text, bg, Palette.DAY_NUMBER_ALPHA), bg, large = true) }
 
 /** A graphic (dot, outline, tint) against what it sits on; WCAG asks for 3:1 for such non-text parts. */
 class GraphicPair(val name: String, val foreground: Long, val background: Long, val required: Double = Contrast.GRAPHIC)
