@@ -7,7 +7,6 @@ import com.cashflow.app.engine.Transaction
 import com.cashflow.app.engine.TxKind
 import com.cashflow.app.engine.TxSource
 import com.cashflow.app.engine.TxStatus
-import com.cashflow.app.engine.WalletMode
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.LocalTime
@@ -26,7 +25,6 @@ object ReferenceScenario {
     val settings = AppSettings(
         startingBalance = 180_000,
         balanceStartDate = startDate,
-        walletMode = WalletMode.DYNAMIC,
         reminderTime = LocalTime.NOON,
     )
 
@@ -48,6 +46,22 @@ object ReferenceScenario {
         Triple(10, 16, 20), Triple(10, 24, 75), Triple(10, 31, 25), Triple(11, 10, 380),
         Triple(11, 12, 63), Triple(11, 28, 220), Triple(11, 30, 25), Triple(12, 12, 63),
         Triple(12, 31, 25),
+    )
+
+    /**
+     * A second repeating INCOME series with an end date, for the Settings screenshots. It starts after the
+     * scenario's last day (Dec 31, 2026), so it changes none of the scenario's closings.
+     */
+    val endingIncomeSource = RecurringRule(
+        id = 3,
+        amount = 100_000,
+        kind = TxKind.INCOME,
+        description = "Freelance income",
+        pattern = RecurrencePattern.MonthFirst,
+        startDate = LocalDate.of(2027, 1, 1),
+        endDate = LocalDate.of(2027, 6, 30),
+        enabled = true,
+        confirmTime = LocalTime.NOON,
     )
 
     /** Oct 11 as a separate one-off: only used to show that listing it twice breaks the sheet. */

@@ -27,19 +27,17 @@
     <string name="button_income">INCOME</string>
     <string name="waiting_header">Waiting for you</string>
     <string name="caught_up">All caught up</string>
-    <string name="hint_skip">← Skip</string>
-    <string name="hint_confirm">Confirm →</string>
-    <string name="action_confirm">Confirm</string>
-    <string name="action_skip">Skip</string>
+    <string name="action_accept">Accept</string>
+    <string name="action_reject">Reject</string>
     <string name="action_cancel">Cancel</string>
     <string name="action_ok">OK</string>
     <string name="action_save">Save</string>
     <string name="action_undo">Undo</string>
-    <string name="confirmed_item">Confirmed %1$s</string>
-    <string name="skipped_item">Skipped %1$s</string>
+    <string name="confirmed_item">Accepted %1$s</string>
+    <string name="skipped_item">Rejected %1$s</string>
     <string name="item_expense">Expense</string>
     <string name="item_income">Income</string>
-    <string name="edit_confirm_title">Confirm %1$s</string>
+    <string name="edit_confirm_title">Accept %1$s</string>
     <string name="edit_confirm_hint">Change the amount if it was different.</string>
     <string name="amount_label">Amount (TND)</string>
     <string name="amount_error">Type an amount above zero</string>
@@ -66,7 +64,6 @@
     <string name="starts_label">Starts</string>
     <string name="ends_label">Ends</string>
     <string name="end_date_switch">Stop on a date</string>
-    <string name="static_hint">“Add my income automatically” is off in Settings, so regular income is ignored until you switch it on.</string>
     <string name="problem_amount">Type an amount first.</string>
     <string name="problem_every_n">Type how many days, for example 7.</string>
     <string name="problem_day">Type a day from 1 to 31.</string>
@@ -101,6 +98,7 @@
         <item quantity="one">%d item waiting for you</item>
         <item quantity="other">%d items waiting for you</item>
     </plurals>
+    <string name="cal_desc_balance">Balance %1$s dinars</string>
     <string name="cal_loading">Loading the month…</string>
     <string name="calendar_dots_hint">Red dot: money going out. Green dot: money coming in. Tap a day to see the amounts.</string>
 
@@ -109,10 +107,10 @@
     <string name="day_end_had">You had %1$s TND at the end of this day</string>
     <string name="day_end_short">Short by %1$s TND at the end of this day</string>
     <string name="day_nothing">Nothing planned for this day.</string>
-    <string name="status_waiting">Waiting for you</string>
+    <string name="status_waiting">Waiting</string>
     <string name="status_planned">Planned</string>
-    <string name="status_done">Done</string>
-    <string name="status_skipped">Skipped</string>
+    <string name="status_done">Accepted</string>
+    <string name="status_skipped">Rejected</string>
     <string name="repeats_label">Repeats</string>
 
     <!-- Change one item -->
@@ -120,15 +118,14 @@
     <string name="item_date_label">Date</string>
     <string name="item_series_note">This comes from a repeating payment. Changes here only affect this day.</string>
     <string name="item_edit_series">Edit this repeating payment</string>
-    <string name="action_done">Done</string>
     <string name="action_mark_waiting">Mark as waiting</string>
     <string name="item_saved">Changes saved</string>
     <string name="marked_waiting">%1$s is waiting for you again</string>
     <string name="item_delete_title">Delete “%1$s”?</string>
     <string name="item_delete_manual_body">This removes it for good.</string>
-    <string name="item_delete_series_body">This payment will be skipped for this day only. The other days of the repeating payment stay as they are.</string>
+    <string name="item_delete_series_body">This payment will be rejected for this day only. The other days of the repeating payment stay as they are.</string>
     <string name="item_deleted">Deleted %1$s</string>
-    <string name="item_skipped_this_day">Skipped %1$s for this day only</string>
+    <string name="item_skipped_this_day">Rejected %1$s for this day only</string>
 
     <!-- Add from a day -->
     <string name="timing_happened">Already happened</string>
@@ -143,29 +140,19 @@
     <string name="upcoming_empty">Nothing coming up</string>
     <string name="group_this_week">This week</string>
     <string name="daily_income_row">Daily income +%1$s TND</string>
-    <string name="daily_income_row_hint">Added every day, not listed one by one</string>
+    <string name="daily_income_row_hint">Every day, not listed one by one</string>
     <string name="short_by_tag">Short by %1$s TND</string>
 
     <!-- Settings -->
     <string name="settings_title">Settings</string>
-    <string name="auto_income_title">Add my income automatically</string>
-    <string name="auto_income_on">Your regular income is added on its days.</string>
-    <string name="auto_income_off">Off: only what you type in changes your money.</string>
+    <string name="auto_income_title">Accept my income automatically</string>
+    <string name="auto_income_helper">On: your income is added on its day without asking. Off: you tap the green check to accept each income.</string>
     <string name="money_started_label">Money I started with (TND)</string>
     <string name="started_on_label">I started on</string>
     <string name="remind_label">Remind me at</string>
     <string name="field_value_format">%1$s: %2$s</string>
-    <string name="regular_income_title">Regular income</string>
-    <string name="regular_income_empty">Nothing here yet.</string>
-    <string name="add_regular_income">Add regular income</string>
-    <string name="edit_regular_income">Change regular income</string>
-    <string name="source_name_label">Name</string>
-    <string name="source_how_often">How often</string>
-    <string name="source_ask_time">Ask me at</string>
-    <string name="delete_regular_income">Delete this regular income</string>
-    <string name="delete_title">Delete “%1$s”?</string>
-    <string name="delete_body">This removes it and the entries that are still to come. Entries you already confirmed or skipped stay in your history.</string>
     <string name="action_delete">Delete</string>
+    <string name="how_often_label">How often</string>
     <string name="amount_and_schedule">%1$s · %2$s</string>
     <string name="sched_daily">Every day</string>
     <string name="sched_weekly">Every %1$s</string>
@@ -176,14 +163,14 @@
 
     <!-- Settings cards -->
     <string name="income_card_title">Income</string>
-    <string name="income_not_auto">Income is not being added automatically.</string>
     <string name="repeating_title">Repeating payments</string>
-    <string name="repeating_empty">Nothing here yet. Add one with EXPENSE, then choose Repeats.</string>
+    <string name="repeating_empty">Nothing here yet. Add one with EXPENSE or INCOME, then choose Repeats.</string>
     <string name="repeating_switch_description">Turn %1$s on or off</string>
     <string name="edit_repeating_title">Change repeating payment</string>
     <string name="repeating_name_label">Name</string>
-    <string name="repeating_ends_switch">Ends on a date</string>
-    <string name="repeating_ends_label">Last day</string>
+    <string name="repeating_until">until %1$s</string>
+    <string name="end_date_label">End date</string>
+    <string name="no_end_date">No end date</string>
     <string name="stop_repeating">Stop repeating</string>
     <string name="stop_title">Stop “%1$s”?</string>
     <string name="stop_body">It stops from today. Payments still waiting in the future are removed. Payments you already answered stay in your history.</string>

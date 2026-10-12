@@ -64,7 +64,7 @@ class EntryPlannerTest {
         assertEquals("Income", rule.description)
         assertEquals(java.time.LocalTime.NOON, rule.confirmTime)
         assertEquals(d(2026, 12, 31), rule.endDate)
-        assertTrue(RuleMaintenance.isActive(rule, WalletMode.DYNAMIC))
+        assertTrue(RuleMaintenance.isActive(rule))
     }
 
     @Test fun now_and_planned_have_no_rule() {

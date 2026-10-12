@@ -44,7 +44,7 @@ class EntryFormTest {
             assertTrue("$kind/$timing must produce a transaction or a rule", (tx != null) xor (rule != null))
             val rows = tx?.let { listOf(it) } ?: RuleMaintenance.materialize(rule!!, emptyList(), today)
             assertTrue("$kind/$timing produced no rows", rows.isNotEmpty())
-            val engine = BalanceEngine(settings(start, 100), rows, today.plusDays(30))
+            val engine = BalanceEngine(settings(start, 100), rows, today)
             val sign = if (kind == TxKind.EXPENSE) -1 else 1
             // Whatever the timing, the money shows up in the forecast for the following month.
             val forecastEnd = engine.forecast(today, today.plusDays(30)).last().closing
@@ -56,7 +56,7 @@ class EntryFormTest {
         val entry = (build(minimal(TxKind.EXPENSE, Timing.NOW)) as FormResult.Valid).entry
         val tx = EntryPlanner.transactionFor(entry, today)!!
         assertEquals(TxStatus.CONFIRMED, tx.status)
-        assertEquals(tnd(100) - 12_500, BalanceEngine(settings(start, 100), listOf(tx), today).currentBalance())
+        assertEquals(tnd(100) - 12_500, BalanceEngine(settings(start, 100), listOf(tx), today).available())
     }
 
     @Test fun repeats_defaults_to_a_weekly_rule_from_today() {

@@ -62,9 +62,8 @@ class UpcomingTest {
         rows: List<Transaction>,
         rules: List<RecurringRule> = emptyList(),
         filter: UpcomingFilter = UpcomingFilter.ALL,
-        mode: WalletMode = WalletMode.DYNAMIC,
         balance: Long = 1000,
-    ) = Upcoming.build(BalanceEngine(settings(start, balance, mode), rows, today), rules, filter, monday)
+    ) = Upcoming.build(BalanceEngine(settings(start, balance), rows, today), rules, filter, monday)
 
     @Test fun groups_are_ordered_waiting_tomorrow_week_then_months() {
         val rows = listOf(
@@ -146,9 +145,8 @@ class UpcomingTest {
         assertEquals(setOf(UpcomingGroupKey.Waiting), m.groups.map { it.key }.toSet())
     }
 
-    @Test fun pinned_daily_income_follows_wallet_mode_enabled_flag_and_filter() {
+    @Test fun pinned_daily_income_follows_enabled_flag_and_filter() {
         val rows = emptyList<Transaction>()
-        assertNull(build(rows, listOf(daily), mode = WalletMode.STATIC).dailyIncome)
         assertNull(build(rows, listOf(daily.copy(enabled = false))).dailyIncome)
         assertNull(build(rows, listOf(daily), filter = UpcomingFilter.EXPENSES).dailyIncome)
         assertEquals(tnd(30), build(rows, listOf(daily), filter = UpcomingFilter.INCOME).dailyIncome)

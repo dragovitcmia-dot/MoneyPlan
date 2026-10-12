@@ -11,7 +11,6 @@ import com.cashflow.app.engine.Transaction
 import com.cashflow.app.engine.TxKind
 import com.cashflow.app.engine.TxSource
 import com.cashflow.app.engine.TxStatus
-import com.cashflow.app.engine.WalletMode
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.LocalTime
@@ -64,13 +63,19 @@ data class RecurringRuleEntity(
     val confirmMinutes: Int,
 )
 
+/**
+ * The old Dynamic/Static wallet mode. The app no longer has the feature; the column stays in the table (no
+ * schema change) and always holds DYNAMIC.
+ */
+enum class LegacyWalletMode { DYNAMIC, STATIC }
+
 /** Single-row table (id is always 1). Times are minutes after midnight. */
 @Entity(tableName = "settings")
 data class SettingsEntity(
     @PrimaryKey val id: Int = 1,
     val startingBalance: Long,
     val balanceStartDate: LocalDate,
-    val walletMode: WalletMode,
+    val walletMode: LegacyWalletMode,
     val reminderMinutes: Int,
 )
 
@@ -119,16 +124,17 @@ fun RecurringRule.toEntity(): RecurringRuleEntity {
     )
 }
 
-fun SettingsEntity.toDomain() = AppSettings(
+/** [autoAcceptIncome] lives in the app's preferences (no schema change), so the caller supplies it. */
+fun SettingsEntity.toDomain(autoAcceptIncome: Boolean) = AppSettings(
     startingBalance = startingBalance,
     balanceStartDate = balanceStartDate,
-    walletMode = walletMode,
+    autoAcceptIncome = autoAcceptIncome,
     reminderTime = LocalTime.ofSecondOfDay(reminderMinutes * 60L),
 )
 
 fun AppSettings.toEntity() = SettingsEntity(
     startingBalance = startingBalance,
     balanceStartDate = balanceStartDate,
-    walletMode = walletMode,
+    walletMode = LegacyWalletMode.DYNAMIC, // legacy column, unused
     reminderMinutes = reminderTime.hour * 60 + reminderTime.minute,
 )

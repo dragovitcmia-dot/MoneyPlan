@@ -8,9 +8,6 @@ enum class TxKind { EXPENSE, INCOME }
 enum class TxStatus { PENDING, CONFIRMED, SKIPPED }
 enum class TxSource { MANUAL, RECURRING }
 
-/** DYNAMIC: income sources feed the balance. STATIC: they are ignored; only logged transactions count. */
-enum class WalletMode { DYNAMIC, STATIC }
-
 /** All amounts are Long millimes (1 TND = 1000). */
 data class Transaction(
     val id: Long = 0,
@@ -91,7 +88,12 @@ data class RecurringRule(
 data class AppSettings(
     val startingBalance: Long,
     val balanceStartDate: LocalDate,
-    val walletMode: WalletMode = WalletMode.DYNAMIC,
+    /**
+     * When true, income that comes from a repeating income series is accepted by itself on its day (after
+     * [reminderTime]); see [AutoAccept]. One-off income and all expenses always wait for the user.
+     */
+    val autoAcceptIncome: Boolean = false,
+    /** The "Remind me at" time; also the time of day from which income is auto-accepted. */
     val reminderTime: LocalTime = LocalTime.NOON,
 ) {
     companion object {
@@ -99,16 +101,23 @@ data class AppSettings(
     }
 }
 
+/**
+ * One day of the balance model. For days before today it is history (start + accepted items up to that day).
+ * From today on it is a forecast: today's Available, minus overdue pending expenses, plus every pending item on
+ * its date.
+ */
 data class DayForecast(
     val date: LocalDate,
-    /** Balance at the start of the day, daily income already added (except on the start day). */
+    /**
+     * Balance before this day's own pending items: the previous day's closing; for today, Available minus
+     * the overdue pending expenses that are assumed to be paid today.
+     */
     val opening: Long,
-    /** Income-source income credited into [opening]. */
+    /** Non-skipped income dated this day (accepted or pending). */
     val income: Long,
-    /** Other (manual) income dated this day, credited after [opening]. */
-    val extraIncome: Long,
+    /** Non-skipped expenses dated this day (accepted or pending). */
     val expenses: Long,
-    /** opening + extraIncome - expenses. */
+    /** The balance at the end of the day under the rules above. */
     val closing: Long,
     /** Every stored row dated this day, SKIPPED ones included; only non-skipped ones are summed. */
     val items: List<Transaction>,

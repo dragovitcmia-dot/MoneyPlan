@@ -27,14 +27,9 @@ class SettingsViewModel(
     /** Local working copy; edits show up here at once and are saved in order in the background. */
     val settings: StateFlow<AppSettings?> = _settings
 
-    /** Income sources only (rules of kind INCOME). */
-    val sources: StateFlow<List<RecurringRule>> = repository.rules
-        .map { rules -> rules.filter { it.kind == TxKind.INCOME } }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
-
-    /** Repeating payments: expense rules that have not ended. */
+    /** Repeating series, expenses and income, that have not ended. */
     val repeating: StateFlow<List<RecurringRule>> = repository.rules
-        .map { rules -> rules.filter { it.kind == TxKind.EXPENSE && RuleMaintenance.isRunning(it, clock()) } }
+        .map { rules -> rules.filter { RuleMaintenance.isRunning(it, clock()) } }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     /** Every rule, so an item can open the series it came from. */

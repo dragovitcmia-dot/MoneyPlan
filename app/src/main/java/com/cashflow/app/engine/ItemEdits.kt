@@ -32,5 +32,11 @@ object ItemEdits {
     /** "Mark as waiting": back to PENDING (undoes Done and Skip). */
     fun markWaiting(tx: Transaction): Transaction = tx.copy(status = TxStatus.PENDING)
 
+    /**
+     * Accept / reject is only possible for a PENDING item dated today or earlier. A future item stays editable,
+     * movable and deletable, but cannot be answered yet.
+     */
+    fun canAnswer(tx: Transaction, today: LocalDate): Boolean = tx.status == TxStatus.PENDING && !tx.date.isAfter(today)
+
     fun canSave(amount: Long?): Boolean = amount != null && amount > 0
 }

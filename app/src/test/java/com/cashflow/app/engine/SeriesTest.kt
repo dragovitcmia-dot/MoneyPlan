@@ -67,7 +67,7 @@ class SeriesTest {
 
     @Test fun editing_the_amount_regenerates_only_waiting_future_rows() {
         val edited = weekly.copy(amount = tnd(90))
-        val change = RuleMaintenance.edit(weekly, edited, rows(), WalletMode.DYNAMIC, today)
+        val change = RuleMaintenance.edit(weekly, edited, rows(), today)
         assertEquals(listOf(4L, 5L), change.deleteIds.sorted())
         assertTrue(change.inserts.isNotEmpty())
         assertTrue(change.inserts.all { it.amount == tnd(90) && it.status == TxStatus.PENDING && it.date.isAfter(today) })
@@ -78,33 +78,26 @@ class SeriesTest {
 
     @Test fun editing_the_schedule_moves_future_rows_to_the_new_days() {
         val friday = weekly.copy(pattern = RecurrencePattern.Weekly(DayOfWeek.FRIDAY))
-        val change = RuleMaintenance.edit(weekly, friday, rows(), WalletMode.DYNAMIC, today)
+        val change = RuleMaintenance.edit(weekly, friday, rows(), today)
         assertTrue(change.inserts.isNotEmpty())
         assertTrue(change.inserts.all { it.date.dayOfWeek == DayOfWeek.FRIDAY })
     }
 
     @Test fun editing_the_end_date_trims_future_rows() {
         val shorter = weekly.copy(endDate = d(2026, 10, 25))
-        val change = RuleMaintenance.edit(weekly, shorter, rows(), WalletMode.DYNAMIC, today)
+        val change = RuleMaintenance.edit(weekly, shorter, rows(), today)
         assertEquals(listOf(4L, 5L), change.deleteIds.sorted())
         assertEquals(listOf(d(2026, 10, 25)), change.inserts.map { it.date })
     }
 
     @Test fun a_disabled_expense_rule_generates_nothing() {
-        val change = RuleMaintenance.edit(weekly, weekly.copy(amount = tnd(10), enabled = false), rows(), WalletMode.DYNAMIC, today)
+        val change = RuleMaintenance.edit(weekly, weekly.copy(amount = tnd(10), enabled = false), rows(), today)
         assertTrue(change.deleteIds.isEmpty() && change.inserts.isEmpty())
-    }
-
-    @Test fun expense_rules_ignore_the_wallet_mode() {
-        val edited = weekly.copy(amount = tnd(90))
-        val dynamic = RuleMaintenance.edit(weekly, edited, rows(), WalletMode.DYNAMIC, today)
-        val static = RuleMaintenance.edit(weekly, edited, rows(), WalletMode.STATIC, today)
-        assertEquals(dynamic.inserts.map { it.date }, static.inserts.map { it.date })
     }
 
     @Test fun a_name_only_change_still_regenerates_with_the_new_name() {
         val renamed = weekly.copy(description = "Gym")
-        val change = RuleMaintenance.edit(weekly, renamed, rows(), WalletMode.DYNAMIC, today)
+        val change = RuleMaintenance.edit(weekly, renamed, rows(), today)
         assertTrue(change.inserts.isNotEmpty() && change.inserts.all { it.description == "Gym" })
     }
 }

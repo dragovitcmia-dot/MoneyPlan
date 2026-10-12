@@ -27,6 +27,11 @@ import com.cashflow.app.engine.Money
 import com.cashflow.app.engine.RecurringRule
 import com.cashflow.app.engine.TxKind
 import com.cashflow.app.ui.components.SectionCard
+import com.cashflow.app.ui.theme.cashflow
+import java.time.format.DateTimeFormatter
+import java.time.format.FormatStyle
+
+private val UntilDate: DateTimeFormatter = DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM)
 
 /** The "Repeating payments" card: every repeating expense with its schedule and an on/off switch; tap to change the whole series. */
 @Composable
@@ -46,7 +51,12 @@ internal fun RepeatingPaymentsCard(viewModel: SettingsViewModel) {
                     Column(Modifier.weight(1f).padding(end = 12.dp)) {
                         Text(rule.description, style = MaterialTheme.typography.bodyLarge)
                         Text(
-                            stringResource(R.string.amount_and_schedule, Money.formatDisplay(rule.amount), scheduleSummary(rule.pattern)),
+                            Money.formatSigned(rule.kind, rule.amount),
+                            style = MaterialTheme.typography.titleMedium,
+                            color = if (rule.kind == TxKind.INCOME) MaterialTheme.cashflow.positive else MaterialTheme.cashflow.negative,
+                        )
+                        Text(
+                            scheduleSummary(rule.pattern) + (rule.endDate?.let { " · " + stringResource(R.string.repeating_until, it.format(UntilDate)) } ?: ""),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -63,11 +73,10 @@ internal fun RepeatingPaymentsCard(viewModel: SettingsViewModel) {
 
     editing?.let { rule ->
         RuleDialog(
-            kind = TxKind.EXPENSE,
+            kind = rule.kind,
             initial = rule,
             newStart = rule.startDate,
             onSave = { viewModel.saveSource(it); editing = null },
-            onDelete = null,
             onStop = { viewModel.stopRepeating(rule.id); editing = null },
             onDismiss = { editing = null },
         )

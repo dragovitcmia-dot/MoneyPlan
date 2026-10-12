@@ -15,9 +15,8 @@ data class RuleChange(
  * and PENDING rows dated today or earlier are left for the user to answer.
  */
 object RuleMaintenance {
-    /** Income sources are inactive in STATIC mode; expense rules ignore the wallet mode. */
-    fun isActive(rule: RecurringRule, mode: WalletMode) =
-        rule.enabled && (rule.kind == TxKind.EXPENSE || mode == WalletMode.DYNAMIC)
+    /** A series generates entries while it is switched on. */
+    fun isActive(rule: RecurringRule) = rule.enabled
 
     /** Start date for a freshly created source: never in the past, and after the balance start day. */
     fun newSourceStartDate(settings: AppSettings, today: LocalDate): LocalDate =
@@ -34,9 +33,9 @@ object RuleMaintenance {
         RuleChange(rule.copy(enabled = false), futurePending(rows, today), emptyList())
 
     /** Enabling generates from today forward; the start date moves up so later runs never backfill. */
-    fun enable(rule: RecurringRule, rows: List<Transaction>, mode: WalletMode, today: LocalDate): RuleChange {
+    fun enable(rule: RecurringRule, rows: List<Transaction>, today: LocalDate): RuleChange {
         val enabled = rule.copy(enabled = true, startDate = maxOf(rule.startDate, today))
-        val inserts = if (isActive(enabled, mode)) materialize(enabled, rows, today) else emptyList()
+        val inserts = if (isActive(enabled)) materialize(enabled, rows, today) else emptyList()
         return RuleChange(enabled, emptyList(), inserts)
     }
 
@@ -48,7 +47,6 @@ object RuleMaintenance {
         old: RecurringRule,
         new: RecurringRule,
         rows: List<Transaction>,
-        mode: WalletMode,
         today: LocalDate,
     ): RuleChange {
         val affectsOccurrences = old.amount != new.amount || old.description != new.description ||
@@ -57,7 +55,7 @@ object RuleMaintenance {
         val regenerated = new.copy(startDate = maxOf(new.startDate, today))
         val deleteIds = futurePending(rows, today)
         val remaining = rows.filter { it.id !in deleteIds }
-        val inserts = if (isActive(regenerated, mode)) materialize(regenerated, remaining, today) else emptyList()
+        val inserts = if (isActive(regenerated)) materialize(regenerated, remaining, today) else emptyList()
         return RuleChange(regenerated, deleteIds, inserts)
     }
 

@@ -5,8 +5,8 @@ import java.time.LocalDate
 fun d(y: Int, m: Int, day: Int): LocalDate = LocalDate.of(y, m, day)
 fun tnd(v: Long): Long = v * 1000
 
-fun settings(start: LocalDate, balance: Long = 0, mode: WalletMode = WalletMode.DYNAMIC) =
-    AppSettings(startingBalance = tnd(balance), balanceStartDate = start, walletMode = mode)
+fun settings(start: LocalDate, balance: Long = 0, autoAccept: Boolean = false) =
+    AppSettings(startingBalance = tnd(balance), balanceStartDate = start, autoAcceptIncome = autoAccept)
 
 fun tx(
     date: LocalDate,

@@ -50,7 +50,6 @@ class ReferenceScenarioTest {
 
     @Test fun start_day_state() {
         val e = engine()
-        assertEquals(tnd(180), e.currentBalance())
         assertEquals(tnd(180), e.available())
         val next = e.nextExpense()!!
         assertEquals(d(2026, 10, 11), next.date)
@@ -67,5 +66,47 @@ class ReferenceScenarioTest {
         assertEquals(tnd(60), closing(e, d(2026, 10, 11)))
         assertEquals(tnd(-38), closing(e, d(2026, 10, 12)))
         assertEquals(tnd(524), closing(e, d(2026, 12, 31)))
+    }
+
+    // ---- the new rule on the same data: nothing is added or deducted unless accepted -------------
+
+    private fun engineOn(today: java.time.LocalDate, rows: List<Transaction> = ledger()) =
+        BalanceEngine(ReferenceScenario.settings, rows, today)
+
+    private fun fc(e: BalanceEngine, date: java.time.LocalDate) = e.forecast(date, date).single()
+
+    @Test fun on_oct_14_with_nothing_accepted_available_is_180_and_the_forecast_opens_at_minus_90() {
+        val e = engineOn(d(2026, 10, 14))
+        assertEquals(tnd(180), e.available())
+        // Overdue pending expenses (assumed paid today): Oct 11 Sunday 75 + Oct 12 128 + Oct 13 67 = 270.
+        // Overdue pending income (30 on Oct 11, 12, 13) is NOT counted.
+        assertEquals(tnd(180 - 270), fc(e, d(2026, 10, 14)).opening)
+        // Today's own pending items: +30 daily income, -30 expense of Oct 14.
+        assertEquals(tnd(-90), fc(e, d(2026, 10, 14)).closing)
+        // Oct 15: +30 income, -20 expense.
+        assertEquals(tnd(-80), fc(e, d(2026, 10, 15)).closing)
+    }
+
+    @Test fun history_before_today_ignores_everything_that_is_not_accepted() {
+        val e = engineOn(d(2026, 10, 14))
+        for (day in 10..13) assertEquals(tnd(180), fc(e, d(2026, 10, day)).closing)
+    }
+
+    @Test fun accepting_the_oct_12_expense_changes_available_by_exactly_128() {
+        val rows = ledger()
+        val target = rows.first { it.date == d(2026, 10, 12) && it.kind == TxKind.EXPENSE }
+        val accepted = rows.map { if (it === target) it.copy(status = TxStatus.CONFIRMED) else it }
+        assertEquals(tnd(180 - 128), engineOn(d(2026, 10, 14), accepted).available())
+        // Accepted instead of overdue-and-pending: the forecast opening today stays the same.
+        assertEquals(tnd(-90), fc(engineOn(d(2026, 10, 14), accepted), d(2026, 10, 14)).opening)
+    }
+
+    @Test fun rejecting_the_oct_12_expense_changes_nothing_but_the_forecast() {
+        val rows = ledger()
+        val target = rows.first { it.date == d(2026, 10, 12) && it.kind == TxKind.EXPENSE }
+        val rejected = rows.map { if (it === target) it.copy(status = TxStatus.SKIPPED) else it }
+        val e = engineOn(d(2026, 10, 14), rejected)
+        assertEquals(tnd(180), e.available())
+        assertEquals(tnd(-90 + 128), fc(e, d(2026, 10, 14)).opening)
     }
 }

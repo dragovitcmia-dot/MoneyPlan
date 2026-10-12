@@ -84,10 +84,10 @@ fun SettingsScreen(
         Text(stringResource(R.string.settings_title), style = MaterialTheme.typography.headlineMedium)
         if (current != null) {
             // Which cards, in which order, and how they behave is decided by the pure SettingsPlan (and tested there).
-            val layout = SettingsPlan.build(current.walletMode)
+            val layout = SettingsPlan.build()
             for (card in layout.cards) {
                 when (card) {
-                    SettingsCard.INCOME -> key(generation) { IncomeCard(viewModel, current, layout) }
+                    SettingsCard.INCOME -> key(generation) { IncomeCard(viewModel, current) }
                     SettingsCard.REPEATING_PAYMENTS -> RepeatingPaymentsCard(viewModel)
                     SettingsCard.STARTING_POINT -> key(generation) { StartingPointCard(viewModel, current, layout) }
                     SettingsCard.APP_UPDATES -> AppUpdatesSection(updateManager)
@@ -160,10 +160,10 @@ private fun AmountField(label: String, initial: Long, allowNegative: Boolean, on
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-internal fun DateField(label: String, value: LocalDate, onPick: (LocalDate) -> Unit) {
+internal fun DateField(label: String, value: LocalDate, display: String? = null, onPick: (LocalDate) -> Unit) {
     var open by remember { mutableStateOf(false) }
     OutlinedButton(onClick = { open = true }, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) {
-        Text(stringResource(R.string.field_value_format, label, value.format(DateFormat)))
+        Text(stringResource(R.string.field_value_format, label, display ?: value.format(DateFormat)))
     }
     if (open) {
         val state = rememberDatePickerState(

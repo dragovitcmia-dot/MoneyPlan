@@ -53,7 +53,6 @@ import com.cashflow.app.engine.NewEntry
 import com.cashflow.app.engine.PatternChoice
 import com.cashflow.app.engine.Timing
 import com.cashflow.app.engine.TxKind
-import com.cashflow.app.engine.WalletMode
 import com.cashflow.app.engine.WhatIfResult
 import com.cashflow.app.ui.components.AppButton
 import com.cashflow.app.ui.components.fullBleed
@@ -330,13 +329,7 @@ fun EntryComposer(
                             Text(FormProblem.END_BEFORE_START.message(), style = MaterialTheme.typography.bodyMedium, color = colors.negative)
                         }
                     }
-                    if (kind == TxKind.INCOME && ui.walletMode == WalletMode.STATIC) {
-                        Text(
-                            stringResource(R.string.static_hint),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
+
                 }
             }
 

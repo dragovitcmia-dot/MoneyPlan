@@ -86,6 +86,7 @@ import com.cashflow.app.ui.components.HeroNumber
 import com.cashflow.app.ui.components.HeroOdometer
 import com.cashflow.app.ui.components.AppButton
 import com.cashflow.app.ui.components.AppButtonStyle
+import com.cashflow.app.ui.components.AnswerButtons
 import com.cashflow.app.ui.components.AppCard
 import com.cashflow.app.ui.components.KindButtons
 import com.cashflow.app.ui.items.CardDate
@@ -209,7 +210,11 @@ private fun HomeContent(
             tx = tx,
             title = labelOf(tx),
             onDismiss = { editing = null },
-            onConfirm = { amount ->
+            onReject = {
+                editing = null
+                skip(tx)
+            },
+            onAccept = { amount ->
                 editing = null
                 // Unchanged (also after rounding to 2 decimals) means: keep the stored amount exactly.
                 val changed = amount != tx.amount && amount != Money.roundToCents(tx.amount)
@@ -311,10 +316,13 @@ private fun CaughtUp() {
     }
 }
 
-/** Confirm with a different amount: the field is prefilled; a changed amount updates only this row. */
+/**
+ * Accept with a different amount: the field is prefilled; a changed amount updates only this row. The red
+ * cross rejects the item, the green check accepts it.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun EditAmountSheet(tx: Transaction, title: String, onDismiss: () -> Unit, onConfirm: (Long) -> Unit) {
+private fun EditAmountSheet(tx: Transaction, title: String, onDismiss: () -> Unit, onReject: () -> Unit, onAccept: (Long) -> Unit) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var text by remember { mutableStateOf(Money.formatInput(tx.amount)) }
     val amount = Money.parse(text, maxDecimals = 2)?.takeIf { it > 0 }
@@ -339,10 +347,7 @@ private fun EditAmountSheet(tx: Transaction, title: String, onDismiss: () -> Uni
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                 modifier = Modifier.fillMaxWidth(),
             )
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                AppButton(stringResource(R.string.action_cancel), onClick = onDismiss, modifier = Modifier.weight(1f), style = AppButtonStyle.Outlined)
-                AppButton(stringResource(R.string.action_confirm), onClick = { amount?.let(onConfirm) }, modifier = Modifier.weight(1f), enabled = amount != null)
-            }
+            AnswerButtons(onReject = onReject, onAccept = { amount?.let(onAccept) }, acceptEnabled = amount != null)
         }
     }
 }

@@ -32,11 +32,13 @@ import com.cashflow.app.engine.Money
 import com.cashflow.app.engine.Transaction
 import com.cashflow.app.engine.TxKind
 import com.cashflow.app.engine.TxStatus
+import com.cashflow.app.ui.components.AnswerButtons
 import com.cashflow.app.ui.components.AppButton
 import com.cashflow.app.ui.components.AppButtonStyle
 import com.cashflow.app.ui.components.LabeledTextField
 import com.cashflow.app.ui.settings.DateField
 import kotlinx.coroutines.launch
+import java.time.LocalDate
 
 /**
  * Change ONE item: amount, description and date, answer it (Done / Skip) or put it back to waiting, or delete
@@ -50,6 +52,7 @@ fun ItemEditSheet(
     actions: ItemActions,
     onDismiss: () -> Unit,
     onEditSeries: () -> Unit,
+    today: LocalDate,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val scope = rememberCoroutineScope()
@@ -113,21 +116,14 @@ fun ItemEditSheet(
                 enabled = amount != null,
                 modifier = Modifier.fillMaxWidth(),
             )
-            if (tx.status == TxStatus.PENDING) {
-                AppButton(
-                    stringResource(R.string.action_done),
-                    onClick = { amount?.let { a -> close { actions.done(tx, a, description, date) } } },
-                    enabled = amount != null,
-                    modifier = Modifier.fillMaxWidth(),
-                    style = AppButtonStyle.Tonal,
+            if (ItemEdits.canAnswer(tx, today)) {
+                // Red cross rejects (the edits are dropped), green check saves the edits and accepts.
+                AnswerButtons(
+                    onReject = { close { actions.skip(tx) } },
+                    onAccept = { amount?.let { a -> close { actions.done(tx, a, description, date) } } },
+                    acceptEnabled = amount != null,
                 )
-                AppButton(
-                    stringResource(R.string.action_skip),
-                    onClick = { close { actions.skip(tx) } },
-                    modifier = Modifier.fillMaxWidth(),
-                    style = AppButtonStyle.Outlined,
-                )
-            } else {
+            } else if (tx.status != TxStatus.PENDING) {
                 AppButton(
                     stringResource(R.string.action_mark_waiting),
                     onClick = { close { actions.markWaiting(tx) } },

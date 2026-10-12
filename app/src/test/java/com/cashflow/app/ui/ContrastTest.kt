@@ -35,7 +35,8 @@ class ContrastTest {
         for (p in listOf(Palette.dark, Palette.light)) {
             val names = p.textPairs().map { it.name }
             assertTrue(names.count { it.startsWith("calendar ") } >= 10)
-            assertTrue(p.graphicPairs().size >= 15)
+            assertTrue(p.graphicPairs().size >= 21)
+            assertTrue(p.graphicPairs().any { it.name.startsWith("accept check") } && p.graphicPairs().any { it.name.startsWith("reject cross") })
         }
         assertEquals(3.0, Contrast.GRAPHIC, 0.0)
     }

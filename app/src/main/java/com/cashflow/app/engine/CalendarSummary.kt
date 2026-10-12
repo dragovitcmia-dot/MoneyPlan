@@ -115,6 +115,9 @@ object CompactAmount {
         return "${(abs + unit / 2) / unit}$suffix"
     }
 
+    /** A balance: "135", "1.2k", and "-10" when negative (red in the cell). */
+    fun balance(millimes: Long): String = (if (millimes < 0) "-" else "") + format(millimes)
+
     /** "-75" / "+30". */
     fun signed(kind: TxKind, millimes: Long): String = (if (kind == TxKind.INCOME) "+" else "-") + format(millimes)
 }
