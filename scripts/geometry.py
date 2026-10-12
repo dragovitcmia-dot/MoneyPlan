@@ -18,6 +18,7 @@ STRINGS_XML = os.path.join(os.path.dirname(__file__), "..", "app", "src", "main"
 MIN_NAV_HEIGHT_DP = 48
 MIN_NAV_WIDTH_SHARE = 0.20
 MIN_BUTTON_HEIGHT_DP = 40
+SCREEN_W = 1080
 
 
 def adb(*args):
@@ -45,6 +46,7 @@ class Node:
         self.text = el.get("text", "").strip()
         self.desc = el.get("content-desc", "").strip()
         self.clickable = el.get("clickable") == "true"
+        self.selected = el.get("selected") == "true"
         self.cls = el.get("class", "")
 
     @property
@@ -102,13 +104,26 @@ def wait_for(text, timeout=20):
     raise SystemExit(f"GEOMETRY FAILED: {text!r} never appeared. Visible: {texts}")
 
 
+def chain(n):
+    out = []
+    while n is not None:
+        out.append(n)
+        n = n.parent
+    return out
+
+
 def clickable_of(n):
-    cur = n
-    while cur is not None:
+    """The control around a label: the nearest clickable ancestor; for the SELECTED tab (which Android may report
+    as not clickable, because tapping it again does nothing) the nearest selected ancestor."""
+    for cur in chain(n):
         if cur.clickable:
             return cur
-        cur = cur.parent
-    return n
+    for cur in chain(n):
+        if cur.selected:
+            return cur
+    # Last resort: the largest ancestor that is still a single cell (narrower than half the screen).
+    cells = [c for c in chain(n) if c.w * 2 <= SCREEN_W and c.w > 0]
+    return max(cells, key=lambda c: c.w * c.h) if cells else n
 
 
 def display():
@@ -131,7 +146,9 @@ def notice(title, message):
 
 
 def main():
+    global SCREEN_W
     W, H, dpi = display()
+    SCREEN_W = W
     dp = dpi / 160.0
     inset = nav_inset(H)
     print(f"screen {W}x{H} px, {dpi} dpi (1 dp = {dp:.2f} px), navigation bar inset {inset} px ({inset / dp:.0f} dp)")
@@ -148,9 +165,10 @@ def main():
             continue
         # the bottom-most match is the bar (a screen title may carry the same word)
         item = clickable_of(max(hits, key=lambda n: n.b[3]))
+        print(f"  {label}: " + " <- ".join(f"{c.cls.split('.')[-1]}[{c.b[0]},{c.b[1]}][{c.b[2]},{c.b[3]}]{'C' if c.clickable else ''}{'S' if c.selected else ''}" for c in chain(max(hits, key=lambda n: n.b[3]))[:4]))
         hd, wd = item.h / dp, item.w / dp
         measured.append(f"{label}: {wd:.0f} x {hd:.0f} dp ({item.w} x {item.h} px, {item.w / W:.0%} of width, clickable={item.clickable})")
-        if not item.clickable:
+        if not (item.clickable or item.selected):
             problems.append(f"nav item {label!r}: no clickable node around it")
         if hd < MIN_NAV_HEIGHT_DP:
             problems.append(f"nav item {label!r} is {hd:.0f} dp tall, needs >= {MIN_NAV_HEIGHT_DP}")
