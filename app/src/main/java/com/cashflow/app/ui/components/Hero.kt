@@ -152,6 +152,7 @@ class HeroOdometer {
                     }
                 }
             }
+            Log.i(TAG, "rolling t=${SystemClock.uptimeMillis()}")
             animate(0f, 1f, animationSpec = tween(OdometerTiming.DURATION_MILLIS, easing = LinearEasing)) { value, _ ->
                 timeFraction = value
             }

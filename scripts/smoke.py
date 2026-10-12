@@ -599,9 +599,21 @@ def run_hero_animation():
             problems.append("hero: screenrecord produced no video")
             frames = []
         print("  logcat CashflowHero:")
-        for line in adb("logcat", "-d", "-v", "time", "-s", "CashflowHero:I", check=False).splitlines():
+        launch_log = adb("logcat", "-d", "-v", "time", "-s", "CashflowHero:I", check=False)
+        for line in launch_log.splitlines():
             if "CashflowHero" in line:
                 print("   ", line)
+        # The app's own clock is the reliable duration measure: from the moment the roll starts to the moment
+        # it has settled. (A screen recording on a loaded CI emulator drops and duplicates frames.)
+        rolling = re.search(r"rolling t=(\d+)", launch_log)
+        settled = re.search(r"settled t=(\d+)", launch_log)
+        if rolling and settled:
+            took = int(settled.group(1)) - int(rolling.group(1))
+            print(f"  animation duration on the app clock: {took} ms (spec 1500 ms)")
+            if not 1450 <= took <= 1700:
+                problems.append(f"hero: the roll took {took} ms on the app clock, expected about 1500")
+        else:
+            problems.append("hero: the app log has no rolling/settled lines for the launch animation")
         time.sleep(1)
         screenshot("hero-anim-final")
         final = band_info(os.path.join(OUT, "hero-anim-final.png"))
@@ -648,8 +660,6 @@ def run_hero_animation():
                 shown_for = t_end - t_start
                 print(f"  observed: start value still shown from t={hero_frames[0][1]:.2f}s, first change after "
                       f"t={t_start:.2f}s, last change t={t_end:.2f}s -> rolling for {shown_for:.2f}s (spec 1.5s)")
-                if not 0.9 <= shown_for <= 2.2:
-                    problems.append(f"hero: observed animation duration {shown_for:.2f}s is far from 1.5 s")
             print(f"  first frame vs final screenshot: mean abs diff {diffs[0]:.2f}; last frame: {diffs[-1]:.2f}")
             if diffs[0] < 6.0:
                 problems.append("hero: the first frame already shows (almost) the final value, no count-down from all nines")
