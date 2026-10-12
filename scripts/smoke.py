@@ -443,7 +443,8 @@ def upcoming_flow(name, today):
     nov10 = ref_closing(_dt.date(2026, 11, 10), today)
     if nov10 < 0:
         try:
-            find(S["short_by_tag"].replace("%1$s", balance_text(-nov10)), timeout=30)
+            scroll_to_top(15)  # the list keeps its position after the sheet: look downwards from the top
+            find(S["short_by_tag"].replace("%1$s", balance_text(-nov10)), timeout=60)
             screenshot(f"{name}-upcoming-short")
         except NotFound as e:
             problems.append(f"{name}: Upcoming has no 'Short by {-nov10} TND' row for Nov 10 ({e})")
