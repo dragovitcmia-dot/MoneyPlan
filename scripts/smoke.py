@@ -102,6 +102,17 @@ class NotFound(Exception):
     pass
 
 
+def dismiss_system_dialog(nodes):
+    """An emulator's own "<app> isn't responding" box (seen for the launcher on slow runners) hides the app from the
+    UI dump: press Wait so the app is visible again."""
+    if any("isn't responding" in (t or "") for t, _, _ in nodes):
+        for t, _, b in nodes:
+            if (t or "").strip() == "Wait":
+                sh(f"input tap {(b[0] + b[2]) // 2} {(b[1] + b[3]) // 2}")
+                time.sleep(1)
+                return
+
+
 def find(text, scroll=True, last=False, timeout=FIND_TIMEOUT, contains=False):
     """Waits up to `timeout` (10 s) for a node with exactly this text (or, with `contains`, a text or content
     description that includes it); scrolls down while it is missing."""
@@ -111,6 +122,7 @@ def find(text, scroll=True, last=False, timeout=FIND_TIMEOUT, contains=False):
         nodes = dump_nodes()
         if nodes:
             last_nodes = nodes
+            dismiss_system_dialog(nodes)
             if contains:
                 hits = [b for t, d, b in nodes if text in t or text in d]
             else:
