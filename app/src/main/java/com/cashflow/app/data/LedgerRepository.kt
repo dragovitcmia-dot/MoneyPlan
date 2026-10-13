@@ -346,6 +346,9 @@ class LedgerRepository(private val db: AppDatabase, private val autoAccept: Auto
 
     // ---- internals ---------------------------------------------------------------------------
 
+    /** Forgets per-series flags of series that no longer exist. */
+    private suspend fun pruneFlags() = seriesFlags.prune(ruleDao.getAll().map { it.id }.toSet())
+
     private suspend fun rowsOf(ruleId: Long) = txDao.rowsForRule(ruleId).map { it.toDomain() }
 
     /**
