@@ -39,6 +39,7 @@ import com.cashflow.app.engine.Money
 import com.cashflow.app.engine.Postpone
 import com.cashflow.app.engine.PostponeChoice
 import com.cashflow.app.engine.RecurringRule
+import com.cashflow.app.engine.SeriesContext
 import com.cashflow.app.engine.Transaction
 import com.cashflow.app.engine.TxKind
 import com.cashflow.app.engine.TxStatus
@@ -64,8 +65,9 @@ fun ItemDetails(
     onEdit: () -> Unit,
 ) {
     val rules by home.rules.collectAsStateWithLifecycle()
+    val series by home.series.collectAsStateWithLifecycle()
     val rule = tx.recurringRuleId?.let { id -> rules.firstOrNull { it.id == id } }
-    ItemDetailsSheet(tx, rule, actions, today, onDismiss, onEdit)
+    ItemDetailsSheet(tx, rule, actions, today, onDismiss, onEdit, series)
 }
 
 /**
@@ -82,14 +84,12 @@ fun ItemDetailsSheet(
     today: LocalDate,
     onDismiss: () -> Unit,
     onEdit: () -> Unit,
+    series: SeriesContext = SeriesContext(),
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val scope = rememberCoroutineScope()
     var amountText by remember(tx.id) { mutableStateOf(Money.formatInput(tx.amount)) }
     var pickingDate by remember(tx.id) { mutableStateOf(false) }
-    var editingSeries by remember(tx.id) { mutableStateOf(false) }
-    var endingSeries by remember(tx.id) { mutableStateOf(false) }
-    var deletingSeries by remember(tx.id) { mutableStateOf(false) }
 
     val typed = Money.parse(amountText, maxDecimals = 2)?.takeIf { ItemEdits.canSave(it) }
     val label = actions.labelOf(tx)
@@ -217,16 +217,8 @@ fun ItemDetailsSheet(
             if (rule != null) {
                 HorizontalDivider()
                 Text(stringResource(R.string.series_section_title), style = MaterialTheme.typography.titleMedium)
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    AppButton(stringResource(R.string.series_edit_future), onClick = { editingSeries = true }, style = AppButtonStyle.Tonal)
-                    AppButton(stringResource(R.string.series_end), onClick = { endingSeries = true }, style = AppButtonStyle.Outlined)
-                    AppButton(
-                        stringResource(R.string.series_delete),
-                        onClick = { deletingSeries = true },
-                        style = AppButtonStyle.Outlined,
-                        contentColor = MaterialTheme.colorScheme.error,
-                    )
-                }
+                // Edit series, Extend, End series and Delete series: for an item of a series in ANY status (they only affect today and later).
+                SeriesActions(rule, today, actions, series, onClose = { after -> close(after) })
             }
         }
     }
@@ -242,40 +234,6 @@ fun ItemDetailsSheet(
         )
     }
 
-    if (rule != null && editingSeries) {
-        SeriesEditDialog(
-            rule = rule,
-            onSave = { amount, name -> editingSeries = false; close { actions.editSeries(rule, amount, name) } },
-            onDismiss = { editingSeries = false },
-        )
-    }
-    if (rule != null && endingSeries) {
-        SeriesEndDialog(
-            rule = rule,
-            earliest = today,
-            initial = maxOf(tx.date, today).plusDays(1),
-            onEnd = { from -> endingSeries = false; close { actions.endSeries(rule, from) } },
-            onDismiss = { endingSeries = false },
-        )
-    }
-    if (rule != null && deletingSeries) {
-        AlertDialog(
-            onDismissRequest = { deletingSeries = false },
-            title = { Text(stringResource(R.string.series_delete_title, rule.description.ifBlank { label })) },
-            text = { Column(Modifier.verticalScroll(rememberScrollState())) { Text(stringResource(R.string.series_delete_body)) } },
-            confirmButton = {
-                TextButton(
-                    onClick = { deletingSeries = false; close { actions.deleteSeries(rule) } },
-                    modifier = Modifier.heightIn(min = 56.dp),
-                ) { Text(stringResource(R.string.action_delete)) }
-            },
-            dismissButton = {
-                TextButton(onClick = { deletingSeries = false }, modifier = Modifier.heightIn(min = 56.dp)) {
-                    Text(stringResource(R.string.action_cancel))
-                }
-            },
-        )
-    }
 }
 
 @Composable
@@ -288,76 +246,5 @@ private fun DetailRow(label: String, value: String, valueColor: androidx.compose
             color = if (valueColor == androidx.compose.ui.graphics.Color.Unspecified) MaterialTheme.colorScheme.onSurface else valueColor,
             modifier = Modifier.weight(0.6f),
         )
-    }
-}
-
-/** New name and amount for the series: from now on (waiting future items are regenerated; answered ones are kept). */
-@Composable
-private fun SeriesEditDialog(rule: RecurringRule, onSave: (Long, String) -> Unit, onDismiss: () -> Unit) {
-    var name by remember(rule.id) { mutableStateOf(rule.description) }
-    var amountText by remember(rule.id) { mutableStateOf(Money.formatInput(rule.amount)) }
-    val typed = Money.parse(amountText, maxDecimals = 2)?.takeIf { ItemEdits.canSave(it) }
-    val amount = typed?.let { if (it == Money.roundToCents(rule.amount)) rule.amount else it }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.series_edit_future_title)) },
-        text = {
-            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text(stringResource(R.string.series_edit_future_body), style = MaterialTheme.typography.bodyMedium)
-                LabeledTextField(
-                    value = name,
-                    onValueChange = { name = it },
-                    label = { Text(stringResource(R.string.description_label)) },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                LabeledTextField(
-                    value = amountText,
-                    onValueChange = { amountText = it },
-                    label = { Text(stringResource(R.string.amount_label)) },
-                    singleLine = true,
-                    isError = typed == null,
-                    supportingText = { if (typed == null) Text(stringResource(R.string.amount_error_decimals)) },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = { amount?.let { onSave(it, name) } }, enabled = amount != null, modifier = Modifier.heightIn(min = 56.dp)) {
-                Text(stringResource(R.string.action_save))
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss, modifier = Modifier.heightIn(min = 56.dp)) { Text(stringResource(R.string.action_cancel)) }
-        },
-    )
-}
-
-/** "End series": pick the first day the payment should no longer appear. */
-@Composable
-private fun SeriesEndDialog(rule: RecurringRule, earliest: LocalDate, initial: LocalDate, onEnd: (LocalDate) -> Unit, onDismiss: () -> Unit) {
-    var from by remember(rule.id) { mutableStateOf(initial) }
-    var picking by remember { mutableStateOf(false) }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.series_end_title, rule.description)) },
-        text = {
-            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text(stringResource(R.string.series_end_body), style = MaterialTheme.typography.bodyMedium)
-                androidx.compose.material3.OutlinedButton(onClick = { picking = true }, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) {
-                    Text(stringResource(R.string.field_value_format, stringResource(R.string.series_end_from), AppDates.format(from)))
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = { onEnd(from) }, modifier = Modifier.heightIn(min = 56.dp)) { Text(stringResource(R.string.series_end)) }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss, modifier = Modifier.heightIn(min = 56.dp)) { Text(stringResource(R.string.action_cancel)) }
-        },
-    )
-    if (picking) {
-        DatePickerDialogFor(initial = from, earliest = earliest, onPick = { from = it }, onDismiss = { picking = false })
     }
 }

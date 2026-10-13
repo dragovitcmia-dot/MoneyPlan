@@ -630,6 +630,40 @@ def finish_name_step(expect_text):
         time.sleep(1.5)
 
 
+def series_walk(name):
+    """Upcoming with its filter chips (All, Repeating, One-time), the series list, a series sheet with the Extend choices,
+    and the Edit form; each screen is photographed as it is reached."""
+    try:
+        tap_text(NAV_UPCOMING, scroll=False)
+        time.sleep(1.5)
+        scroll_to_top(3)
+        screenshot(f"{name}-upcoming-chips")
+        tap_text(S["filter_repeating"], scroll=False)
+        time.sleep(1.5)
+        screenshot(f"{name}-series-list")
+        tap_text("Sunday expense", scroll=False, contains=True)
+        time.sleep(1.5)
+        find(S["series_extend_title"], scroll=False, timeout=8)
+        screenshot(f"{name}-series-sheet")
+        swipe_up(0.8, 0.3)
+        screenshot(f"{name}-series-sheet-bottom")
+        tap_text(S["series_edit_action"], scroll=False)
+        time.sleep(1.5)
+        screenshot(f"{name}-series-edit")
+        sh("input keyevent 4")  # closes the form (and, with the next Back, the sheet)
+        time.sleep(1)
+        sh("input keyevent 4")
+        time.sleep(1)
+        tap_text(S["filter_all"], scroll=False, timeout=8)
+        time.sleep(1)
+    except NotFound as e:
+        screenshot(f"{name}-series-FAILED")
+        print("  series walk:", e)
+        recover_to_home()
+        return [f"{name}: series walk: {e}"]
+    return []
+
+
 def open_plan_wizard():
     tap_text(S["plan_button"], scroll=True, timeout=15)
     time.sleep(1.2)
@@ -739,6 +773,7 @@ def run_config(name, night, font, size, density):
             today = device_now().date()
             extra += calendar_flow(name, today)
             extra += upcoming_flow(name, today)
+            extra += series_walk(name)
         tap_text(TEXT_SETTINGS, scroll=False)
         time.sleep(1)
         scroll_to_top()  # the tab keeps its scroll position, so a fresh look starts from the top

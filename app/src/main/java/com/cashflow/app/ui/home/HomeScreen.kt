@@ -145,6 +145,7 @@ private fun HomeContent(
     var changing by remember { mutableStateOf<Transaction?>(null) }
 
     val actions = rememberItemActions(viewModel, snackbarHost)
+    val seriesCtx by viewModel.series.collectAsStateWithLifecycle()
     fun labelOf(tx: Transaction) = actions.labelOf(tx)
     fun confirm(tx: Transaction, newAmount: Long? = null) = actions.confirm(tx, newAmount)
     fun reject(tx: Transaction) = actions.requestReject(tx) // asks first: rejecting is permanent
@@ -195,7 +196,8 @@ private fun HomeContent(
                     haptics = haptics,
                     onConfirm = { fromSwipe ->
                         if (fromSwipe) viewModel.onSwipeCompleted()
-                        confirm(tx)
+                        // A series that asks for the amount each time opens the amount sheet instead of accepting.
+                        if (actions.asksAmount(tx, seriesCtx)) editing = tx else confirm(tx)
                     },
                     onSkip = { fromSwipe ->
                         if (fromSwipe) viewModel.onSwipeCompleted()

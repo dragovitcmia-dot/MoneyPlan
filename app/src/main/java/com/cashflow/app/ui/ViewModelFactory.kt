@@ -18,7 +18,7 @@ class ViewModelFactory(private val app: CashflowApp) : ViewModelProvider.Factory
         modelClass.isAssignableFrom(CalendarViewModel::class.java) ->
             CalendarViewModel(app.snapshots, app.clock) as T
         modelClass.isAssignableFrom(UpcomingViewModel::class.java) ->
-            UpcomingViewModel(app.snapshots) as T
+            UpcomingViewModel(app.snapshots, app.repository.seriesContext) as T
         else -> throw IllegalArgumentException("Unknown ViewModel ${modelClass.name}")
     }
 }

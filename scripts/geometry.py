@@ -173,6 +173,68 @@ def check_sheet(title, W, H, dp, inset):
     return problems
 
 
+def tap(n):
+    sh(f"input tap {(n.b[0] + n.b[2]) // 2} {(n.b[1] + n.b[3]) // 2}")
+
+
+def check_upcoming(W, H, dp, nav_top):
+    """Loads the sample data (Settings > Developer tools), opens Upcoming and measures the filter chips; then selects
+    Repeating and checks that the series rows are clickable and inside the screen."""
+    problems = []
+    nodes, hits = wait_for(S["nav_settings"])
+    tap(clickable_of(max(hits, key=lambda n: n.b[3])))
+    time.sleep(1.5)
+    for _ in range(12):  # the developer tools card is at the bottom of Settings
+        nodes = dump()
+        load = [n for n in nodes if n.text == S["debug_load_sample"] or n.desc == S["debug_load_sample"]]
+        if load:
+            break
+        sh(f"input swipe {W // 2} {int(H * 0.75)} {W // 2} {int(H * 0.30)} 300")
+        time.sleep(0.8)
+    else:
+        return ["Settings: 'Load sample data' not found"]
+    tap(clickable_of(load[0]))
+    time.sleep(3)
+    nodes, hits = wait_for(S["nav_upcoming"])
+    tap(clickable_of(max(hits, key=lambda n: n.b[3])))
+    time.sleep(2)
+    chips = {}
+    for key in ("filter_all", "filter_repeating", "filter_one_time"):
+        nodes, hit = wait_for(S[key])
+        chips[key] = clickable_of(min(hit, key=lambda n: n.b[1]))
+    lines = []
+    for key, chip in chips.items():
+        inside = chip.b[0] >= 0 and chip.b[2] <= W and chip.b[1] >= 0 and chip.b[3] <= H
+        lines.append(f"{S[key]}: {chip.w / dp:.0f} x {chip.h / dp:.0f} dp {'ok' if inside else 'OUTSIDE'}")
+        if chip.h / dp < MIN_NAV_HEIGHT_DP:
+            problems.append(f"Upcoming chip {S[key]!r} is {chip.h / dp:.0f} dp tall, needs >= {MIN_NAV_HEIGHT_DP}")
+        if not inside:
+            problems.append(f"Upcoming chip {S[key]!r} is not inside the screen: {chip.b}")
+        if not chip.clickable:
+            problems.append(f"Upcoming chip {S[key]!r} is not clickable")
+    print("UPCOMING CHIPS:", "; ".join(lines))
+    notice("Geometry: Upcoming filter chips", "; ".join(lines))
+    tap(chips["filter_repeating"])
+    time.sleep(2)
+    nodes = dump()
+    rows = [n for n in nodes if n.text.startswith("Sunday expense") or n.desc.startswith("Sunday expense") or "Daily income" in (n.text + n.desc)]
+    rows = [clickable_of(r) for r in rows if r.b[1] > chips["filter_repeating"].b[3]]
+    if not rows:
+        problems.append("with Repeating selected no series row was found")
+    else:
+        lines = []
+        for r in rows:
+            inside = r.b[0] >= 0 and r.b[2] <= W and r.b[1] >= 0 and r.b[3] <= nav_top
+            lines.append(f"[{r.b[0]},{r.b[1]}][{r.b[2]},{r.b[3]}] {r.w / dp:.0f} x {r.h / dp:.0f} dp clickable={r.clickable} inside={inside}")
+            if not r.clickable:
+                problems.append(f"a series row is not clickable: {r.b}")
+            if not inside:
+                problems.append(f"a series row is not inside the screen above the bar: {r.b}")
+        print("SERIES ROWS:", "; ".join(lines))
+        notice("Geometry: series rows", "; ".join(lines))
+    return problems
+
+
 def main():
     global SCREEN_W
     W, H, dpi = display()
@@ -292,6 +354,9 @@ def main():
     problems += check_sheet("Add expense wizard, Amount step", W, H, dp, inset)
     sh("input keyevent 4")  # an untouched wizard closes at once
     time.sleep(1.5)
+    # 3. Upcoming: the three filter chips (>= 48 dp, inside the screen) and, with Repeating selected, the series rows
+    problems += check_upcoming(W, H, dp, nav_top)
+
     if problems:
         for p in problems:
             print(f"::error title=Geometry gate::{p}")

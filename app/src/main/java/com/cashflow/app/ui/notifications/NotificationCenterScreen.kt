@@ -21,6 +21,7 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -65,6 +66,7 @@ private fun iconOf(type: NotificationType): ImageVector = when (type) {
     NotificationType.SHORTAGE -> Icons.Filled.Warning
     NotificationType.AUTO_INCOME -> Icons.Filled.Check
     NotificationType.INFO -> Icons.Filled.Info
+    NotificationType.LAST_PAYMENT -> Icons.Filled.Refresh
 }
 
 /** The bell's history: newest first in Today / Earlier; tap a row to open its screen, swipe to remove it. */

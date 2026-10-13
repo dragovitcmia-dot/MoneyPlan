@@ -15,6 +15,8 @@ import com.cashflow.app.R
 import com.cashflow.app.engine.AppDates
 import com.cashflow.app.engine.ConfirmGate
 import com.cashflow.app.engine.DeleteOutcome
+import com.cashflow.app.engine.ExtendChoice
+import com.cashflow.app.engine.SeriesContext
 import com.cashflow.app.engine.RecurringRule
 import com.cashflow.app.engine.Transaction
 import com.cashflow.app.engine.TxKind
@@ -127,15 +129,41 @@ class ItemActions(
 
     fun endSeries(rule: RecurringRule, from: LocalDate) {
         haptics.confirm()
-        viewModel.endSeriesFrom(rule.id, from)
-        announcer.announce(resources.getString(R.string.series_ended, AppDates.format(from.minusDays(1))))
+        viewModel.endSeriesFrom(rule.id, from) { plan ->
+            announcer.announce(resources.getString(R.string.series_ended, AppDates.format(from.minusDays(1)))) {
+                if (plan != null) viewModel.undoEndSeries(plan.first, plan.second)
+            }
+        }
     }
 
     fun deleteSeries(rule: RecurringRule) {
         haptics.reject()
-        viewModel.deleteSeries(rule.id)
-        announcer.announce(resources.getString(R.string.series_deleted))
+        viewModel.deleteSeries(rule.id) { deleted ->
+            announcer.announce(resources.getString(R.string.series_deleted)) { if (deleted != null) viewModel.undoDeleteSeries(deleted) }
+        }
     }
+
+    /** "Extend": the end moves later (never earlier) and the waiting occurrences up to it appear. */
+    fun extendSeries(rule: RecurringRule, choice: ExtendChoice) {
+        haptics.confirm()
+        viewModel.extendSeries(rule.id, choice) { end ->
+            announcer.announce(if (end == null) resources.getString(R.string.series_extend_nothing) else resources.getString(R.string.series_extended, end))
+        }
+    }
+
+    fun saveSeries(rule: RecurringRule, askAmount: Boolean) {
+        haptics.confirm()
+        viewModel.saveSeries(rule, askAmount)
+        announcer.announce(resources.getString(R.string.series_changed))
+    }
+
+    fun setAskAmount(rule: RecurringRule, on: Boolean) {
+        haptics.tick()
+        viewModel.setAskAmount(rule.id, on)
+    }
+
+    /** True for an item of a series that asks for the amount each time: accepting it opens the amount sheet first. */
+    fun asksAmount(tx: Transaction, series: SeriesContext): Boolean = tx.recurringRuleId?.let { it in series.askAmountRuleIds } == true
 
     /** Manual items are removed (Undo puts them back); generated ones are skipped for this day only. */
     fun delete(tx: Transaction) {

@@ -1,7 +1,10 @@
 package com.cashflow.app.data
 
 import androidx.room.withTransaction
+import com.cashflow.app.engine.AppDates
 import com.cashflow.app.engine.AppSettings
+import com.cashflow.app.engine.ExtendChoice
+import com.cashflow.app.engine.SeriesExtend
 import com.cashflow.app.engine.DeleteOutcome
 import com.cashflow.app.engine.DeletePlan
 import com.cashflow.app.engine.Deletions
@@ -26,7 +29,7 @@ import java.time.LocalDateTime
  * change) come from the pure engine; this class loads rows, asks the engine, and writes the result.
  * Nothing here ever confirms a transaction on its own: only [confirm] / [skip] / [undo] change status.
  */
-class LedgerRepository(private val db: AppDatabase, private val autoAccept: AutoAcceptStore) {
+class LedgerRepository(private val db: AppDatabase, private val autoAccept: AutoAcceptStore, private val seriesFlags: SeriesFlagsStore) {
     private val txDao = db.transactionDao()
     private val ruleDao = db.recurringRuleDao()
     private val settingsDao = db.settingsDao()
@@ -40,6 +43,9 @@ class LedgerRepository(private val db: AppDatabase, private val autoAccept: Auto
         txDao.observeAll().map { rows -> rows.map { it.toDomain() } }.flowOn(Dispatchers.Default)
     val rules: Flow<List<RecurringRule>> =
         ruleDao.observeAll().map { rows -> rows.map { it.toDomain() } }.flowOn(Dispatchers.Default)
+
+    /** Which series ask for the amount each time and which the user ended explicitly. */
+    val seriesContext: kotlinx.coroutines.flow.StateFlow<com.cashflow.app.engine.SeriesContext> = seriesFlags.flags
 
     /** Run on app start, on resume, and when the day changes. Idempotent; never confirms anything. */
     suspend fun runMaintenance(today: LocalDate) {
@@ -162,6 +168,7 @@ class LedgerRepository(private val db: AppDatabase, private val autoAccept: Auto
         val rule = ruleDao.get(ruleId)?.toDomain() ?: return@withTransaction null
         val plan = Deletions.planThisAndFuture(tx, rule, rowsOf(ruleId), today)
         apply(plan.change)
+        seriesFlags.markEnded(ruleId)
         plan
     }
 
@@ -171,6 +178,7 @@ class LedgerRepository(private val db: AppDatabase, private val autoAccept: Auto
             ruleDao.update(plan.oldRule.toEntity())
             if (plan.removed.isNotEmpty()) txDao.insertAll(plan.removed.map { it.toEntity() })
         }
+        seriesFlags.unmarkEnded(plan.oldRule.id)
     }
 
     /** Undo of a manual delete: puts the row back (it gets a new id). */
@@ -209,6 +217,7 @@ class LedgerRepository(private val db: AppDatabase, private val autoAccept: Auto
             val rule = ruleDao.get(id)?.toDomain() ?: return@withTransaction
             apply(RuleMaintenance.stop(rule, rowsOf(id), today))
         }
+        seriesFlags.markEnded(id)
     }
 
     /** "End series" from [from]: no occurrence from that day on; waiting future ones are removed, the past stays. */
@@ -217,6 +226,7 @@ class LedgerRepository(private val db: AppDatabase, private val autoAccept: Auto
             val rule = ruleDao.get(id)?.toDomain() ?: return@withTransaction
             apply(RuleMaintenance.endFrom(rule, rowsOf(id), from, today))
         }
+        seriesFlags.markEnded(id)
     }
 
     /** Removes the rule and its PENDING future rows; rows dated today or earlier are kept. */
@@ -227,7 +237,74 @@ class LedgerRepository(private val db: AppDatabase, private val autoAccept: Auto
             if (ids.isNotEmpty()) txDao.deleteByIds(ids)
             ruleDao.deleteById(id)
         }
+        pruneFlags()
     }
+
+    /** Undo of "End series": the old end date and the removed waiting occurrences come back. */
+    suspend fun undoEndSeries(oldRule: RecurringRule, removed: List<Transaction>) {
+        db.withTransaction {
+            ruleDao.update(oldRule.toEntity())
+            if (removed.isNotEmpty()) txDao.insertAll(removed.map { it.toEntity() })
+        }
+        seriesFlags.unmarkEnded(oldRule.id)
+    }
+
+    /** The series and the waiting occurrences "End series" from [from] would remove (for its Undo). */
+    suspend fun endSeriesPlan(id: Long, from: LocalDate, today: LocalDate): Pair<RecurringRule, List<Transaction>>? {
+        val rule = ruleDao.get(id)?.toDomain() ?: return null
+        val rows = rowsOf(id)
+        val removedIds = RuleMaintenance.endFrom(rule, rows, from, today).deleteIds.toSet()
+        return rule to rows.filter { it.id in removedIds }
+    }
+
+    /**
+     * Extends a series (also an ended one) and generates its waiting occurrences up to the new end. Returns the new end
+     * date as the text to show ("No end" for none), or null when the choice would not move the end.
+     */
+    suspend fun extendSeries(id: Long, choice: ExtendChoice, today: LocalDate): String? = db.withTransaction {
+        val rule = ruleDao.get(id)?.toDomain() ?: return@withTransaction null
+        val change = SeriesExtend.apply(rule, rowsOf(id), choice, today) ?: return@withTransaction null
+        apply(change)
+        seriesFlags.unmarkEnded(id)
+        change.rule.endDate?.let { AppDates.format(it) } ?: "No end"
+    }
+
+    /** Saves an edited series (waiting future occurrences regenerate) together with its "ask me the amount" switch. */
+    suspend fun saveSeries(rule: RecurringRule, askAmount: Boolean, today: LocalDate) {
+        val old = ruleDao.get(rule.id)?.toDomain()
+        saveRule(rule, today)
+        seriesFlags.setAskAmount(rule.id, askAmount)
+        // A later end date makes an explicitly ended series run again.
+        if (old != null && (rule.endDate == null || (old.endDate != null && rule.endDate.isAfter(old.endDate)))) seriesFlags.unmarkEnded(rule.id)
+    }
+
+    suspend fun setAskAmount(ruleId: Long, on: Boolean) = seriesFlags.setAskAmount(ruleId, on)
+
+    /** Everything needed to take a deleted series back: the series, all its rows as they were, and which of them were removed. */
+    class DeletedSeries(val rule: RecurringRule, val rows: List<Transaction>, val removedIds: Set<Long>, val ask: Boolean, val ended: Boolean)
+
+    /** Deletes the series like [deleteRule] and returns what [undoDeleteSeries] needs. Accepted and rejected rows are kept (they lose the link). */
+    suspend fun deleteSeriesWithUndo(id: Long, today: LocalDate): DeletedSeries? {
+        val rule = ruleDao.get(id)?.toDomain() ?: return null
+        val rows = rowsOf(id)
+        val removed = RuleMaintenance.disable(rule, rows, today).deleteIds.toSet()
+        val flags = seriesFlags.flags.value
+        deleteRule(id, today)
+        return DeletedSeries(rule, rows, removed, id in flags.askAmountRuleIds, id in flags.endedRuleIds)
+    }
+
+    suspend fun undoDeleteSeries(d: DeletedSeries) {
+        db.withTransaction {
+            ruleDao.insert(d.rule.toEntity()) // the same id: the rows link back to it
+            val (gone, kept) = d.rows.partition { it.id in d.removedIds }
+            if (kept.isNotEmpty()) txDao.updateAll(kept.map { it.toEntity() })
+            if (gone.isNotEmpty()) txDao.insertAll(gone.map { it.toEntity() })
+        }
+        seriesFlags.setAskAmount(d.rule.id, d.ask)
+        if (d.ended) seriesFlags.markEnded(d.rule.id)
+    }
+
+    private suspend fun pruneFlags() = seriesFlags.prune(ruleDao.getAll().map { it.id }.toSet())
 
     // ---- seeding / debug ---------------------------------------------------------------------
 
@@ -248,6 +325,7 @@ class LedgerRepository(private val db: AppDatabase, private val autoAccept: Auto
             settingsDao.deleteAll()
             maintain(today)
         }
+        pruneFlags()
     }
 
     // ---- internals ---------------------------------------------------------------------------

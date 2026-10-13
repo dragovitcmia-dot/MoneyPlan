@@ -42,6 +42,7 @@ fun NotificationEntity.toBell() = BellEntry(
     amountMillimes = amountMillimes,
     createdAt = Instant.ofEpochMilli(createdAt),
     readAt = readAt?.let(Instant::ofEpochMilli),
+    key = key,
 )
 
 @Dao
@@ -67,6 +68,15 @@ interface NotificationDao {
 
     @Query("DELETE FROM notifications WHERE id IN (:ids)")
     suspend fun deleteIds(ids: List<Long>)
+
+    @Query("SELECT * FROM notifications")
+    suspend fun getAll(): List<NotificationEntity>
+
+    @Query("DELETE FROM notifications WHERE `key` = :key")
+    suspend fun deleteByKey(key: String)
+
+    @Query("UPDATE notifications SET title = :title, body = :body WHERE `key` = :key")
+    suspend fun updateText(key: String, title: String, body: String)
 
     @Query("SELECT id, createdAt FROM notifications")
     suspend fun idsWithTime(): List<IdTime>

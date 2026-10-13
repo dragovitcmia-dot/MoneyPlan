@@ -6,10 +6,10 @@ import java.time.LocalTime
 import java.time.ZoneId
 import java.time.temporal.ChronoUnit
 
-enum class NotificationType { HEADS_UP_WEEK, HEADS_UP_DAY, DAY_OF, SHORTAGE, AUTO_INCOME, INFO }
+enum class NotificationType { HEADS_UP_WEEK, HEADS_UP_DAY, DAY_OF, SHORTAGE, AUTO_INCOME, INFO, LAST_PAYMENT }
 
 /** Where a tap on a notification (or a bell row) leads. */
-enum class NotificationRoute { UPCOMING, CALENDAR }
+enum class NotificationRoute { UPCOMING, CALENDAR, SERIES }
 
 enum class DecisionAction { POST, CANCEL }
 
@@ -43,6 +43,10 @@ data class NotificationDecision(
     val bellKey: String?,
     val amountMillimes: Long? = null,
     val action: DecisionAction = DecisionAction.POST,
+    /** The series a [NotificationRoute.SERIES] tap opens. */
+    val ruleId: Long? = null,
+    /** A single waiting item of an "ask me the amount" series: the tap opens its amount sheet. */
+    val itemId: Long? = null,
 )
 
 /**
@@ -99,16 +103,18 @@ object Notifications {
         rules: List<RecurringRule>,
         forecast: List<DayForecast>,
         alreadyPosted: Set<String>,
+        series: SeriesContext = SeriesContext(),
     ): List<NotificationDecision> {
         if (!settings.enabled) return emptyList()
         val local = now.atZone(zone)
         val today = local.toLocalDate()
         val time = local.toLocalTime()
         val out = mutableListOf<NotificationDecision>()
-        out += dayOf(today, time, settings, items, alreadyPosted)
+        out += dayOf(today, time, settings, items, alreadyPosted, series)
         if (settings.headsUp) out += headsUps(today, time, settings, items, rules, alreadyPosted)
         if (settings.shortageAlerts) out += shortage(today, time, settings, forecast, alreadyPosted)
         out += autoIncome(today, time, settings, items, alreadyPosted)
+        if (settings.headsUp) out += lastPayments(today, time, settings, items, rules, series, alreadyPosted)
         return out
     }
 
@@ -120,12 +126,9 @@ object Notifications {
         s: NotificationSettings,
         items: List<Transaction>,
         posted: Set<String>,
+        series: SeriesContext,
     ): List<NotificationDecision> {
-        val waiting = items.filter {
-            it.status == TxStatus.PENDING && !it.date.isAfter(today) &&
-                // Repeating income is about to be accepted by itself: it is not asked about.
-                !(s.autoAcceptIncome && it.kind == TxKind.INCOME && it.source == TxSource.RECURRING)
-        }
+        val waiting = waitingSet(today, s.autoAcceptIncome, items)
         if (waiting.isEmpty()) {
             val leftover = posted.any { k -> isDayKey(k, today) || isDayKey(k, today.minusDays(1)) }
             return if (leftover) {
@@ -149,22 +152,7 @@ object Notifications {
         val expenses = waiting.filter { it.kind == TxKind.EXPENSE }.sumOf { it.amount }
         val income = waiting.filter { it.kind == TxKind.INCOME }.sumOf { it.amount }
         val again = posted.any { isDayKey(it, today) } // something was already said about today: this one is a nag
-        val title = when {
-            again -> "Still waiting"
-            expenses == 0L -> "Confirm today's income"
-            else -> "Confirm today's payments"
-        }
-        val body = if (waiting.size == 1) {
-            val only = waiting.single()
-            "${nameOf(only)} ${Money.formatSigned(only.kind, only.amount)}"
-        } else {
-            val parts = buildList {
-                add("${waiting.size} items")
-                if (expenses > 0) add(Money.formatSigned(TxKind.EXPENSE, expenses))
-                if (income > 0) add(Money.formatSigned(TxKind.INCOME, income))
-            }
-            parts.joinToString(", ")
-        }
+        val (title, body) = dayText(waiting, again)
         val bellKey = "DAY|$today|bell"
         return listOf(
             NotificationDecision(
@@ -177,8 +165,37 @@ object Notifications {
                 post = true,
                 bellKey = bellKey.takeIf { it !in posted },
                 amountMillimes = income - expenses,
+                itemId = waiting.singleOrNull()?.takeIf { it.recurringRuleId in series.askAmountRuleIds }?.id,
             ),
         )
+    }
+
+    /** PENDING items due today or earlier that the day summary asks about (income that repeats is accepted by itself when that is on). */
+    fun waitingSet(today: LocalDate, autoAccept: Boolean, items: List<Transaction>): List<Transaction> = items.filter {
+        it.status == TxStatus.PENDING && !it.date.isAfter(today) &&
+            !(autoAccept && it.kind == TxKind.INCOME && it.source == TxSource.RECURRING)
+    }
+
+    /** The title and body of the day-of notification; [again] makes it a nag ("Still waiting"). */
+    fun dayText(waiting: List<Transaction>, again: Boolean): Pair<String, String> {
+        val expenses = waiting.filter { it.kind == TxKind.EXPENSE }.sumOf { it.amount }
+        val income = waiting.filter { it.kind == TxKind.INCOME }.sumOf { it.amount }
+        val title = when {
+            again -> "Still waiting"
+            expenses == 0L -> "Confirm today's income"
+            else -> "Confirm today's payments"
+        }
+        val body = if (waiting.size == 1) {
+            val only = waiting.single()
+            "${nameOf(only)} ${Money.formatSigned(only.kind, only.amount)}"
+        } else {
+            buildList {
+                add("${waiting.size} items")
+                if (expenses > 0) add(Money.formatSigned(TxKind.EXPENSE, expenses))
+                if (income > 0) add(Money.formatSigned(TxKind.INCOME, income))
+            }.joinToString(", ")
+        }
+        return title to body
     }
 
     private fun isDayKey(key: String, date: LocalDate) = key.startsWith("DAY|$date|") && !key.endsWith("|bell")
@@ -198,23 +215,15 @@ object Notifications {
         val end = start.plusHours(HEADS_UP_WINDOW_HOURS)
         val inWindow = !time.isBefore(start) && (end.isBefore(start) || time.isBefore(end))
         if (!inWindow) return emptyList()
-        val byId = rules.associateBy { it.id }
-        fun rule(tx: Transaction) = tx.recurringRuleId?.let(byId::get)
         val out = mutableListOf<NotificationDecision>()
 
-        fun group(days: Long, type: NotificationType, prefix: String, title: String, when_: String, eligible: (Transaction) -> Boolean) {
+        fun group(days: Long, type: NotificationType, prefix: String, week: Boolean) {
             val target = today.plusDays(days)
             val key = "$prefix|$target"
             if (key in posted) return
-            val list = items.filter { it.status == TxStatus.PENDING && it.kind == TxKind.EXPENSE && it.date == target && eligible(it) }
-                .sortedWith(compareBy<Transaction> { it.amount }.thenBy { it.id }.reversed())
+            val list = headsUpItems(items, rules, target, week)
             if (list.isEmpty()) return
-            val total = list.sumOf { it.amount }
-            val text = if (list.size == 1) {
-                "${nameOf(list[0])} ${Money.formatSigned(TxKind.EXPENSE, list[0].amount)}, ${AppDates.dayMonth(target)}"
-            } else {
-                "${list.size} payments $when_, ${Money.formatSigned(TxKind.EXPENSE, total)}"
-            }
+            val (title, text) = headsUpText(list, target, week)
             out += NotificationDecision(
                 key = key,
                 type = type,
@@ -228,10 +237,31 @@ object Notifications {
             )
         }
         // A week ahead: one-time payments and the ones that come monthly or less often.
-        group(7, NotificationType.HEADS_UP_WEEK, "HU7", "Coming up", "next week") { tx -> rule(tx)?.pattern?.let(::monthlyOrLess) ?: true }
+        group(7, NotificationType.HEADS_UP_WEEK, "HU7", week = true)
         // The day before: everything except daily repeaters.
-        group(1, NotificationType.HEADS_UP_DAY, "HU1", "Tomorrow", "tomorrow") { tx -> rule(tx)?.pattern != RecurrencePattern.Daily }
+        group(1, NotificationType.HEADS_UP_DAY, "HU1", week = false)
         return out
+    }
+
+    /** The waiting expenses a heads-up for [target] is about (a week ahead: one-time and monthly or rarer; a day ahead: all but daily). */
+    fun headsUpItems(items: List<Transaction>, rules: List<RecurringRule>, target: LocalDate, week: Boolean): List<Transaction> {
+        val byId = rules.associateBy { it.id }
+        return items.filter { it.status == TxStatus.PENDING && it.kind == TxKind.EXPENSE && it.date == target }
+            .filter { tx ->
+                val pattern = tx.recurringRuleId?.let(byId::get)?.pattern
+                if (week) pattern?.let(::monthlyOrLess) ?: true else pattern != RecurrencePattern.Daily
+            }
+            .sortedWith(compareBy<Transaction> { it.amount }.thenBy { it.id }.reversed())
+    }
+
+    fun headsUpText(list: List<Transaction>, target: LocalDate, week: Boolean): Pair<String, String> {
+        val title = if (week) "Coming up" else "Tomorrow"
+        val text = if (list.size == 1) {
+            "${nameOf(list[0])} ${Money.formatSigned(TxKind.EXPENSE, list[0].amount)}, ${AppDates.dayMonth(target)}"
+        } else {
+            "${list.size} payments ${if (week) "next week" else "tomorrow"}, ${Money.formatSigned(TxKind.EXPENSE, list.sumOf { it.amount })}"
+        }
+        return title to text
     }
 
     /** Monthly or less often: the monthly patterns, yearly, and every 28 days or more. */
@@ -241,7 +271,7 @@ object Notifications {
         RecurrencePattern.Daily, is RecurrencePattern.Weekly, is RecurrencePattern.WeeklyDays -> false
     }
 
-    private fun nameOf(tx: Transaction) = tx.description.trim().ifEmpty { if (tx.kind == TxKind.INCOME) "Income" else "Expense" }
+    internal fun nameOf(tx: Transaction) = tx.description.trim().ifEmpty { if (tx.kind == TxKind.INCOME) "Income" else "Expense" }
 
     // ---- shortage alert ----------------------------------------------------------------------------
 
@@ -308,6 +338,110 @@ object Notifications {
                 amountMillimes = total,
             ),
         )
+    }
+}
+
+/** The "Last payment" reminder, and the pure decision about which shown notifications are resolved. */
+internal fun Notifications.lastPayments(
+    today: LocalDate,
+    time: LocalTime,
+    s: NotificationSettings,
+    items: List<Transaction>,
+    rules: List<RecurringRule>,
+    series: SeriesContext,
+    posted: Set<String>,
+): List<NotificationDecision> {
+    if (isQuiet(time) || time.isBefore(effective(s.reminderTime))) return emptyList()
+    val out = mutableListOf<NotificationDecision>()
+    for (rule in rules) {
+        if (!rule.enabled || rule.endDate == null || rule.id in series.endedRuleIds) continue
+        val last = SeriesLast.lastDate(rule, items) ?: continue
+        // From the first day on or after "a week before" until the day itself; later it is too late to be useful.
+        if (today.isBefore(last.minusDays(7)) || today.isAfter(last)) continue
+        val key = Notifications.lastKey(rule.id, last)
+        if (key in posted) continue
+        val name = rule.description.trim().ifEmpty { if (rule.kind == TxKind.INCOME) "Income" else "Expense" }
+        out += NotificationDecision(
+            key = key,
+            type = NotificationType.LAST_PAYMENT,
+            title = "Last payment",
+            body = "$name ${Money.formatSigned(rule.kind, rule.amount)} ends ${AppDates.dayMonth(last)}. Extend?",
+            relatedDate = last,
+            route = NotificationRoute.SERIES,
+            post = true,
+            bellKey = key,
+            amountMillimes = if (rule.kind == TxKind.INCOME) rule.amount else -rule.amount,
+            ruleId = rule.id,
+        )
+    }
+    return out
+}
+
+fun Notifications.lastKey(ruleId: Long, last: LocalDate) = "LAST|$ruleId|$last"
+
+/** A notification that is on show (its bell row), as the resolution below sees it. */
+data class ShownNotice(val key: String, val type: NotificationType, val relatedDate: LocalDate, val title: String, val body: String)
+
+data class NoticeUpdate(val key: String, val title: String, val body: String)
+
+/** Which shown notifications to take away (status bar and bell row) and which to rewrite in place. */
+data class ResolutionPlan(val remove: List<String>, val updates: List<NoticeUpdate>) {
+    val isEmpty get() = remove.isEmpty() && updates.isEmpty()
+}
+
+/**
+ * When an item changes state, the notifications that were about it must follow: gone when everything they mention is
+ * resolved, rewritten in place (fewer items, new total) when some of it remains, untouched when the change was about
+ * something else. Informational rows (income received, tests) and shortage history stay.
+ */
+object NoticeResolution {
+    fun plan(
+        today: LocalDate,
+        settings: NotificationSettings,
+        items: List<Transaction>,
+        rules: List<RecurringRule>,
+        forecast: List<DayForecast>,
+        shown: List<ShownNotice>,
+        series: SeriesContext = SeriesContext(),
+    ): ResolutionPlan {
+        val remove = mutableListOf<String>()
+        val updates = mutableListOf<NoticeUpdate>()
+        val waiting = Notifications.waitingSet(today, settings.autoAcceptIncome, items)
+        val anyShortage = forecast.any {
+            !it.date.isBefore(today) && it.closing < 0 && ChronoUnit.DAYS.between(today, it.date) <= Notifications.SHORTAGE_HORIZON_DAYS
+        }
+        for (n in shown) {
+            when (n.type) {
+                NotificationType.DAY_OF -> {
+                    if (waiting.isEmpty()) {
+                        remove += n.key
+                    } else if (n.relatedDate == today) {
+                        val (title, body) = Notifications.dayText(waiting, again = n.title == "Still waiting")
+                        if (title != n.title || body != n.body) updates += NoticeUpdate(n.key, title, body)
+                    }
+                }
+                NotificationType.HEADS_UP_WEEK, NotificationType.HEADS_UP_DAY -> {
+                    val week = n.type == NotificationType.HEADS_UP_WEEK
+                    val list = Notifications.headsUpItems(items, rules, n.relatedDate, week)
+                    if (list.isEmpty()) {
+                        remove += n.key
+                    } else {
+                        val (title, body) = Notifications.headsUpText(list, n.relatedDate, week)
+                        if (title != n.title || body != n.body) updates += NoticeUpdate(n.key, title, body)
+                    }
+                }
+                NotificationType.SHORTAGE -> if (!anyShortage) remove += n.key
+                NotificationType.LAST_PAYMENT -> {
+                    val ruleId = n.key.split("|").getOrNull(1)?.toLongOrNull()
+                    val rule = rules.firstOrNull { it.id == ruleId }
+                    val stillLast = rule != null && rule.enabled && rule.endDate != null && rule.id !in series.endedRuleIds &&
+                        SeriesLast.lastDate(rule, items) == n.relatedDate
+                    if (!stillLast) remove += n.key
+                }
+                NotificationType.AUTO_INCOME, NotificationType.INFO -> Unit
+            }
+        }
+        return ResolutionPlan(remove, updates)
     }
 }
 

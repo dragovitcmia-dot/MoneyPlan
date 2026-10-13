@@ -4,6 +4,7 @@ import android.app.Application
 import com.cashflow.app.data.AppDatabase
 import com.cashflow.app.data.LedgerRepository
 import com.cashflow.app.data.SharedPrefsAutoAccept
+import com.cashflow.app.data.SharedPrefsSeriesFlags
 import com.cashflow.app.engine.AppDates
 import com.cashflow.app.engine.BalanceEngine
 import com.cashflow.app.notify.NotificationCenterRepository
@@ -40,8 +41,8 @@ class CashflowApp : Application() {
     @OptIn(FlowPreview::class)
     private fun startReminderChecks() {
         appScope.launch {
-            combine(repository.transactions, repository.settings, notificationPrefs.toggles) { _, _, _ -> }
-                .debounce(1_500)
+            combine(repository.transactions, repository.settings, notificationPrefs.toggles, repository.rules, repository.seriesContext) { _, _, _, _, _ -> }
+                .debounce(400)
                 .collect { runCatching { reminderRunner.run() } }
         }
     }
@@ -50,7 +51,9 @@ class CashflowApp : Application() {
 
     val uiPrefs: UiPrefs by lazy { UiPrefs(this) }
 
-    val repository: LedgerRepository by lazy { LedgerRepository(AppDatabase.create(this), SharedPrefsAutoAccept(this)) }
+    val seriesFlags: SharedPrefsSeriesFlags by lazy { SharedPrefsSeriesFlags(this) }
+
+    val repository: LedgerRepository by lazy { LedgerRepository(AppDatabase.create(this), SharedPrefsAutoAccept(this), seriesFlags) }
 
     /** The balance engine is injected as a factory so view models never construct it directly. */
     val engineFactory: EngineFactory = EngineFactory(::BalanceEngine)

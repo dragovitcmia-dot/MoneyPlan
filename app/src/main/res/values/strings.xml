@@ -347,13 +347,38 @@
     <string name="plan_button">Plan a purchase</string>
     <string name="plan_title">Plan a purchase</string>
     <string name="plan_not_affordable">Not affordable in the next 180 days</string>
-    <string name="plan_extra_needed">You would need %1$s more.</string>
+    <string name="plan_extra_needed">Short by %1$s</string>
     <string name="plan_it">Plan it</string>
-    <string name="plan_add_normal">Add as a normal expense</string>
+    <string name="plan_add_normal">Add anyway</string>
     <string name="plan_saved_one">Planned: %1$s</string>
     <string name="plan_saved_parts">Planned: %1$s, %2$d parts</string>
     <string name="plan_chip_desc_all">Pay all at once</string>
     <string name="plan_chip_desc_parts">%1$d payments</string>
     <string name="plan_strip_desc">Next 60 days with this plan</string>
     <string name="plan_loading">Calculating…</string>
+
+    <!-- Repeating series: list, sheet, edit, extend -->
+    <string name="filter_repeating">Repeating</string>
+    <string name="filter_one_time">One-time</string>
+    <string name="series_list_empty">No repeating payments yet.</string>
+    <string name="series_tag_ended">Ended</string>
+    <string name="tag_last">Last</string>
+    <string name="series_next_line">Next: %1$s</string>
+    <string name="series_sheet_none">The series is gone.</string>
+    <string name="series_edit_action">Edit series</string>
+    <string name="series_edit_title">Edit series</string>
+    <string name="series_extend_action">Extend</string>
+    <string name="series_extend_title">Extend until</string>
+    <string name="extend_1_month">+1 month</string>
+    <string name="extend_3_months">+3 months</string>
+    <string name="extend_1_year">+1 year</string>
+    <string name="extend_no_end">No end</string>
+    <string name="extend_pick">Pick a date</string>
+    <string name="series_extended">Extended to %1$s</string>
+    <string name="series_extend_nothing">The end is already later.</string>
+    <string name="series_ask_amount">Ask me the amount each time</string>
+    <string name="series_ask_amount_helper">Accepting opens the amount first.</string>
+    <string name="series_add_new">Add a new one</string>
+    <string name="series_last_payment_title">Last payment</string>
+    <string name="series_form_name">Name</string>
 </resources>

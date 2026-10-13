@@ -43,15 +43,19 @@ class NotificationPoster(context: Context) {
     }
 
     @SuppressLint("MissingPermission") // canPost() checks it
-    fun post(decision: NotificationDecision): Boolean {
+    fun post(decision: NotificationDecision, silent: Boolean = false): Boolean {
         if (!canPost()) return false
-        val id = idOf(decision.type)
+        val id = idOf(decision.type, decision.ruleId)
         val intent = Intent(context, MainActivity::class.java)
             .putExtra(MainActivity.EXTRA_ROUTE, decision.route.name)
             .putExtra(MainActivity.EXTRA_DATE, decision.relatedDate.toString())
+            .apply {
+                decision.ruleId?.let { putExtra(MainActivity.EXTRA_RULE, it) }
+                decision.itemId?.let { putExtra(MainActivity.EXTRA_ITEM, it) }
+            }
             .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
         val tap = PendingIntent.getActivity(context, id, intent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
-        val channel = if (decision.type == NotificationType.HEADS_UP_WEEK || decision.type == NotificationType.HEADS_UP_DAY) CHANNEL_HEADS_UP else CHANNEL_PAYMENTS
+        val channel = if (decision.type in HEADS_UP_TYPES) CHANNEL_HEADS_UP else CHANNEL_PAYMENTS
         val notification = NotificationCompat.Builder(context, channel)
             .setSmallIcon(R.drawable.ic_stat_cashflow)
             .setContentTitle(decision.title)
@@ -59,14 +63,22 @@ class NotificationPoster(context: Context) {
             .setStyle(NotificationCompat.BigTextStyle().bigText(decision.body))
             .setContentIntent(tap)
             .setAutoCancel(true)
+            .setOnlyAlertOnce(silent)
             .setCategory(NotificationCompat.CATEGORY_REMINDER)
             .build()
         NotificationManagerCompat.from(context).notify(id, notification)
         return true
     }
 
-    fun cancel(type: NotificationType) {
-        NotificationManagerCompat.from(context).cancel(idOf(type))
+    fun cancel(type: NotificationType, ruleId: Long? = null) {
+        NotificationManagerCompat.from(context).cancel(idOf(type, ruleId))
+    }
+
+    /** Whether the notification of this type (and series) is still in the status bar, so an update never brings back a dismissed one. */
+    fun isShown(type: NotificationType, ruleId: Long? = null): Boolean {
+        if (Build.VERSION.SDK_INT < 23) return false
+        val id = idOf(type, ruleId)
+        return context.getSystemService(NotificationManager::class.java).activeNotifications.any { it.id == id }
     }
 
     companion object {
@@ -74,6 +86,9 @@ class NotificationPoster(context: Context) {
         const val CHANNEL_HEADS_UP = "heads_up"
 
         /** One id per type: a newer notification of the same type (a nag, the next day's summary) replaces the old one. */
-        fun idOf(type: NotificationType): Int = 1000 + type.ordinal
+        fun idOf(type: NotificationType, ruleId: Long? = null): Int =
+            if (type == NotificationType.LAST_PAYMENT) 3000 + ((ruleId ?: 0L) % 5000).toInt() else 1000 + type.ordinal
+
+        private val HEADS_UP_TYPES = setOf(NotificationType.HEADS_UP_WEEK, NotificationType.HEADS_UP_DAY, NotificationType.LAST_PAYMENT)
     }
 }
