@@ -168,6 +168,9 @@ fun EntryComposer(
     onDismiss: () -> Unit,
     /** Opened from a calendar day: that day is prefilled (see [EntryFormState.forDay]). */
     day: LocalDate? = null,
+    /** "Add as a normal expense" from Plan a purchase: the price and the name arrive filled in. */
+    prefillAmount: String = "",
+    prefillName: String = "",
 ) {
     val scope = rememberCoroutineScope()
     val permission = LocalNotificationPermission.current
@@ -176,7 +179,7 @@ fun EntryComposer(
     val isExpense = kind == TxKind.EXPENSE
     val accentFill = if (isExpense) colors.expenseFill else colors.incomeFill
 
-    val initial = remember { EntryWizard.start(kind, ui.today, day) }
+    val initial = remember { EntryWizard.start(kind, ui.today, day, prefillAmount, prefillName) }
     var wizard by remember { mutableStateOf(initial) }
     var discard by remember { mutableStateOf(DiscardState()) }
     var saving by remember { mutableStateOf(false) }
@@ -376,7 +379,7 @@ private fun ProblemList(problems: List<FormProblem>) {
 }
 
 @Composable
-private fun AmountStep(form: EntryFormState, problems: List<FormProblem>, change: ((EntryFormState) -> EntryFormState) -> Unit) {
+internal fun AmountStep(form: EntryFormState, problems: List<FormProblem>, change: ((EntryFormState) -> EntryFormState) -> Unit) {
     val colors = MaterialTheme.cashflow
     val haptics = rememberHaptics()
     StepTitle(stringResource(R.string.wizard_amount_title))
@@ -409,7 +412,7 @@ private fun AmountStep(form: EntryFormState, problems: List<FormProblem>, change
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun NameStep(
+internal fun NameStep(
     form: EntryFormState,
     isExpense: Boolean,
     frequent: List<String>,

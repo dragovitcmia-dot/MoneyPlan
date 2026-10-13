@@ -16,6 +16,7 @@ import com.cashflow.app.engine.RedDip
 import com.cashflow.app.engine.RedDipCheck
 import com.cashflow.app.engine.TxKind
 import com.cashflow.app.engine.NewEntry
+import com.cashflow.app.engine.PlanBaseline
 import com.cashflow.app.engine.NextExpense
 import com.cashflow.app.engine.RecurringRule
 import com.cashflow.app.engine.RuleMaintenance
@@ -191,6 +192,16 @@ class HomeViewModel(
     /** The balance the Review screen shows for [entry]: the Available amount after it, or the balance on its day. */
     suspend fun resultingBalance(entry: NewEntry): ResultingBalance? = withContext(Dispatchers.Default) {
         engine?.let { EntryProjection.resultingBalance(it, entry) }
+    }
+
+    /** Today's closing balance and the next 180 days, for Plan a purchase. */
+    suspend fun purchaseBaseline(): PlanBaseline? = withContext(Dispatchers.Default) {
+        engine?.let { PlanBaseline.of(it) }
+    }
+
+    /** "Plan it": the parts of a purchase become ordinary one-time planned expenses. */
+    suspend fun planPurchase(entries: List<NewEntry.Planned>) {
+        for (entry in entries) save(entry)
     }
 
     /** Stores a validated entry. Recurring entries become rules / income sources and materialize. */

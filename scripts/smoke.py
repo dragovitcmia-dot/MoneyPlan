@@ -593,7 +593,7 @@ def notification_walk(name):
         time.sleep(1.2)
         find(S["center_title"], scroll=False, timeout=8)
         screenshot(f"{name}-notification-center")
-        find("Today: 3 to confirm", scroll=False, timeout=8, contains=True)
+        find("Test notification", scroll=False, timeout=8, contains=True)
         sh("input keyevent 4")  # Back closes the center
         time.sleep(1)
         screenshot(f"{name}-home-bell-read")
@@ -603,6 +603,83 @@ def notification_walk(name):
         sh("input keyevent 4")
         problems.append(f"{name}: notification walk: {e}")
     return problems
+
+
+def open_plan_wizard():
+    tap_text(S["plan_button"], scroll=True, timeout=15)
+    time.sleep(1.2)
+
+
+def plan_walk(name):
+    """Plan a purchase: price on the numpad, name, result with the calendar strip (and a second chip), then leave
+    through the Discard question. Each screen is photographed as it is reached."""
+    try:
+        open_plan_wizard()
+        find("1", scroll=False, last=True)
+        for digit in ("1", "0", "0"):
+            tap_text(digit, last=True, scroll=False)
+        time.sleep(0.5)
+        screenshot(f"{name}-plan-price")
+        tap_text(S["wizard_next"], scroll=False)
+        time.sleep(1.5)
+        sh("input text Phone")
+        time.sleep(0.8)
+        screenshot(f"{name}-plan-name")
+        sh("input keyevent 66")  # Done goes on to the result
+        time.sleep(2.5)
+        screenshot(f"{name}-plan-result")
+        try:
+            tap_text("3", scroll=False, timeout=4)  # the 3-part chip, when it exists
+            time.sleep(1.5)
+            screenshot(f"{name}-plan-result-3")
+        except NotFound:
+            pass
+        sh("input keyevent 4")
+        time.sleep(1.2)
+        find(S["wizard_keep_going"], scroll=False, timeout=8)
+        tap_text(S["wizard_discard"], scroll=False)
+        time.sleep(1.2)
+    except NotFound as e:
+        screenshot(f"{name}-plan-FAILED")
+        print("  plan walk:", e)
+        for _ in range(3):
+            sh("input keyevent 4")
+            time.sleep(1)
+            try:
+                tap_text(S["wizard_discard"], scroll=False, timeout=3)
+            except NotFound:
+                pass
+        return [f"{name}: plan walk: {e}"]
+    return []
+
+
+def plan_create_walk(name):
+    """"Plan it" for real: the items appear in Upcoming as ordinary planned expenses. Runs last (it changes the data)."""
+    try:
+        tap_text(TEXT_HOME, scroll=False)
+        time.sleep(1.5)
+        open_plan_wizard()
+        find("1", scroll=False, last=True)
+        for digit in ("1", "0", "0"):
+            tap_text(digit, last=True, scroll=False)
+        tap_text(S["wizard_next"], scroll=False)
+        time.sleep(1.5)
+        sh("input text Phone")
+        sh("input keyevent 66")
+        time.sleep(2.5)
+        tap_text(S["plan_it"], scroll=False)
+        time.sleep(1.5)
+        find("Planned: Phone", scroll=False, timeout=8, contains=True)
+        screenshot(f"{name}-plan-done")
+        tap_text(NAV_UPCOMING, scroll=False)
+        time.sleep(1.5)
+        find("Phone", scroll=True, timeout=20, contains=True)
+        screenshot(f"{name}-plan-in-upcoming")
+    except NotFound as e:
+        screenshot(f"{name}-plan-create-FAILED")
+        print("  plan create walk:", e)
+        return [f"{name}: plan create walk: {e}"]
+    return []
 
 
 def run_config(name, night, font, size, density):
@@ -626,6 +703,7 @@ def run_config(name, night, font, size, density):
             extra.append(f"{name}: Available should be {REF_BALANCE} while nothing is accepted, but is {spoken_available()}")
         # Tapping a waiting card opens the accept sheet: a red cross and a green check.
         extra += notification_walk(name)
+        extra += plan_walk(name)
         scroll_to_top(3)
         tap_text_midscreen("Sunday expense")
         time.sleep(1.2)
@@ -647,6 +725,7 @@ def run_config(name, night, font, size, density):
         scroll_to_top()  # the tab keeps its scroll position, so a fresh look starts from the top
         screenshot(f"{name}-settings")
         extra += settings_flow(name)
+        extra += plan_create_walk(name)
     except NotFound as e:
         screenshot(f"{name}-FAILED")
         print("  NOT FOUND:", e)

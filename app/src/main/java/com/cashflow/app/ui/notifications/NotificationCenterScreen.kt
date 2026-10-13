@@ -20,6 +20,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -49,6 +50,9 @@ import com.cashflow.app.CashflowApp
 import com.cashflow.app.R
 import com.cashflow.app.engine.BellEntry
 import com.cashflow.app.engine.BellSection
+import com.cashflow.app.engine.BellTone
+import com.cashflow.app.engine.BellTones
+import com.cashflow.app.ui.theme.cashflow
 import com.cashflow.app.engine.NotificationCenterModel
 import com.cashflow.app.engine.NotificationType
 import kotlinx.coroutines.launch
@@ -60,6 +64,7 @@ private fun iconOf(type: NotificationType): ImageVector = when (type) {
     NotificationType.DAY_OF -> Icons.Filled.Notifications
     NotificationType.SHORTAGE -> Icons.Filled.Warning
     NotificationType.AUTO_INCOME -> Icons.Filled.Check
+    NotificationType.INFO -> Icons.Filled.Info
 }
 
 /** The bell's history: newest first in Today / Earlier; tap a row to open its screen, swipe to remove it. */
@@ -170,8 +175,16 @@ private fun BellRow(entry: BellEntry, time: String, onClick: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Box(Modifier.size(32.dp).clip(CircleShape).background(colors.primaryContainer), contentAlignment = Alignment.Center) {
-            Icon(iconOf(entry.type), contentDescription = null, tint = colors.onPrimaryContainer, modifier = Modifier.size(18.dp))
+        val cash = MaterialTheme.cashflow
+        val tone = BellTones.of(entry.type, entry.amountMillimes)
+        val (fill, ink) = when (tone) {
+            BellTone.EXPENSE -> cash.expenseFill to cash.buttonLabel
+            BellTone.INCOME -> cash.incomeFill to cash.buttonLabel
+            BellTone.SHORTAGE -> cash.badge to colors.background
+            BellTone.INFO -> colors.secondaryContainer to colors.onSecondaryContainer
+        }
+        Box(Modifier.size(32.dp).clip(CircleShape).background(fill), contentAlignment = Alignment.Center) {
+            Icon(iconOf(entry.type), contentDescription = null, tint = ink, modifier = Modifier.size(18.dp))
         }
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(

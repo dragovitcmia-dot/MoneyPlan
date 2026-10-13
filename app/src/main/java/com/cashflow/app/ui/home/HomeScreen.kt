@@ -138,6 +138,9 @@ private fun HomeContent(
     val haptics = rememberHaptics()
     val showHint by viewModel.swipeHintVisible.collectAsStateWithLifecycle()
     var composerKind by rememberSaveable { mutableStateOf<String?>(null) }
+    var planOpen by rememberSaveable { mutableStateOf(false) }
+    // "Add as a normal expense" from Plan a purchase: (price text, name) for the add wizard.
+    var prefill by remember { mutableStateOf<Pair<String, String>?>(null) }
     var editing by remember { mutableStateOf<Transaction?>(null) }
     var changing by remember { mutableStateOf<Transaction?>(null) }
 
@@ -169,6 +172,14 @@ private fun HomeContent(
             KindButtons(
                 onExpense = { composerKind = TxKind.EXPENSE.name },
                 onIncome = { composerKind = TxKind.INCOME.name },
+            )
+        }
+        item(key = "plan", contentType = "plan") {
+            AppButton(
+                stringResource(R.string.plan_button),
+                onClick = { planOpen = true },
+                modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp),
+                style = AppButtonStyle.Outlined,
             )
         }
         item(key = "waitingHeader", contentType = "header") {
@@ -205,7 +216,24 @@ private fun HomeContent(
             resultingBalance = viewModel::resultingBalance,
             onSave = viewModel::save,
             onSaved = { message -> actions.announce(message) },
-            onDismiss = { composerKind = null },
+            onDismiss = { composerKind = null; prefill = null },
+            prefillAmount = prefill?.first.orEmpty(),
+            prefillName = prefill?.second.orEmpty(),
+        )
+    }
+
+    if (planOpen) {
+        PlanPurchaseSheet(
+            ui = ui,
+            loadBaseline = viewModel::purchaseBaseline,
+            onPlan = viewModel::planPurchase,
+            onPlanned = { message -> actions.announce(message) },
+            onAddNormal = { state ->
+                prefill = state.priceText to state.name.trim()
+                planOpen = false
+                composerKind = TxKind.EXPENSE.name
+            },
+            onDismiss = { planOpen = false },
         )
     }
 

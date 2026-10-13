@@ -67,3 +67,33 @@ object NotificationCenterModel {
         }
     }
 }
+
+/** The colour family of a bell row's round icon: expense red, income green, shortage amber, anything else neutral. */
+enum class BellTone { EXPENSE, INCOME, SHORTAGE, INFO }
+
+object BellTones {
+    fun of(type: NotificationType, amountMillimes: Long?): BellTone = when (type) {
+        NotificationType.SHORTAGE -> BellTone.SHORTAGE
+        NotificationType.AUTO_INCOME -> BellTone.INCOME
+        NotificationType.INFO -> BellTone.INFO
+        NotificationType.HEADS_UP_WEEK, NotificationType.HEADS_UP_DAY -> BellTone.EXPENSE
+        NotificationType.DAY_OF -> if ((amountMillimes ?: 0L) > 0L) BellTone.INCOME else BellTone.EXPENSE
+    }
+}
+
+/** Where the user is: a tab, and whether the notification center covers it. */
+data class NavState(val tab: Int = 0, val centerOpen: Boolean = false)
+
+object NavLogic {
+    /** Tapping a tab ALWAYS shows that tab: an open notification center closes. */
+    fun selectTab(state: NavState, tab: Int): NavState = NavState(tab = tab, centerOpen = false)
+
+    /** The bell opens the center, or closes it when it is open. */
+    fun toggleCenter(state: NavState): NavState = state.copy(centerOpen = !state.centerOpen)
+
+    /** System Back or the arrow: closes the center, nothing else changes. */
+    fun closeCenter(state: NavState): NavState = state.copy(centerOpen = false)
+
+    /** A tap on a notification or a bell row: that tab, center closed. */
+    fun openTab(state: NavState, tab: Int): NavState = selectTab(state, tab)
+}

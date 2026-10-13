@@ -55,8 +55,8 @@ class NotificationsTest {
         val r = run("12:00", listOf(tx(today, 100, id = 1), tx(today, 20, id = 2), tx(today, 30, TxKind.INCOME, id = 3)))
         val day = only(r, NotificationType.DAY_OF)
         assertEquals(1, day.size)
-        assertEquals("Today: 3 to confirm", day[0].title)
-        assertEquals("−120 TND, +30 TND", day[0].body)
+        assertEquals("Confirm today's payments", day[0].title)
+        assertEquals("3 items, −120 TND, +30 TND", day[0].body)
         assertEquals(today, day[0].relatedDate)
         assertEquals(NotificationRoute.UPCOMING, day[0].route)
         assertTrue(day[0].post)
@@ -64,13 +64,15 @@ class NotificationsTest {
     }
 
     @Test fun the_body_leaves_out_a_total_that_is_zero() {
-        assertEquals("−75 TND", only(run("12:00", listOf(tx(today, 75))), NotificationType.DAY_OF)[0].body)
-        assertEquals("+30 TND", only(run("12:00", listOf(tx(today, 30, TxKind.INCOME))), NotificationType.DAY_OF)[0].body)
+        assertEquals("Expense −75 TND", only(run("12:00", listOf(tx(today, 75))), NotificationType.DAY_OF)[0].body)
+        assertEquals("Income +30 TND", only(run("12:00", listOf(tx(today, 30, TxKind.INCOME))), NotificationType.DAY_OF)[0].body)
+        assertEquals("2 items, −75 TND", only(run("12:00", listOf(tx(today, 50, id = 1), tx(today, 25, id = 2))), NotificationType.DAY_OF)[0].body)
+        assertEquals("2 items, +80 TND", only(run("12:00", listOf(tx(today, 50, TxKind.INCOME, id = 1), tx(today, 30, TxKind.INCOME, id = 2))), NotificationType.DAY_OF)[0].body)
     }
 
     @Test fun overdue_items_are_part_of_the_summary() {
         val r = run("12:00", listOf(tx(today.minusDays(2), 40, id = 1), tx(today, 10, id = 2)))
-        assertEquals("Today: 2 to confirm", only(r, NotificationType.DAY_OF)[0].title)
+        assertEquals("2 items, \u221250 TND", only(r, NotificationType.DAY_OF)[0].body)
     }
 
     @Test fun future_answered_and_rejected_items_are_not_counted() {
@@ -83,12 +85,13 @@ class NotificationsTest {
                 tx(today, 8, id = 4),
             ),
         )
-        assertEquals("Today: 1 to confirm", only(r, NotificationType.DAY_OF)[0].title)
+        assertEquals("Expense \u22128 TND", only(r, NotificationType.DAY_OF)[0].body)
     }
 
     @Test fun pending_income_due_today_appears_in_the_summary_as_an_income_line() {
         val r = run("12:00", listOf(tx(today, 120, TxKind.INCOME)))
-        assertEquals("+120 TND", only(r, NotificationType.DAY_OF)[0].body)
+        assertEquals("Confirm today's income", only(r, NotificationType.DAY_OF)[0].title)
+        assertEquals("Income +120 TND", only(r, NotificationType.DAY_OF)[0].body)
     }
 
     @Test fun the_nag_slots_are_every_two_hours_up_to_21() {
@@ -145,6 +148,16 @@ class NotificationsTest {
         assertEquals(listOf("12:00", "14:00", "16:00", "18:00", "20:00").map { "DAY|$today|$it" }, keys)
     }
 
+    @Test fun the_first_message_of_the_day_has_the_confirm_title_and_the_later_ones_say_still_waiting() {
+        val items = listOf(tx(today, 10, id = 1, description = "Rent"))
+        val first = only(run("12:00", items), NotificationType.DAY_OF)[0]
+        assertEquals("Confirm today's payments", first.title)
+        assertEquals("Rent \u221210 TND", first.body)
+        val nag = only(run("14:00", items, posted = record(emptySet(), listOf(first))), NotificationType.DAY_OF)[0]
+        assertEquals("Still waiting", nag.title)
+        assertEquals(first.body, nag.body)
+    }
+
     @Test fun the_bell_gets_the_day_summary_once_not_once_per_nag() {
         val items = listOf(tx(today, 10))
         val first = only(run("12:00", items), NotificationType.DAY_OF)[0]
@@ -183,7 +196,8 @@ class NotificationsTest {
     @Test fun answering_part_of_the_set_updates_the_same_notification_with_fewer_items() {
         val posted = setOf("DAY|$today|12:00")
         val r = only(run("14:00", listOf(tx(today, 10, id = 1), tx(today, 20, status = TxStatus.CONFIRMED, id = 2)), posted = posted), NotificationType.DAY_OF)
-        assertEquals("Today: 1 to confirm", r[0].title)
+        assertEquals("Still waiting", r[0].title)
+        assertEquals("Expense −10 TND", r[0].body)
     }
 
     @Test fun income_that_repeats_is_not_asked_about_when_auto_accept_is_on() {
@@ -191,12 +205,12 @@ class NotificationsTest {
         val recurring = tx(today, 30, TxKind.INCOME, source = TxSource.RECURRING, id = 1)
         assertTrue(only(run("12:00", listOf(recurring), settings = s), NotificationType.DAY_OF).isEmpty())
         val oneOff = tx(today, 50, TxKind.INCOME, id = 2)
-        assertEquals("+50 TND", only(run("12:00", listOf(recurring, oneOff), settings = s), NotificationType.DAY_OF)[0].body)
+        assertEquals("Income +50 TND", only(run("12:00", listOf(recurring, oneOff), settings = s), NotificationType.DAY_OF)[0].body)
     }
 
     @Test fun income_that_repeats_is_asked_about_when_auto_accept_is_off() {
         val recurring = tx(today, 30, TxKind.INCOME, source = TxSource.RECURRING, id = 1)
-        assertEquals("Today: 1 to confirm", only(run("12:00", listOf(recurring)), NotificationType.DAY_OF)[0].title)
+        assertEquals("Confirm today's income", only(run("12:00", listOf(recurring)), NotificationType.DAY_OF)[0].title)
     }
 
     @Test fun the_master_switch_turns_everything_off() {
@@ -226,8 +240,8 @@ class NotificationsTest {
     @Test fun a_week_ahead_a_one_time_expense_gets_a_heads_up() {
         val r = only(run("12:00", listOf(tx(week, 600, id = 1, description = "Rent"))), NotificationType.HEADS_UP_WEEK)
         assertEquals(1, r.size)
-        assertEquals("In 1 week: 1 payment", r[0].title)
-        assertEquals("19 OCT: Rent −600 TND", r[0].body)
+        assertEquals("Coming up", r[0].title)
+        assertEquals("Rent −600 TND, 19 OCT", r[0].body)
         assertEquals(week, r[0].relatedDate)
         assertEquals(NotificationRoute.UPCOMING, r[0].route)
         assertTrue(r[0].post)
@@ -276,7 +290,8 @@ class NotificationsTest {
         val weekly = run("12:00", listOf(item(2)), rules = listOf(rule(RecurrencePattern.Weekly(tomorrow.dayOfWeek), start, id = 2)))
         assertEquals(1, only(weekly, NotificationType.HEADS_UP_DAY).size)
         val oneTime = only(run("12:00", listOf(tx(tomorrow, 30, id = 3))), NotificationType.HEADS_UP_DAY)
-        assertEquals("Tomorrow: 1 payment", oneTime[0].title)
+        assertEquals("Tomorrow", oneTime[0].title)
+        assertEquals("Expense \u221230 TND, 13 OCT", oneTime[0].body)
         assertEquals(tomorrow, oneTime[0].relatedDate)
     }
 
@@ -284,8 +299,8 @@ class NotificationsTest {
         val items = (1..5).map { tx(week, it * 10L, id = it.toLong(), description = "P$it") }
         val r = only(run("12:00", items), NotificationType.HEADS_UP_WEEK)
         assertEquals(1, r.size)
-        assertEquals("In 1 week: 5 payments", r[0].title)
-        assertEquals("19 OCT: P5 −50 TND, P4 −40 TND, P3 −30 TND, +2 more", r[0].body)
+        assertEquals("Coming up", r[0].title)
+        assertEquals("5 payments next week, −150 TND", r[0].body)
     }
 
     @Test fun a_payment_without_a_name_is_called_expense() {
@@ -344,8 +359,8 @@ class NotificationsTest {
         // 100 TND available, a 140 TND expense in 4 days: short by 40, 10 per day.
         val r = only(run("12:00", listOf(tx(today.plusDays(4), 140)), balance = 100), NotificationType.SHORTAGE)
         assertEquals(1, r.size)
-        assertEquals("Short by 40 TND before 16 OCT 2026", r[0].title)
-        assertEquals("Save 10 TND/day", r[0].body)
+        assertEquals("Low balance ahead", r[0].title)
+        assertEquals("Short by 40 TND before 16 OCT, save 10/day", r[0].body)
         assertEquals(NotificationRoute.CALENDAR, r[0].route)
         assertEquals(today.plusDays(4), r[0].relatedDate)
         assertEquals(40_000L, r[0].amountMillimes)
@@ -361,18 +376,17 @@ class NotificationsTest {
 
     @Test fun the_per_day_text_uses_the_rounded_up_value() {
         val r = only(run("12:00", listOf(tx(today.plusDays(3), 110)), balance = 100), NotificationType.SHORTAGE)
-        assertEquals("Save 3.34 TND/day", r[0].body)
+        assertEquals("Short by 10 TND before 15 OCT, save 3.34/day", r[0].body)
     }
 
     @Test fun a_shortage_tomorrow_asks_for_the_whole_amount_in_one_day() {
         val r = only(run("12:00", listOf(tx(tomorrow, 125)), balance = 100), NotificationType.SHORTAGE)
-        assertEquals("Save 25 TND/day", r[0].body)
+        assertEquals("Short by 25 TND before 13 OCT, save 25/day", r[0].body)
     }
 
     @Test fun a_shortage_today_also_divides_by_one_day() {
         val r = only(run("12:00", listOf(tx(today, 130)), balance = 100), NotificationType.SHORTAGE)
-        assertEquals("Short by 30 TND before 12 OCT 2026", r[0].title)
-        assertEquals("Save 30 TND/day", r[0].body)
+        assertEquals("Short by 30 TND before 12 OCT, save 30/day", r[0].body)
     }
 
     @Test fun the_horizon_is_sixty_days_inclusive() {
@@ -416,7 +430,7 @@ class NotificationsTest {
         assertEquals(1, r.size)
         assertTrue(r[0].post)
         assertNotNullKey(r[0].bellKey)
-        assertEquals("Short by 50 TND before 16 OCT 2026", r[0].title)
+        assertEquals("Short by 50 TND before 16 OCT, save 12.5/day", r[0].body)
     }
 
     @Test fun the_same_shortage_is_alerted_again_the_next_day_but_the_bell_keeps_one_entry() {
@@ -428,7 +442,7 @@ class NotificationsTest {
         assertEquals(1, r.size)
         assertTrue(r[0].post)
         assertNull(r[0].bellKey)
-        assertEquals("Save 13.34 TND/day", r[0].body)
+        assertEquals("Short by 40 TND before 16 OCT, save 13.34/day", r[0].body)
     }
 
     @Test fun shortage_alerts_can_be_switched_off() {
@@ -458,7 +472,7 @@ class NotificationsTest {
         val auto = r.single { it.type == NotificationType.AUTO_INCOME }
         assertFalse(auto.post)
         assertEquals("AUTO|$today", auto.bellKey)
-        assertEquals("Income added", auto.title)
+        assertEquals("Income received", auto.title)
         assertEquals("+30 TND", auto.body)
         assertTrue(r.none { it.post })
     }

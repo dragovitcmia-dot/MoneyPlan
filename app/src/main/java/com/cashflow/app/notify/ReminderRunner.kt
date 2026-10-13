@@ -73,9 +73,9 @@ class ReminderRunner(private val app: CashflowApp) {
         val today = LocalDate.ofInstant(now, zone)
         val sample = NotificationDecision(
             key = "TEST|${now.toEpochMilli()}",
-            type = NotificationType.DAY_OF,
-            title = "Today: 3 to confirm",
-            body = "−120 TND, +30 TND",
+            type = NotificationType.INFO,
+            title = "Test notification",
+            body = "Reminders are working.",
             relatedDate = today,
             route = NotificationRoute.UPCOMING,
             post = true,

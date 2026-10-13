@@ -9,12 +9,13 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.layout.offset
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.ripple
@@ -23,7 +24,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -46,32 +46,37 @@ fun AppTopBar(unread: Int, onBell: () -> Unit) {
     ) { Bell(unread, onBell) }
 }
 
-/** A 48 dp tap target; the badge shows the unread count, capped at "9+". */
+/**
+ * A 48 dp tap target. The badge is a Material [BadgedBox] badge anchored to the top-right corner of the bell icon:
+ * about 16 dp high, the count centered in 10 sp bold, "9+" above nine, hidden at zero. Nothing around it clips it.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun Bell(unread: Int, onClick: () -> Unit) {
     val colors = MaterialTheme.colorScheme
     val description = if (unread > 0) stringResource(R.string.bell_desc_unread, unread) else stringResource(R.string.bell_desc)
     val badge = NotificationCenterModel.badge(unread)
     Box(
-        Modifier.size(BELL_TAP_DP.dp).clip(CircleShape)
+        Modifier.size(BELL_TAP_DP.dp)
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
-                indication = ripple(bounded = true),
+                indication = ripple(bounded = false, radius = 24.dp),
                 role = Role.Button,
                 onClick = onClick,
             )
             .semantics { contentDescription = description },
         contentAlignment = Alignment.Center,
     ) {
-        Icon(Icons.Filled.Notifications, contentDescription = null, tint = colors.onSurface, modifier = Modifier.size(26.dp))
-        if (badge != null) {
-            Box(
-                Modifier.align(Alignment.TopEnd).offset(x = (-4).dp, y = 6.dp).widthIn(min = 18.dp).height(18.dp)
-                    .clip(CircleShape).background(colors.primary).padding(horizontal = 4.dp),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(badge, color = colors.onPrimary, fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1)
-            }
+        BadgedBox(
+            badge = {
+                if (badge != null) {
+                    Badge(containerColor = colors.primary, contentColor = colors.onPrimary) {
+                        Text(badge, fontSize = 10.sp, lineHeight = 10.sp, fontWeight = FontWeight.Bold, maxLines = 1, textAlign = TextAlign.Center)
+                    }
+                }
+            },
+        ) {
+            Icon(Icons.Filled.Notifications, contentDescription = null, tint = colors.onSurface, modifier = Modifier.size(26.dp))
         }
     }
 }
