@@ -59,11 +59,16 @@ import com.cashflow.app.engine.AppDates
 import com.cashflow.app.engine.Money
 import com.cashflow.app.engine.Transaction
 import com.cashflow.app.engine.TxKind
-import com.cashflow.app.engine.UpcomingFilter
+import com.cashflow.app.engine.Upcoming
+import com.cashflow.app.engine.UpcomingKind
+import com.cashflow.app.engine.UpcomingTap
+import com.cashflow.app.engine.UpcomingType
+import androidx.compose.material3.minimumInteractiveComponentSize
+import androidx.compose.ui.unit.sp
 import com.cashflow.app.engine.UpcomingGroupKey
 import com.cashflow.app.engine.UpcomingRow
 import com.cashflow.app.ui.components.AppCard
-import com.cashflow.app.ui.components.selectedChipColors
+import com.cashflow.app.ui.components.NameWithRepeat
 import com.cashflow.app.ui.components.quantityString
 import com.cashflow.app.ui.home.HomeViewModel
 import com.cashflow.app.ui.items.ItemEditSheet
@@ -93,7 +98,8 @@ fun UpcomingScreen(
     val seriesRows by upcoming.series.collectAsStateWithLifecycle()
     val seriesCtx by home.series.collectAsStateWithLifecycle()
     var openSeries by remember { mutableStateOf<Long?>(null) }
-    val filter by upcoming.filter.collectAsStateWithLifecycle()
+    val type by upcoming.type.collectAsStateWithLifecycle()
+    val kind by upcoming.kind.collectAsStateWithLifecycle()
     val today by upcoming.today.collectAsStateWithLifecycle()
     val showHint by home.swipeHintVisible.collectAsStateWithLifecycle()
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { upcoming.refreshDay() }
@@ -127,24 +133,30 @@ fun UpcomingScreen(
             Text(stringResource(R.string.upcoming_title), style = MaterialTheme.typography.headlineMedium, modifier = Modifier.semantics { heading() })
         }
         item(key = "filters", contentType = "filters") {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                for ((value, label) in listOf(
-                    UpcomingFilter.ALL to R.string.filter_all,
-                    UpcomingFilter.REPEATING to R.string.filter_repeating,
-                    UpcomingFilter.ONE_TIME to R.string.filter_one_time,
-                )) {
-                    FilterChip(
-                        selected = filter == value,
-                        onClick = { haptics.tick(); upcoming.setFilter(value) },
-                        label = { Text(stringResource(label), style = MaterialTheme.typography.titleSmall) },
-                        modifier = Modifier.heightIn(min = 56.dp),
-                        colors = selectedChipColors(),
-                    )
-                }
+            // Two slim rows: the type, then the kind. Chips look 32 dp tall with a 48 dp touch area and 13 sp text.
+            Column(Modifier.fillMaxWidth()) {
+                FilterRow(
+                    selected = type,
+                    options = listOf(
+                        UpcomingType.ALL to R.string.filter_all,
+                        UpcomingType.EXPENSES to R.string.filter_expenses,
+                        UpcomingType.INCOME to R.string.filter_income,
+                    ),
+                    onSelect = { haptics.tick(); upcoming.setType(it) },
+                )
+                FilterRow(
+                    selected = kind,
+                    options = listOf(
+                        UpcomingKind.ALL to R.string.filter_all,
+                        UpcomingKind.REPEATING to R.string.filter_repeating,
+                        UpcomingKind.ONE_TIME to R.string.filter_one_time,
+                    ),
+                    onSelect = { haptics.tick(); upcoming.setKind(it) },
+                )
             }
         }
 
-        if (filter == UpcomingFilter.REPEATING) {
+        if (kind == UpcomingKind.REPEATING) {
             if (seriesRows.isEmpty()) {
                 item(key = "series-empty", contentType = "empty") {
                     Text(
@@ -160,7 +172,16 @@ fun UpcomingScreen(
             }
         } else if (current != null) {
             current.dailyIncome?.let { total ->
-                item(key = "daily", contentType = "daily") { DailyIncomeRow(total) }
+                item(key = "daily", contentType = "daily") {
+                    DailyIncomeRow(total) {
+                        // Every row opens something: the series of a single daily income, or the Repeating list when there are several.
+                        when (val tap = Upcoming.tapForDaily(current)) {
+                            is UpcomingTap.OpenSeries -> openSeries = tap.ruleId
+                            UpcomingTap.ShowRepeating -> upcoming.setKind(UpcomingKind.REPEATING)
+                            else -> Unit
+                        }
+                    }
+                }
             }
             if (current.groups.isEmpty()) {
                 item(key = "empty", contentType = "empty") { NothingComing() }
@@ -190,7 +211,7 @@ fun UpcomingScreen(
                             },
                             onOpen = { editing = row.tx },
                             modifier = Modifier.animateItem(),
-                            footer = if (row.repeating || row.shortBy != null || row.last) ({ RowTags(row) }) else null,
+                            footer = if (row.shortBy != null || row.last) ({ RowTags(row) }) else null,
                         )
                     } else {
                         SwipeToDelete(
@@ -307,11 +328,10 @@ private fun UpcomingCard(row: UpcomingRow, onClick: () -> Unit, modifier: Modifi
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Top) {
                 Column(Modifier.weight(1f).padding(end = 12.dp)) {
-                    Text(
+                    NameWithRepeat(
                         tx.description.ifBlank { stringResource(if (income) R.string.item_income else R.string.item_expense) },
-                        style = MaterialTheme.typography.titleMedium,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
+                        repeating = tx.recurringRuleId != null,
+                        income = income,
                     )
                     Text(
                         AppDates.withWeekday(tx.date) + " · " + quantityString(R.plurals.in_days, row.daysAway, row.daysAway),
@@ -325,7 +345,7 @@ private fun UpcomingCard(row: UpcomingRow, onClick: () -> Unit, modifier: Modifi
                     color = if (income) MaterialTheme.cashflow.positive else MaterialTheme.cashflow.negative,
                 )
             }
-            if (row.repeating || row.shortBy != null || row.last) RowTags(row)
+            if (row.shortBy != null || row.last) RowTags(row)
         }
     }
 }
@@ -338,12 +358,6 @@ private fun RowTags(row: UpcomingRow) {
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        if (row.repeating) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                Icon(Icons.Filled.Refresh, contentDescription = null, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text(stringResource(R.string.repeats_label), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-        }
         if (row.last) LastTag()
         row.shortBy?.let { short ->
             Surface(shape = MaterialTheme.shapes.extraSmall, color = MaterialTheme.colorScheme.errorContainer, contentColor = MaterialTheme.colorScheme.onErrorContainer) {
@@ -358,8 +372,8 @@ private fun RowTags(row: UpcomingRow) {
 }
 
 @Composable
-private fun DailyIncomeRow(total: Long) {
-    AppCard(Modifier.fillMaxWidth()) {
+private fun DailyIncomeRow(total: Long, onClick: () -> Unit) {
+    AppCard(Modifier.fillMaxWidth(), onClick = onClick) {
         Row(
             Modifier.fillMaxWidth().heightIn(min = 56.dp).padding(16.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -433,6 +447,23 @@ private fun SeriesRowCard(row: com.cashflow.app.engine.SeriesRow, onClick: () ->
                     }
                 }
             }
+        }
+    }
+}
+
+/** One group of filter chips in a row: 32 dp look, 48 dp touch area, 13 sp text. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun <T> FilterRow(selected: T, options: List<Pair<T, Int>>, onSelect: (T) -> Unit) {
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+        for ((value, label) in options) {
+            FilterChip(
+                selected = selected == value,
+                onClick = { onSelect(value) },
+                label = { Text(stringResource(label), fontSize = 13.sp) },
+                modifier = Modifier.minimumInteractiveComponentSize(),
+                colors = selectedChipColors(),
+            )
         }
     }
 }

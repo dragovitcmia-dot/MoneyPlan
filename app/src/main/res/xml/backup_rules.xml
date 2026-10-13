@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Google auto-backup (Android 11 and older): the main database and the small settings stores; not the notification history,
+     the snapshots folder or caches (an explicit include list leaves everything else out, so no excludes are needed). -->
+<full-backup-content>
+    <include domain="database" path="cashflow.db" />
+    <include domain="database" path="cashflow.db-wal" />
+    <include domain="sharedpref" path="settings_prefs.xml" />
+    <include domain="sharedpref" path="notification_prefs.xml" />
+    <include domain="sharedpref" path="ui_prefs.xml" />
+</full-backup-content>

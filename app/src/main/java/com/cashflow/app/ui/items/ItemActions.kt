@@ -14,6 +14,7 @@ import androidx.compose.ui.platform.LocalContext
 import com.cashflow.app.R
 import com.cashflow.app.engine.AppDates
 import com.cashflow.app.engine.ConfirmGate
+import com.cashflow.app.engine.AcceptUndo
 import com.cashflow.app.engine.DeleteOutcome
 import com.cashflow.app.engine.ExtendChoice
 import com.cashflow.app.engine.SeriesContext
@@ -46,9 +47,9 @@ class ItemActions(
     fun confirm(tx: Transaction, newAmount: Long? = null) {
         haptics.confirm()
         viewModel.confirm(tx.id, newAmount)
-        announcer.announce(resources.getString(R.string.confirmed_item, labelOf(tx))) {
-            viewModel.undo(tx.id, if (newAmount != null) tx.amount else null)
-        }
+        // "Accepted. Undo" for six seconds: the token knows the row before and after, so Undo restores exactly that and nothing else.
+        val token = AcceptUndo.token(tx, amount = newAmount ?: tx.amount, nowMillis = System.currentTimeMillis())
+        announcer.announce(resources.getString(R.string.confirmed_item, labelOf(tx))) { viewModel.undoAccept(token) }
     }
 
     /** The item whose rejection waits for "Are you sure?" (null: no dialog). */
@@ -90,7 +91,8 @@ class ItemActions(
     fun done(tx: Transaction, amount: Long, description: String, date: LocalDate) {
         haptics.confirm()
         viewModel.updateItem(tx.id, amount, description, date, TxStatus.CONFIRMED)
-        announcer.announce(resources.getString(R.string.confirmed_item, labelOf(tx))) { viewModel.undo(tx.id) }
+        val token = AcceptUndo.token(tx, amount = amount, description = description.trim(), date = date, nowMillis = System.currentTimeMillis())
+        announcer.announce(resources.getString(R.string.confirmed_item, labelOf(tx))) { viewModel.undoAccept(token) }
     }
 
     fun save(tx: Transaction, amount: Long, description: String, date: LocalDate) {
@@ -170,6 +172,7 @@ class ItemActions(
         haptics.reject()
         viewModel.deleteItem(tx) { outcome ->
             when (outcome) {
+                null -> announcer.announce(resources.getString(R.string.item_delete_refused))
                 is DeleteOutcome.Remove ->
                     announcer.announce(resources.getString(R.string.item_deleted, labelOf(tx))) { viewModel.restoreItem(tx) }
                 is DeleteOutcome.MarkSkipped ->

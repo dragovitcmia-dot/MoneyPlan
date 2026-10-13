@@ -56,8 +56,15 @@ object SeriesList {
      * one the user ended explicitly leaves the list once its end date has passed (until then it still runs).
      * A deleted series is simply not in [rules].
      */
-    fun build(rules: List<RecurringRule>, rows: List<Transaction>, series: SeriesContext, today: LocalDate): List<SeriesRow> =
+    fun build(
+        rules: List<RecurringRule>,
+        rows: List<Transaction>,
+        series: SeriesContext,
+        today: LocalDate,
+        type: UpcomingType = UpcomingType.ALL,
+    ): List<SeriesRow> =
         rules.filter { it.enabled }
+            .filter { type == UpcomingType.ALL || (type == UpcomingType.EXPENSES) == (it.kind == TxKind.EXPENSE) }
             .filterNot { it.id in series.endedRuleIds && it.endDate != null && it.endDate.isBefore(today) }
             .map { rule ->
                 val next = rows.filter { it.recurringRuleId == rule.id && it.status == TxStatus.PENDING && !it.date.isBefore(today) }.minOfOrNull { it.date }

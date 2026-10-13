@@ -381,4 +381,28 @@
     <string name="series_add_new">Add a new one</string>
     <string name="series_last_payment_title">Last payment</string>
     <string name="series_form_name">Name</string>
+
+    <!-- Backup -->
+    <string name="item_delete_refused">Accepted and past items stay in your history.</string>
+    <string name="backup_title">Backup</string>
+    <string name="backup_now">Back up now</string>
+    <string name="backup_empty">No snapshots yet.</string>
+    <string name="backup_restore">Restore</string>
+    <string name="backup_show_all">Show all (%1$d)</string>
+    <string name="backup_show_less">Show fewer</string>
+    <string name="backup_export">Export backup file</string>
+    <string name="backup_import">Import backup file</string>
+    <string name="backup_done">Backup saved.</string>
+    <string name="backup_failed">The backup did not work.</string>
+    <string name="backup_restore_title">Restore this backup?</string>
+    <string name="backup_restore_body">The snapshot of %1$s replaces your data. Your current data is saved first as a “Before restore” snapshot. The app restarts.</string>
+    <string name="backup_import_body">Backup of %1$s with %2$d items. It replaces your data. Your current data is saved first as a “Before restore” snapshot. The app restarts.</string>
+    <string name="backup_confirm_restore">Restore</string>
+    <string name="backup_too_new">This backup is from a newer version of the app.</string>
+    <string name="backup_too_old">This backup is too old to restore.</string>
+    <string name="backup_corrupt">This backup file is damaged.</string>
+    <string name="backup_unreadable">This is not a Cashflow backup.</string>
+    <string name="backup_restoring">Restoring…</string>
+    <string name="backup_share_title">Share the backup</string>
+    <string name="backup_items">%1$d items</string>
 </resources>

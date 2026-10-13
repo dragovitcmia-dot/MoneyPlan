@@ -41,6 +41,7 @@ import com.cashflow.app.engine.Transaction
 import com.cashflow.app.engine.TxKind
 import com.cashflow.app.ui.Haptics
 import com.cashflow.app.ui.components.AppCard
+import com.cashflow.app.ui.components.NameWithRepeat
 import com.cashflow.app.ui.components.SwipeHint
 import com.cashflow.app.ui.theme.cashflow
 
@@ -119,13 +120,12 @@ fun WaitingCard(
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Top) {
                     Column(Modifier.weight(1f).padding(end = 12.dp)) {
-                        Text(
+                        NameWithRepeat(
                             tx.description.ifBlank {
                                 stringResource(if (income) R.string.item_income else R.string.item_expense)
                             },
-                            style = MaterialTheme.typography.titleMedium,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis,
+                            repeating = tx.recurringRuleId != null,
+                            income = income,
                         )
                         Text(
                             AppDates.format(tx.date),
