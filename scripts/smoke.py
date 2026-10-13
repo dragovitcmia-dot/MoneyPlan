@@ -559,8 +559,7 @@ def wizard_walk(name):
         sh("input text Coffee")
         time.sleep(0.8)
         screenshot(f"{name}-wizard-name-typed")
-        sh("input keyevent 66")  # Enter: Done moves on
-        time.sleep(1.5)
+        finish_name_step(S["timing_repeats"])  # Enter: Done moves on (Next if the keyboard swallowed it)
         screenshot(f"{name}-wizard-when")
         tap_text(S["timing_repeats"], scroll=False)
         time.sleep(1)
@@ -574,13 +573,7 @@ def wizard_walk(name):
     except NotFound as e:
         screenshot(f"{name}-wizard-FAILED")
         print("  wizard walk:", e)
-        for _ in range(3):
-            sh("input keyevent 4")
-            time.sleep(1)
-            try:
-                tap_text(S["wizard_discard"], scroll=False, timeout=3)
-            except NotFound:
-                pass
+        recover_to_home()
         return [f"{name}: wizard walk: {e}"]
     return []
 
@@ -593,7 +586,7 @@ def notification_walk(name):
         time.sleep(1.2)
         find(S["center_title"], scroll=False, timeout=8)
         screenshot(f"{name}-notification-center")
-        find("Today: 3 to confirm", scroll=False, timeout=8, contains=True)
+        find("Test notification", scroll=False, timeout=8, contains=True)
         sh("input keyevent 4")  # Back closes the center
         time.sleep(1)
         screenshot(f"{name}-home-bell-read")
@@ -603,6 +596,109 @@ def notification_walk(name):
         sh("input keyevent 4")
         problems.append(f"{name}: notification walk: {e}")
     return problems
+
+
+def recover_to_home():
+    """After a failed walk: close an open sheet (Back, then Discard when asked) and make sure the app is in front."""
+    for _ in range(2):
+        sh("input keyevent 4")
+        time.sleep(1)
+        try:
+            tap_text(S["wizard_discard"], scroll=False, timeout=3)
+            break
+        except NotFound:
+            pass
+    nodes = dump_nodes() or []
+    if not any(t == TEXT_HOME or d == TEXT_HOME for t, d, _ in nodes):
+        sh(f"monkey -p {PKG} -c android.intent.category.LAUNCHER 1")
+        time.sleep(3)
+    try:
+        tap_text(TEXT_HOME, scroll=False, timeout=8)
+    except NotFound:
+        pass
+
+
+def finish_name_step(expect_text):
+    """Enter (the keyboard's Done) goes on from the name step; if the emulator's keyboard swallowed it, press Next."""
+    sh("input keyevent 66")
+    time.sleep(1.5)
+    try:
+        find(expect_text, scroll=False, timeout=4, contains=True)
+    except NotFound:
+        print("  Enter did not leave the name step: pressing Next")
+        tap_text(S["wizard_next"], scroll=False)
+        time.sleep(1.5)
+
+
+def open_plan_wizard():
+    tap_text(S["plan_button"], scroll=True, timeout=15)
+    time.sleep(1.2)
+
+
+def plan_walk(name):
+    """Plan a purchase: price on the numpad, name, result with the calendar strip (and a second chip), then leave
+    through the Discard question. Each screen is photographed as it is reached."""
+    try:
+        open_plan_wizard()
+        find("1", scroll=False, last=True)
+        for digit in ("1", "0", "0"):
+            tap_text(digit, last=True, scroll=False)
+        time.sleep(0.5)
+        screenshot(f"{name}-plan-price")
+        tap_text(S["wizard_next"], scroll=False)
+        time.sleep(1.5)
+        sh("input text Phone")
+        time.sleep(0.8)
+        screenshot(f"{name}-plan-name")
+        finish_name_step(S["plan_it"])  # the result screen
+        time.sleep(1.5)
+        screenshot(f"{name}-plan-result")
+        try:
+            tap_text("3", scroll=False, timeout=4)  # the 3-part chip, when it exists
+            time.sleep(1.5)
+            screenshot(f"{name}-plan-result-3")
+        except NotFound:
+            pass
+        sh("input keyevent 4")
+        time.sleep(1.2)
+        find(S["wizard_keep_going"], scroll=False, timeout=8)
+        tap_text(S["wizard_discard"], scroll=False)
+        time.sleep(1.2)
+    except NotFound as e:
+        screenshot(f"{name}-plan-FAILED")
+        print("  plan walk:", e)
+        recover_to_home()
+        return [f"{name}: plan walk: {e}"]
+    return []
+
+
+def plan_create_walk(name):
+    """"Plan it" for real: the items appear in Upcoming as ordinary planned expenses. Runs last (it changes the data)."""
+    try:
+        tap_text(TEXT_HOME, scroll=False)
+        time.sleep(1.5)
+        open_plan_wizard()
+        find("1", scroll=False, last=True)
+        for digit in ("1", "0", "0"):
+            tap_text(digit, last=True, scroll=False)
+        tap_text(S["wizard_next"], scroll=False)
+        time.sleep(1.5)
+        sh("input text Phone")
+        finish_name_step(S["plan_it"])
+        time.sleep(1.5)
+        tap_text(S["plan_it"], scroll=False)
+        time.sleep(1.5)
+        find("Planned: Phone", scroll=False, timeout=8, contains=True)
+        screenshot(f"{name}-plan-done")
+        tap_text(NAV_UPCOMING, scroll=False)
+        time.sleep(1.5)
+        find("Phone", scroll=True, timeout=20, contains=True)
+        screenshot(f"{name}-plan-in-upcoming")
+    except NotFound as e:
+        screenshot(f"{name}-plan-create-FAILED")
+        print("  plan create walk:", e)
+        return [f"{name}: plan create walk: {e}"]
+    return []
 
 
 def run_config(name, night, font, size, density):
@@ -626,6 +722,7 @@ def run_config(name, night, font, size, density):
             extra.append(f"{name}: Available should be {REF_BALANCE} while nothing is accepted, but is {spoken_available()}")
         # Tapping a waiting card opens the accept sheet: a red cross and a green check.
         extra += notification_walk(name)
+        extra += plan_walk(name)
         scroll_to_top(3)
         tap_text_midscreen("Sunday expense")
         time.sleep(1.2)
@@ -647,6 +744,7 @@ def run_config(name, night, font, size, density):
         scroll_to_top()  # the tab keeps its scroll position, so a fresh look starts from the top
         screenshot(f"{name}-settings")
         extra += settings_flow(name)
+        extra += plan_create_walk(name)
     except NotFound as e:
         screenshot(f"{name}-FAILED")
         print("  NOT FOUND:", e)

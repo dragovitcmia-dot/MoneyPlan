@@ -342,4 +342,18 @@
     <string name="debug_run_check">Run reminder check now</string>
     <string name="debug_check_done">Reminder check done: %1$d new</string>
     <string name="weekday_circle_selected">%1$s, selected</string>
+
+    <!-- Plan a purchase -->
+    <string name="plan_button">Plan a purchase</string>
+    <string name="plan_title">Plan a purchase</string>
+    <string name="plan_not_affordable">Not affordable in the next 180 days</string>
+    <string name="plan_extra_needed">You would need %1$s more.</string>
+    <string name="plan_it">Plan it</string>
+    <string name="plan_add_normal">Add as a normal expense</string>
+    <string name="plan_saved_one">Planned: %1$s</string>
+    <string name="plan_saved_parts">Planned: %1$s, %2$d parts</string>
+    <string name="plan_chip_desc_all">Pay all at once</string>
+    <string name="plan_chip_desc_parts">%1$d payments</string>
+    <string name="plan_strip_desc">Next 60 days with this plan</string>
+    <string name="plan_loading">Calculating…</string>
 </resources>

@@ -37,8 +37,10 @@ data class WizardState(
  */
 object EntryWizard {
     /** A fresh wizard; opened from a calendar day it starts with that day prefilled (see [EntryFormState.forDay]). */
-    fun start(kind: TxKind, today: LocalDate, day: LocalDate? = null): WizardState {
-        val form = if (day != null) EntryFormState.forDay(kind, day, today) else EntryFormState.initial(kind, today)
+    fun start(kind: TxKind, today: LocalDate, day: LocalDate? = null, amountText: String = "", description: String = ""): WizardState {
+        val base = if (day != null) EntryFormState.forDay(kind, day, today) else EntryFormState.initial(kind, today)
+        // "Add as a normal expense" from Plan a purchase arrives with the price and the name filled in.
+        val form = base.copy(amountText = amountText, description = description)
         // A repeating payment never starts in the past.
         val fixed = if (form.startDate.isBefore(today)) withStartDate(form, today) else form
         return WizardState(fixed, today)

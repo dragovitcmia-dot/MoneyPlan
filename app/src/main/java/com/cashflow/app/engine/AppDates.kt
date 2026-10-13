@@ -26,6 +26,9 @@ object AppDates {
     /** "05 OCT 2026". */
     fun format(date: LocalDate): String = "${date.format(day)} ${mon(date)} ${date.year}"
 
+    /** "05 OCT": always without the year (notification texts). */
+    fun dayMonth(date: LocalDate): String = "${date.format(day)} ${mon(date)}"
+
     /** "05 OCT" (no year), for tight places where the year is the current one; other years keep the year. */
     fun formatShort(date: LocalDate, today: LocalDate): String =
         if (date.year == today.year) "${date.format(day)} ${mon(date)}" else format(date)

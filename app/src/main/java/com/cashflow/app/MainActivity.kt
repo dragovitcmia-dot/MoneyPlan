@@ -38,6 +38,8 @@ import com.cashflow.app.ui.notifications.AppTopBar
 import com.cashflow.app.ui.notifications.LocalNotificationPermission
 import com.cashflow.app.ui.notifications.NotificationCenterScreen
 import com.cashflow.app.ui.notifications.NotificationPermission
+import com.cashflow.app.engine.NavLogic
+import com.cashflow.app.engine.NavState
 import com.cashflow.app.engine.NotificationRoute
 import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -134,7 +136,7 @@ class MainActivity : ComponentActivity() {
                 }
 
                 fun navigate(route: NotificationRoute, date: LocalDate?) {
-                    showCenter = false
+                    showCenter = NavLogic.closeCenter(NavState(tab, showCenter)).centerOpen
                     when (route) {
                         NotificationRoute.UPCOMING -> tab = 2
                         NotificationRoute.CALENDAR -> {
@@ -153,7 +155,7 @@ class MainActivity : ComponentActivity() {
                         navRequest = null
                     }
                 }
-                BackHandler(enabled = showCenter) { showCenter = false }
+                BackHandler(enabled = showCenter) { showCenter = NavLogic.closeCenter(NavState(tab, showCenter)).centerOpen }
 
                 // The hero odometer lives here, above the tabs, so switching tabs never touches it. The launch
                 // count-down plays ONLY on a fresh start (no saved state); returning from the background,
@@ -176,7 +178,7 @@ class MainActivity : ComponentActivity() {
                 Scaffold(
                     containerColor = MaterialTheme.colorScheme.background,
                     snackbarHost = { SnackbarHost(snackbar) },
-                    topBar = { AppTopBar(unread = unread, onBell = { showCenter = !showCenter }) },
+                    topBar = { AppTopBar(unread = unread, onBell = { NavLogic.toggleCenter(NavState(tab, showCenter)).let { tab = it.tab; showCenter = it.centerOpen } }) },
                     bottomBar = {
                         // Four labelled tabs. The labels follow the font size up to 1.3x and then shrink to fit,
                         // so "Calendar" and "Upcoming" never get cut off.
@@ -190,7 +192,8 @@ class MainActivity : ComponentActivity() {
                                     NavTab(Icons.Filled.Settings, R.string.nav_settings),
                                 ),
                                 selected = tab,
-                                onSelect = { tab = it },
+                                // Every tab always works: with the notification center open, a tap leaves it and shows that tab.
+                                onSelect = { index -> NavLogic.selectTab(NavState(tab, showCenter), index).let { tab = it.tab; showCenter = it.centerOpen } },
                             )
                         }
                     },
@@ -211,7 +214,7 @@ class MainActivity : ComponentActivity() {
                                 NotificationCenterScreen(
                                     app = app,
                                     contentPadding = padding,
-                                    onClose = { showCenter = false },
+                                    onClose = { showCenter = NavLogic.closeCenter(NavState(tab, showCenter)).centerOpen },
                                     onOpen = { entry ->
                                         navigate(
                                             entry.type.routeOf(),

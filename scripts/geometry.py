@@ -145,6 +145,34 @@ def notice(title, message):
     print(f"::notice title={title}::{message}", flush=True)
 
 
+def check_sheet(title, W, H, dp, inset):
+    """With a wizard sheet open on its first step: every clickable control lies fully inside the screen and above the
+    system navigation bar, and the primary Next button is fully visible and at least 40 dp tall."""
+    problems = []
+    nodes, _ = wait_for(S["wizard_next"], timeout=15)
+    time.sleep(1)
+    nodes = dump()
+    limit = H - inset
+    controls = [n for n in nodes if n.clickable and n.w > 0 and n.h > 0 and not (n.w >= 0.9 * W and n.h >= 0.5 * H)]
+    lines = []
+    for n in sorted(controls, key=lambda n: (n.b[1], n.b[0])):
+        inside = n.b[0] >= 0 and n.b[2] <= W and n.b[1] >= 0 and n.b[3] <= limit
+        lines.append(f"{n.label()!r}: [{n.b[0]},{n.b[1]}][{n.b[2]},{n.b[3]}] {n.w / dp:.0f} x {n.h / dp:.0f} dp {'ok' if inside else 'OUTSIDE'}")
+        if not inside:
+            problems.append(f"{title}: control {n.label()!r} {n.b} is not fully inside the screen above the navigation bar (limit y={limit})")
+    print(f"{title.upper()} CONTROLS:\n  " + "\n  ".join(lines))
+    nxt = clickable_of(max((n for n in nodes if n.text == S["wizard_next"]), key=lambda n: n.b[3]))
+    nxt_ok = nxt.b[0] >= 0 and nxt.b[2] <= W and nxt.b[1] >= 0 and nxt.b[3] <= limit and nxt.h / dp >= MIN_BUTTON_HEIGHT_DP
+    msg = f"Next: [{nxt.b[0]},{nxt.b[1]}][{nxt.b[2]},{nxt.b[3]}] {nxt.w / dp:.0f} x {nxt.h / dp:.0f} dp, bottom edge {limit - nxt.b[3]} px above the navigation bar, {len(controls)} controls checked"
+    print(f"{title}: {msg}")
+    notice(f"Geometry: {title}", msg)
+    if not nxt_ok:
+        problems.append(f"{title}: the Next button is not fully visible: {nxt.b} (limit y={limit}, height {nxt.h / dp:.0f} dp)")
+    if len(controls) < 4:
+        problems.append(f"{title}: only {len(controls)} controls found in the dump: the check did not see the sheet")
+    return problems
+
+
 def main():
     global SCREEN_W
     W, H, dpi = display()
@@ -196,38 +224,72 @@ def main():
         if bell.b[2] > W or bell.b[0] < W / 2 or bell.b[1] < 0:
             problems.append(f"the bell is not at the top right of the screen: {bell.b}")
 
-    # 2. Add Expense wizard, Amount step
+    # 1c. the notification center must not block the bar: with it open every tab is present and clickable, and a tap leaves it
+    bell_node = clickable_of(bells[0]) if bells else None
+    if bell_node is not None:
+        sh(f"input tap {(bell_node.b[0] + bell_node.b[2]) // 2} {(bell_node.b[1] + bell_node.b[3]) // 2}")
+        nodes, _ = wait_for(S["center_mark_all"], timeout=15)
+        time.sleep(0.5)
+        nodes = dump()
+        open_items = {}
+        for label in labels:
+            hits = [n for n in nodes if n.text == label or n.desc == label]
+            if hits:
+                open_items[label] = clickable_of(max(hits, key=lambda n: n.b[3]))
+        missing = [l for l in labels if l not in open_items]
+        if missing:
+            problems.append(f"with the notification center open these tabs are missing: {missing}")
+        for label, item in open_items.items():
+            if not (item.clickable or item.selected):
+                problems.append(f"with the notification center open the {label!r} tab is not clickable")
+        print("NAV WITH CENTER OPEN:", ", ".join(f"{l} {i.w / dp:.0f}x{i.h / dp:.0f} dp clickable={i.clickable}" for l, i in open_items.items()))
+        cal = open_items.get(S["nav_calendar"])
+        if cal is not None:
+            sh(f"input tap {(cal.b[0] + cal.b[2]) // 2} {(cal.b[1] + cal.b[3]) // 2}")
+            time.sleep(1.5)
+            nodes = dump()
+            still_open = any(n.text == S["center_mark_all"] for n in nodes)
+            cal_selected = any((n.text == S["nav_calendar"] or n.desc == S["nav_calendar"]) and any(c.selected for c in chain(n)) for n in nodes)
+            print(f"TAP ON CALENDAR WITH CENTER OPEN: center still open={still_open}, calendar tab selected={cal_selected}")
+            notice("Geometry: tabs with the center open", "; ".join(f"{l} {i.w / dp:.0f} x {i.h / dp:.0f} dp" for l, i in open_items.items()) + f"; after a tap on Calendar the center is {'STILL OPEN' if still_open else 'closed'}")
+            if still_open:
+                problems.append("tapping a bottom-navigation tab did not close the notification center")
+            if not cal_selected:
+                problems.append("tapping the Calendar tab with the center open did not select Calendar")
+            home = [n for n in nodes if n.text == S["nav_home"] or n.desc == S["nav_home"]]
+            if home:
+                h = clickable_of(max(home, key=lambda n: n.b[3]))
+                sh(f"input tap {(h.b[0] + h.b[2]) // 2} {(h.b[1] + h.b[3]) // 2}")
+                time.sleep(1.5)
+
+    # 2. Home: the Plan a purchase button, then the Add Expense wizard and the Plan a purchase wizard on their first step
+    nodes, hits = wait_for(S["button_expense"])
+    nav_top = min((i.b[1] for i in open_items.values()), default=H) if bell_node is not None else H
+    plan_hits = [n for n in nodes if n.text == S["plan_button"] or n.desc == S["plan_button"]]
+    if not plan_hits:
+        problems.append("the 'Plan a purchase' button was not found on Home")
+    else:
+        plan = clickable_of(plan_hits[0])
+        pw, ph = plan.w / dp, plan.h / dp
+        inside = plan.b[0] >= 0 and plan.b[2] <= W and plan.b[1] >= 0 and plan.b[3] <= nav_top
+        msg = f"Plan a purchase: [{plan.b[0]},{plan.b[1]}][{plan.b[2]},{plan.b[3]}] {pw:.0f} x {ph:.0f} dp, clickable={plan.clickable}, inside the screen above the bar={inside}"
+        print("PLAN BUTTON:", msg)
+        notice("Geometry: Plan a purchase button", msg)
+        if not plan.clickable:
+            problems.append("the 'Plan a purchase' button is not clickable")
+        if ph < MIN_NAV_HEIGHT_DP:
+            problems.append(f"the 'Plan a purchase' button is {ph:.0f} dp tall, needs >= {MIN_NAV_HEIGHT_DP}")
+        if not inside:
+            problems.append(f"the 'Plan a purchase' button is not fully on screen above the navigation bar: {plan.b} (bar top {nav_top})")
+        sh(f"input tap {(plan.b[0] + plan.b[2]) // 2} {(plan.b[1] + plan.b[3]) // 2}")
+        problems += check_sheet("Plan a purchase wizard, price step", W, H, dp, inset)
+        sh("input keyevent 4")  # an untouched wizard closes at once
+        time.sleep(1.5)
+
     nodes, hits = wait_for(S["button_expense"])
     target = clickable_of(hits[0])
     sh(f"input tap {(target.b[0] + target.b[2]) // 2} {(target.b[1] + target.b[3]) // 2}")
-    nodes, next_hits = wait_for(S["wizard_next"], timeout=15)
-    time.sleep(1)
-    nodes = dump()
-    limit = H - inset
-    controls = []
-    for n in nodes:
-        if not n.clickable or n.w <= 0 or n.h <= 0:
-            continue
-        if n.w >= 0.9 * W and n.h >= 0.5 * H:  # the dimmed backdrop behind the sheet, not a button
-            continue
-        controls.append(n)
-    lines = []
-    for n in sorted(controls, key=lambda n: (n.b[1], n.b[0])):
-        inside = n.b[0] >= 0 and n.b[2] <= W and n.b[1] >= 0 and n.b[3] <= limit
-        lines.append(f"{n.label()!r}: [{n.b[0]},{n.b[1]}][{n.b[2]},{n.b[3]}] {n.w / dp:.0f} x {n.h / dp:.0f} dp {'ok' if inside else 'OUTSIDE'}")
-        if not inside:
-            problems.append(f"wizard control {n.label()!r} {n.b} is not fully inside the screen above the navigation bar (limit y={limit})")
-    print("WIZARD CONTROLS (Amount step):\n  " + "\n  ".join(lines))
-    nxt = clickable_of(max((n for n in nodes if n.text == S["wizard_next"]), key=lambda n: n.b[3]))
-    nxt_ok = nxt.b[0] >= 0 and nxt.b[2] <= W and nxt.b[1] >= 0 and nxt.b[3] <= limit and nxt.h / dp >= MIN_BUTTON_HEIGHT_DP
-    msg = f"Next: [{nxt.b[0]},{nxt.b[1]}][{nxt.b[2]},{nxt.b[3]}] {nxt.w / dp:.0f} x {nxt.h / dp:.0f} dp, bottom edge {limit - nxt.b[3]} px above the navigation bar, {len(controls)} controls checked"
-    print("NEXT BUTTON:", msg)
-    notice("Geometry: wizard Amount step", msg)
-    if not nxt_ok:
-        problems.append(f"the Next button is not fully visible: {nxt.b} (limit y={limit}, height {nxt.h / dp:.0f} dp)")
-    if len(controls) < 4:
-        problems.append(f"only {len(controls)} controls found in the wizard dump: the check did not see the sheet")
-
+    problems += check_sheet("Add expense wizard, Amount step", W, H, dp, inset)
     sh("input keyevent 4")  # an untouched wizard closes at once
     time.sleep(1.5)
     if problems:

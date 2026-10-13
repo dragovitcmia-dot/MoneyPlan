@@ -76,3 +76,19 @@ class NotificationCenterModelTest {
         assertTrue(!entry(2, Duration.ZERO, readAt = now).unread)
     }
 }
+
+class BellTonesTest {
+    @Test fun rows_get_their_colour_family() {
+        assertEquals(BellTone.SHORTAGE, BellTones.of(NotificationType.SHORTAGE, 10_000))
+        assertEquals(BellTone.INCOME, BellTones.of(NotificationType.AUTO_INCOME, 30_000))
+        assertEquals(BellTone.INFO, BellTones.of(NotificationType.INFO, null))
+        assertEquals(BellTone.EXPENSE, BellTones.of(NotificationType.HEADS_UP_WEEK, -300_000))
+        assertEquals(BellTone.EXPENSE, BellTones.of(NotificationType.HEADS_UP_DAY, -300_000))
+    }
+
+    @Test fun a_day_summary_is_green_when_only_income_is_waiting_and_red_otherwise() {
+        assertEquals(BellTone.INCOME, BellTones.of(NotificationType.DAY_OF, 30_000))
+        assertEquals(BellTone.EXPENSE, BellTones.of(NotificationType.DAY_OF, -90_000))
+        assertEquals(BellTone.EXPENSE, BellTones.of(NotificationType.DAY_OF, null))
+    }
+}

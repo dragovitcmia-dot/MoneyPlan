@@ -6,7 +6,7 @@ import java.time.LocalTime
 import java.time.ZoneId
 import java.time.temporal.ChronoUnit
 
-enum class NotificationType { HEADS_UP_WEEK, HEADS_UP_DAY, DAY_OF, SHORTAGE, AUTO_INCOME }
+enum class NotificationType { HEADS_UP_WEEK, HEADS_UP_DAY, DAY_OF, SHORTAGE, AUTO_INCOME, INFO }
 
 /** Where a tap on a notification (or a bell row) leads. */
 enum class NotificationRoute { UPCOMING, CALENDAR }
@@ -63,7 +63,6 @@ object Notifications {
     val NAG_LAST: LocalTime = LocalTime.of(21, 0)
     const val HEADS_UP_WINDOW_HOURS = 6L
     const val SHORTAGE_HORIZON_DAYS = 60L
-    const val MAX_NAMES = 3
 
     fun isQuiet(t: LocalTime): Boolean = !t.isBefore(QUIET_START) || t.isBefore(QUIET_END)
 
@@ -149,17 +148,30 @@ object Notifications {
         if (key in posted) return emptyList()
         val expenses = waiting.filter { it.kind == TxKind.EXPENSE }.sumOf { it.amount }
         val income = waiting.filter { it.kind == TxKind.INCOME }.sumOf { it.amount }
-        val parts = buildList {
-            if (expenses > 0) add(Money.formatSigned(TxKind.EXPENSE, expenses))
-            if (income > 0) add(Money.formatSigned(TxKind.INCOME, income))
+        val again = posted.any { isDayKey(it, today) } // something was already said about today: this one is a nag
+        val title = when {
+            again -> "Still waiting"
+            expenses == 0L -> "Confirm today's income"
+            else -> "Confirm today's payments"
+        }
+        val body = if (waiting.size == 1) {
+            val only = waiting.single()
+            "${nameOf(only)} ${Money.formatSigned(only.kind, only.amount)}"
+        } else {
+            val parts = buildList {
+                add("${waiting.size} items")
+                if (expenses > 0) add(Money.formatSigned(TxKind.EXPENSE, expenses))
+                if (income > 0) add(Money.formatSigned(TxKind.INCOME, income))
+            }
+            parts.joinToString(", ")
         }
         val bellKey = "DAY|$today|bell"
         return listOf(
             NotificationDecision(
                 key = key,
                 type = NotificationType.DAY_OF,
-                title = "Today: ${waiting.size} to confirm",
-                body = parts.joinToString(", "),
+                title = title,
+                body = body,
                 relatedDate = today,
                 route = NotificationRoute.UPCOMING,
                 post = true,
@@ -190,21 +202,24 @@ object Notifications {
         fun rule(tx: Transaction) = tx.recurringRuleId?.let(byId::get)
         val out = mutableListOf<NotificationDecision>()
 
-        fun group(days: Long, type: NotificationType, prefix: String, title: String, eligible: (Transaction) -> Boolean) {
+        fun group(days: Long, type: NotificationType, prefix: String, title: String, when_: String, eligible: (Transaction) -> Boolean) {
             val target = today.plusDays(days)
             val key = "$prefix|$target"
             if (key in posted) return
             val list = items.filter { it.status == TxStatus.PENDING && it.kind == TxKind.EXPENSE && it.date == target && eligible(it) }
                 .sortedWith(compareBy<Transaction> { it.amount }.thenBy { it.id }.reversed())
             if (list.isEmpty()) return
-            val names = list.take(MAX_NAMES).joinToString(", ") { "${nameOf(it)} ${Money.formatSigned(TxKind.EXPENSE, it.amount)}" }
-            val more = if (list.size > MAX_NAMES) ", +${list.size - MAX_NAMES} more" else ""
-            val first = AppDates.formatShort(target, today)
+            val total = list.sumOf { it.amount }
+            val text = if (list.size == 1) {
+                "${nameOf(list[0])} ${Money.formatSigned(TxKind.EXPENSE, list[0].amount)}, ${AppDates.dayMonth(target)}"
+            } else {
+                "${list.size} payments $when_, ${Money.formatSigned(TxKind.EXPENSE, total)}"
+            }
             out += NotificationDecision(
                 key = key,
                 type = type,
-                title = "$title: ${list.size} ${if (list.size == 1) "payment" else "payments"}",
-                body = "$first: $names$more",
+                title = title,
+                body = text,
                 relatedDate = target,
                 route = NotificationRoute.UPCOMING,
                 post = true,
@@ -213,9 +228,9 @@ object Notifications {
             )
         }
         // A week ahead: one-time payments and the ones that come monthly or less often.
-        group(7, NotificationType.HEADS_UP_WEEK, "HU7", "In 1 week") { tx -> rule(tx)?.pattern?.let(::monthlyOrLess) ?: true }
+        group(7, NotificationType.HEADS_UP_WEEK, "HU7", "Coming up", "next week") { tx -> rule(tx)?.pattern?.let(::monthlyOrLess) ?: true }
         // The day before: everything except daily repeaters.
-        group(1, NotificationType.HEADS_UP_DAY, "HU1", "Tomorrow") { tx -> rule(tx)?.pattern != RecurrencePattern.Daily }
+        group(1, NotificationType.HEADS_UP_DAY, "HU1", "Tomorrow", "tomorrow") { tx -> rule(tx)?.pattern != RecurrencePattern.Daily }
         return out
     }
 
@@ -226,7 +241,7 @@ object Notifications {
         RecurrencePattern.Daily, is RecurrencePattern.Weekly, is RecurrencePattern.WeeklyDays -> false
     }
 
-    private fun nameOf(tx: Transaction) = tx.description.trim().ifEmpty { "Expense" }
+    private fun nameOf(tx: Transaction) = tx.description.trim().ifEmpty { if (tx.kind == TxKind.INCOME) "Income" else "Expense" }
 
     // ---- shortage alert ----------------------------------------------------------------------------
 
@@ -252,8 +267,8 @@ object Notifications {
             NotificationDecision(
                 key = osKey,
                 type = NotificationType.SHORTAGE,
-                title = "Short by ${Money.formatDisplay(need)} before ${AppDates.format(day.date)}",
-                body = "Save ${Money.formatDisplay(perDay)}/day",
+                title = "Low balance ahead",
+                body = "Short by ${Money.formatDisplay(need)} before ${AppDates.dayMonth(day.date)}, save ${Money.formatDisplay(perDay, withCurrency = false)}/day",
                 relatedDate = day.date,
                 route = NotificationRoute.CALENDAR,
                 post = postDue,
@@ -284,7 +299,7 @@ object Notifications {
             NotificationDecision(
                 key = key,
                 type = NotificationType.AUTO_INCOME,
-                title = "Income added",
+                title = "Income received",
                 body = Money.formatSigned(TxKind.INCOME, total),
                 relatedDate = today,
                 route = NotificationRoute.UPCOMING,
