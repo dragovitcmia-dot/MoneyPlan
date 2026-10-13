@@ -233,6 +233,12 @@ class MainActivity : ComponentActivity() {
                                             entry.type.routeOf(),
                                             entry.relatedDate,
                                             ruleId = if (entry.key.startsWith("LAST|")) entry.key.split("|").getOrNull(1)?.toLongOrNull() else null,
+                                            // A day summary about ONE waiting item of an "ask me the amount" series opens that item's amount sheet, like the status-bar notification.
+                                            itemId = if (entry.type == com.cashflow.app.engine.NotificationType.DAY_OF) {
+                                                home.state.value?.toConfirm?.singleOrNull()?.takeIf { it.recurringRuleId in home.series.value.askAmountRuleIds }?.id
+                                            } else {
+                                                null
+                                            },
                                         )
                                     },
                                 )

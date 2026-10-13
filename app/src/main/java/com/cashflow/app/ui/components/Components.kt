@@ -46,6 +46,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.layout.size
+import com.cashflow.app.ui.theme.cashflow
 import androidx.compose.ui.composed
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.draw.drawWithContent
@@ -218,3 +220,28 @@ fun selectedChipColors(): SelectableChipColors = FilterChipDefaults.filterChipCo
     selectedLabelColor = MaterialTheme.colorScheme.onPrimary,
     selectedLeadingIconColor = MaterialTheme.colorScheme.onPrimary,
 )
+
+/**
+ * The name of an item with, when it belongs to a repeating series, a small circular-arrow icon right after it in the type color
+ * (income green, expense red). One-time items show nothing extra.
+ */
+@Composable
+fun NameWithRepeat(name: String, repeating: Boolean, income: Boolean, modifier: Modifier = Modifier) {
+    androidx.compose.foundation.layout.Row(modifier, verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+        Text(
+            name,
+            style = MaterialTheme.typography.titleMedium,
+            maxLines = 2,
+            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f, fill = false),
+        )
+        if (repeating) {
+            androidx.compose.material3.Icon(
+                androidx.compose.material.icons.Icons.Filled.Refresh,
+                contentDescription = androidx.compose.ui.res.stringResource(com.cashflow.app.R.string.repeats_label),
+                tint = if (income) MaterialTheme.cashflow.positive else MaterialTheme.cashflow.negative,
+                modifier = Modifier.padding(start = 6.dp).size(16.dp),
+            )
+        }
+    }
+}

@@ -9,6 +9,23 @@ import java.time.temporal.TemporalAdjusters
 /** ALL and ONE_TIME list occurrences; REPEATING shows the series list instead (see [SeriesList]). */
 enum class UpcomingFilter { ALL, EXPENSES, INCOME, REPEATING, ONE_TIME }
 
+/** The two independent filter groups of Upcoming; they combine (AND). */
+enum class UpcomingType { ALL, EXPENSES, INCOME }
+
+enum class UpcomingKind { ALL, REPEATING, ONE_TIME }
+
+/** What a tap on something in the Upcoming list does. */
+sealed interface UpcomingTap {
+    /** Opens the details sheet of the item (with the series actions for a series item). */
+    data class OpenDetails(val txId: Long) : UpcomingTap
+
+    /** Opens the sheet of one series. */
+    data class OpenSeries(val ruleId: Long) : UpcomingTap
+
+    /** Several daily series are summed in one row: switch to the Repeating list. */
+    data object ShowRepeating : UpcomingTap
+}
+
 /** Headers of the Upcoming list, in display order: Waiting, Tomorrow, This week, then one per month. */
 sealed interface UpcomingGroupKey {
     /** PENDING items dated today or earlier: the same ones Home lists under "Waiting for you". */
@@ -38,6 +55,8 @@ data class UpcomingModel(
     /** Total of the enabled DAILY income sources, pinned on top; null when there is none to show. */
     val dailyIncome: Long?,
     val groups: List<UpcomingGroup>,
+    /** The enabled daily income series behind [dailyIncome]. */
+    val dailyRuleIds: List<Long> = emptyList(),
 ) {
     val isEmpty get() = groups.isEmpty() && dailyIncome == null
 }
@@ -66,10 +85,32 @@ object Upcoming {
         is UpcomingGroupKey.Month -> 3 + key.month.year * 12L + key.month.monthValue
     }
 
+    /** Every row of the list opens its details. */
+    fun tapFor(row: UpcomingRow): UpcomingTap = UpcomingTap.OpenDetails(row.tx.id)
+
+    /** The pinned daily-income row: its series when there is one, otherwise the Repeating list. */
+    fun tapForDaily(model: UpcomingModel): UpcomingTap? = when {
+        model.dailyIncome == null -> null
+        model.dailyRuleIds.size == 1 -> UpcomingTap.OpenSeries(model.dailyRuleIds.single())
+        else -> UpcomingTap.ShowRepeating
+    }
+
+    fun build(engine: BalanceEngine, rules: List<RecurringRule>, filter: UpcomingFilter, firstDayOfWeek: DayOfWeek): UpcomingModel {
+        val (type, kind) = when (filter) {
+            UpcomingFilter.ALL -> UpcomingType.ALL to UpcomingKind.ALL
+            UpcomingFilter.EXPENSES -> UpcomingType.EXPENSES to UpcomingKind.ALL
+            UpcomingFilter.INCOME -> UpcomingType.INCOME to UpcomingKind.ALL
+            UpcomingFilter.REPEATING -> UpcomingType.ALL to UpcomingKind.REPEATING
+            UpcomingFilter.ONE_TIME -> UpcomingType.ALL to UpcomingKind.ONE_TIME
+        }
+        return build(engine, rules, type, kind, firstDayOfWeek)
+    }
+
     fun build(
         engine: BalanceEngine,
         rules: List<RecurringRule>,
-        filter: UpcomingFilter,
+        type: UpcomingType,
+        kind: UpcomingKind,
         firstDayOfWeek: DayOfWeek,
     ): UpcomingModel {
         val today = engine.today
@@ -82,13 +123,12 @@ object Upcoming {
         val rows = days.asSequence()
             .flatMap { it.items.asSequence() }
             .filter { it.status == TxStatus.PENDING }
+            .filter { type == UpcomingType.ALL || (type == UpcomingType.EXPENSES) == (it.kind == TxKind.EXPENSE) }
             .filter {
-                when (filter) {
-                    UpcomingFilter.ALL -> true
-                    UpcomingFilter.EXPENSES -> it.kind == TxKind.EXPENSE
-                    UpcomingFilter.INCOME -> it.kind == TxKind.INCOME
-                    UpcomingFilter.ONE_TIME -> it.recurringRuleId == null
-                    UpcomingFilter.REPEATING -> false // the series list replaces the occurrences
+                when (kind) {
+                    UpcomingKind.ALL -> true
+                    UpcomingKind.ONE_TIME -> it.recurringRuleId == null
+                    UpcomingKind.REPEATING -> false // the series list replaces the occurrences
                 }
             }
             // Future occurrences of a daily income source are summarized in the pinned row, not listed.
@@ -111,14 +151,14 @@ object Upcoming {
             .map { (key, list) -> UpcomingGroup(key, list.sortedWith(compareBy<UpcomingRow> { it.tx.date }.thenBy { it.tx.id })) }
             .sortedBy { order(it.key) }
 
-        val dailyTotal = if (filter == UpcomingFilter.ALL || filter == UpcomingFilter.INCOME) {
+        val dailySeries = if (kind == UpcomingKind.ALL && type != UpcomingType.EXPENSES) {
             rules.filter {
                 it.enabled && it.kind == TxKind.INCOME && it.pattern == RecurrencePattern.Daily &&
                     (it.endDate == null || !it.endDate.isBefore(today))
-            }.sumOf { it.amount }.takeIf { it > 0 }
+            }
         } else {
-            null
+            emptyList()
         }
-        return UpcomingModel(dailyTotal, groups)
+        return UpcomingModel(dailySeries.sumOf { it.amount }.takeIf { it > 0 }, groups, dailySeries.map { it.id })
     }
 }

@@ -198,27 +198,37 @@ def check_upcoming(W, H, dp, nav_top):
     nodes, hits = wait_for(S["nav_upcoming"])
     tap(clickable_of(max(hits, key=lambda n: n.b[3])))
     time.sleep(2)
+    # Two groups of chips: type (All, Expenses, Income) and kind (All, Repeating, One-time). "All" appears twice: top-most is the type.
+    nodes, _ = wait_for(S["filter_repeating"])
+    alls = sorted([n for n in nodes if n.text == S["filter_all"] or n.desc == S["filter_all"]], key=lambda n: n.b[1])
     chips = {}
-    for key in ("filter_all", "filter_repeating", "filter_one_time"):
+    if len(alls) >= 2:
+        chips["type All"] = clickable_of(alls[0])
+        chips["kind All"] = clickable_of(alls[1])
+    else:
+        problems.append("the two 'All' chips were not both found")
+    for label, key in (("Expenses", "filter_expenses"), ("Income", "filter_income"), ("Repeating", "filter_repeating"), ("One-time", "filter_one_time")):
         nodes, hit = wait_for(S[key])
-        chips[key] = clickable_of(min(hit, key=lambda n: n.b[1]))
+        chips[label] = clickable_of(min(hit, key=lambda n: n.b[1]))
     lines = []
-    for key, chip in chips.items():
+    for label, chip in chips.items():
         inside = chip.b[0] >= 0 and chip.b[2] <= W and chip.b[1] >= 0 and chip.b[3] <= H
-        lines.append(f"{S[key]}: {chip.w / dp:.0f} x {chip.h / dp:.0f} dp {'ok' if inside else 'OUTSIDE'}")
+        lines.append(f"{label}: {chip.w / dp:.0f} x {chip.h / dp:.0f} dp {'ok' if inside else 'OUTSIDE'}")
         if chip.h / dp < MIN_NAV_HEIGHT_DP:
-            problems.append(f"Upcoming chip {S[key]!r} is {chip.h / dp:.0f} dp tall, needs >= {MIN_NAV_HEIGHT_DP}")
+            problems.append(f"Upcoming chip {label!r} touch area is {chip.h / dp:.0f} dp tall, needs >= {MIN_NAV_HEIGHT_DP}")
+        if chip.w / dp < MIN_NAV_HEIGHT_DP:
+            problems.append(f"Upcoming chip {label!r} touch area is {chip.w / dp:.0f} dp wide, needs >= {MIN_NAV_HEIGHT_DP}")
         if not inside:
-            problems.append(f"Upcoming chip {S[key]!r} is not inside the screen: {chip.b}")
+            problems.append(f"Upcoming chip {label!r} is not inside the screen: {chip.b}")
         if not chip.clickable:
-            problems.append(f"Upcoming chip {S[key]!r} is not clickable")
+            problems.append(f"Upcoming chip {label!r} is not clickable")
     print("UPCOMING CHIPS:", "; ".join(lines))
     notice("Geometry: Upcoming filter chips", "; ".join(lines))
-    tap(chips["filter_repeating"])
+    tap(chips["Repeating"])
     time.sleep(2)
     nodes = dump()
     rows = [n for n in nodes if n.text.startswith("Sunday expense") or n.desc.startswith("Sunday expense") or "Daily income" in (n.text + n.desc)]
-    rows = [clickable_of(r) for r in rows if r.b[1] > chips["filter_repeating"].b[3]]
+    rows = [clickable_of(r) for r in rows if r.b[1] > chips["Repeating"].b[3]]
     if not rows:
         problems.append("with Repeating selected no series row was found")
     else:

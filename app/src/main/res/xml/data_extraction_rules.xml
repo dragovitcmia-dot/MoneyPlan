@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android 12 and newer: the same content for the cloud backup and for device-to-device transfer. -->
+<data-extraction-rules>
+    <cloud-backup>
+        <include domain="database" path="cashflow.db" />
+        <include domain="sharedpref" path="settings_prefs.xml" />
+        <include domain="sharedpref" path="notification_prefs.xml" />
+        <include domain="sharedpref" path="ui_prefs.xml" />
+        <exclude domain="database" path="notifications.db" />
+        <exclude domain="database" path="notifications.db-wal" />
+        <exclude domain="database" path="notifications.db-shm" />
+        <exclude domain="file" path="backups" />
+        <exclude domain="sharedpref" path="backup_state.xml" />
+    </cloud-backup>
+    <device-transfer>
+        <include domain="database" path="cashflow.db" />
+        <include domain="sharedpref" path="settings_prefs.xml" />
+        <include domain="sharedpref" path="notification_prefs.xml" />
+        <include domain="sharedpref" path="ui_prefs.xml" />
+        <exclude domain="database" path="notifications.db" />
+        <exclude domain="database" path="notifications.db-wal" />
+        <exclude domain="database" path="notifications.db-shm" />
+        <exclude domain="file" path="backups" />
+        <exclude domain="sharedpref" path="backup_state.xml" />
+    </device-transfer>
+</data-extraction-rules>

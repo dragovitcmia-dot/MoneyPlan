@@ -36,6 +36,7 @@ import com.cashflow.app.engine.Transaction
 import com.cashflow.app.engine.TxKind
 import com.cashflow.app.engine.TxStatus
 import com.cashflow.app.ui.components.AppCard
+import com.cashflow.app.ui.components.NameWithRepeat
 import com.cashflow.app.ui.components.KindButtons
 import com.cashflow.app.ui.theme.cashflow
 import java.time.LocalDate
@@ -107,21 +108,14 @@ private fun DayItemRow(item: DayItem, today: LocalDate, onClick: () -> Unit) {
             verticalAlignment = Alignment.Top,
         ) {
             Column(Modifier.weight(1f).padding(end = 12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(
+                NameWithRepeat(
                     tx.description.ifBlank { stringResource(if (income) R.string.item_income else R.string.item_expense) },
-                    style = MaterialTheme.typography.titleMedium,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
+                    repeating = item.fromSeries,
+                    income = income,
                 )
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     Text(statusText(tx, today), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     if (item.last) com.cashflow.app.ui.upcoming.LastTag()
-                    if (item.fromSeries) {
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                            Icon(Icons.Filled.Refresh, contentDescription = null, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                            Text(stringResource(R.string.repeats_label), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                    }
                 }
             }
             Text(

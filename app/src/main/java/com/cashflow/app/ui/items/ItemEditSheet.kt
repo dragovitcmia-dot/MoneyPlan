@@ -127,13 +127,16 @@ fun ItemEditSheet(
                     style = AppButtonStyle.Tonal,
                 )
             }
-            AppButton(
-                stringResource(R.string.action_delete),
-                onClick = { confirmDelete = true },
-                modifier = Modifier.fillMaxWidth(),
-                style = AppButtonStyle.Outlined,
-                contentColor = MaterialTheme.colorScheme.error,
-            )
+            // Permanent history: an accepted item, or one dated before today, cannot be deleted.
+            if (!com.cashflow.app.engine.HistoryGuard.isHistory(tx, today)) {
+                AppButton(
+                    stringResource(R.string.action_delete),
+                    onClick = { confirmDelete = true },
+                    modifier = Modifier.fillMaxWidth(),
+                    style = AppButtonStyle.Outlined,
+                    contentColor = MaterialTheme.colorScheme.error,
+                )
+            }
         }
     }
 

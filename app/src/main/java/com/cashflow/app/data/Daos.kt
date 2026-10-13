@@ -47,6 +47,17 @@ interface TransactionDao {
     @Query("DELETE FROM transactions WHERE id IN (:ids)")
     suspend fun deleteByIds(ids: List<Long>)
 
+    @Query("SELECT * FROM transactions WHERE id IN (:ids)")
+    suspend fun getByIds(ids: List<Long>): List<TransactionEntity>
+
+    /** Detaches rows from a series that is being deleted: they stay as standalone items, nothing else about them changes. */
+    @Query("UPDATE transactions SET recurringRuleId = NULL WHERE id IN (:ids)")
+    suspend fun detach(ids: List<Long>)
+
+    /** Undo of a series delete: only the link comes back, never an old copy of the row. */
+    @Query("UPDATE transactions SET recurringRuleId = :ruleId WHERE id IN (:ids) AND recurringRuleId IS NULL")
+    suspend fun relink(ids: List<Long>, ruleId: Long)
+
     @Query("DELETE FROM transactions")
     suspend fun deleteAll()
 }

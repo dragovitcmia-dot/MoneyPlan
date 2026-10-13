@@ -9,7 +9,7 @@ import androidx.room.migration.Migration
 
 @Database(
     entities = [TransactionEntity::class, RecurringRuleEntity::class, SettingsEntity::class],
-    version = 2,
+    version = AppDatabase.SCHEMA_VERSION,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)
@@ -19,6 +19,9 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun settingsDao(): SettingsDao
 
     companion object {
+        /** The schema version of the main database. The backup code compares it with what it saw before an update. */
+        const val SCHEMA_VERSION = 2
+
         /** All migrations, oldest first. Version 2 is the baseline, so there are none yet. */
         val MIGRATIONS: Array<Migration> = arrayOf()
 

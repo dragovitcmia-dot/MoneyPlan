@@ -71,6 +71,7 @@ class ReminderRunner(private val app: CashflowApp) {
                 }
                 prefs.savePostedKeys(PostedKeys.prune(posted, today))
                 app.notificationCenter.prune(now)
+                runCatching { app.backupManager.prune() } // earlier days consolidate and old snapshots go in the same periodic pass
                 decisions
             }
         }

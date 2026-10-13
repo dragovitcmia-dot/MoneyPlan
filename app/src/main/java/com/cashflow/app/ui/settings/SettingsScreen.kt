@@ -89,6 +89,7 @@ fun SettingsScreen(
                 when (card) {
                     SettingsCard.INCOME -> key(generation) { IncomeCard(viewModel, current) }
                     SettingsCard.NOTIFICATIONS -> NotificationsCard(viewModel, current)
+                    SettingsCard.BACKUP -> BackupCard()
                     SettingsCard.STARTING_POINT -> key(generation) { StartingPointCard(viewModel, current, layout) }
                     SettingsCard.APP_UPDATES -> AppUpdatesSection(updateManager)
                     SettingsCard.DEVELOPER_TOOLS -> DebugSection(repository) { viewModel.reload { generation++ } }

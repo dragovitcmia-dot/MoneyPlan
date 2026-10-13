@@ -487,6 +487,15 @@ def settings_flow(name):
     swipe_up(0.75, 0.35)
     time.sleep(0.6)
     screenshot(f"{name}-settings-notifications")  # the Notifications card
+    swipe_up(0.75, 0.3)
+    time.sleep(0.6)
+    screenshot(f"{name}-settings-backup")  # the Backup card
+    try:
+        tap_text(S["backup_now"], scroll=False, timeout=6)
+        time.sleep(3)
+        screenshot(f"{name}-settings-backup-after")  # a Manual snapshot is in the list
+    except NotFound as e:
+        problems.append(f"{name}: Back up now: {e}")
     scroll_to_top(4)
     if name in SETTINGS_BOTTOM_CONFIGS:
         for _ in range(8):

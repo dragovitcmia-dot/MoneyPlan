@@ -26,6 +26,14 @@ jobs:
           set -o pipefail
           ./gradlew testDebugUnitTest assemblePreview --stacktrace 2>&1 | tee gradle.log
 
+      - name: Merged manifest backup attributes
+        if: always()
+        run: |
+          M=$(find app/build/intermediates -path '*merged_manifests*' -name AndroidManifest.xml | head -1)
+          echo "merged manifest: $M"
+          echo "::notice title=Merged manifest::$(grep -o 'android:allowBackup="[a-z]*"\|android:fullBackupContent="[^"]*"\|android:dataExtractionRules="[^"]*"\|android:name="com.cashflow.app.RestartActivity"\|android:process=":restart"' "$M" | tr '\n' ' ')"
+          for f in app/src/main/res/xml/backup_rules.xml app/src/main/res/xml/data_extraction_rules.xml; do echo "--- $f"; cat "$f"; done
+
       - name: Show the exported Room schemas
         if: always()
         run: |
