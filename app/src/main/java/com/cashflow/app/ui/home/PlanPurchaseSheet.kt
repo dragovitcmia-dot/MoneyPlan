@@ -298,7 +298,7 @@ private fun ResultStep(baseline: PlanBaseline?, result: PurchaseResult?, option:
         }
     }
     if (option != null) {
-        Text(PurchaseStrip.summary(option), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+        Text(PurchaseStrip.summary(option), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
         CalendarStrip(PurchaseStrip.cells(baseline, option), option)
     }
 }
@@ -328,7 +328,7 @@ private fun StripCellView(cell: StripCell) {
     val purchase = cell.purchase != null
     val shape = StripShape
     Column(
-        Modifier.width(60.dp).height(96.dp).clip(shape)
+        Modifier.width(68.dp).height(96.dp).clip(shape)
             .background(if (cell.negative) colors.dayNegativeFill else scheme.surface)
             .then(if (purchase) Modifier.border(BorderStroke(2.dp, colors.expenseFill), shape) else Modifier)
             .padding(vertical = 6.dp),
@@ -346,16 +346,17 @@ private fun StripCellView(cell: StripCell) {
         }
         Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
             cell.purchaseText?.let { text ->
-                Text(text, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = colors.negative, maxLines = 1, textAlign = TextAlign.Center)
+                Text(text, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = colors.negative, maxLines = 1, softWrap = false, textAlign = TextAlign.Center)
             }
         }
         Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
             Text(
                 cell.closingText,
-                style = MaterialTheme.typography.titleMedium,
+                style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.Bold,
                 color = if (cell.negative) colors.negative else scheme.onSurface,
                 maxLines = 1,
+                softWrap = false,
             )
         }
     }

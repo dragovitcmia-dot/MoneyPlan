@@ -559,8 +559,7 @@ def wizard_walk(name):
         sh("input text Coffee")
         time.sleep(0.8)
         screenshot(f"{name}-wizard-name-typed")
-        sh("input keyevent 66")  # Enter: Done moves on
-        time.sleep(1.5)
+        finish_name_step(S["timing_repeats"])  # Enter: Done moves on (Next if the keyboard swallowed it)
         screenshot(f"{name}-wizard-when")
         tap_text(S["timing_repeats"], scroll=False)
         time.sleep(1)
@@ -574,13 +573,7 @@ def wizard_walk(name):
     except NotFound as e:
         screenshot(f"{name}-wizard-FAILED")
         print("  wizard walk:", e)
-        for _ in range(3):
-            sh("input keyevent 4")
-            time.sleep(1)
-            try:
-                tap_text(S["wizard_discard"], scroll=False, timeout=3)
-            except NotFound:
-                pass
+        recover_to_home()
         return [f"{name}: wizard walk: {e}"]
     return []
 
@@ -605,6 +598,38 @@ def notification_walk(name):
     return problems
 
 
+def recover_to_home():
+    """After a failed walk: close an open sheet (Back, then Discard when asked) and make sure the app is in front."""
+    for _ in range(2):
+        sh("input keyevent 4")
+        time.sleep(1)
+        try:
+            tap_text(S["wizard_discard"], scroll=False, timeout=3)
+            break
+        except NotFound:
+            pass
+    nodes = dump_nodes() or []
+    if not any(t == TEXT_HOME or d == TEXT_HOME for t, d, _ in nodes):
+        sh(f"monkey -p {PKG} -c android.intent.category.LAUNCHER 1")
+        time.sleep(3)
+    try:
+        tap_text(TEXT_HOME, scroll=False, timeout=8)
+    except NotFound:
+        pass
+
+
+def finish_name_step(expect_text):
+    """Enter (the keyboard's Done) goes on from the name step; if the emulator's keyboard swallowed it, press Next."""
+    sh("input keyevent 66")
+    time.sleep(1.5)
+    try:
+        find(expect_text, scroll=False, timeout=4, contains=True)
+    except NotFound:
+        print("  Enter did not leave the name step: pressing Next")
+        tap_text(S["wizard_next"], scroll=False)
+        time.sleep(1.5)
+
+
 def open_plan_wizard():
     tap_text(S["plan_button"], scroll=True, timeout=15)
     time.sleep(1.2)
@@ -625,8 +650,8 @@ def plan_walk(name):
         sh("input text Phone")
         time.sleep(0.8)
         screenshot(f"{name}-plan-name")
-        sh("input keyevent 66")  # Done goes on to the result
-        time.sleep(2.5)
+        finish_name_step(S["plan_it"])  # the result screen
+        time.sleep(1.5)
         screenshot(f"{name}-plan-result")
         try:
             tap_text("3", scroll=False, timeout=4)  # the 3-part chip, when it exists
@@ -642,13 +667,7 @@ def plan_walk(name):
     except NotFound as e:
         screenshot(f"{name}-plan-FAILED")
         print("  plan walk:", e)
-        for _ in range(3):
-            sh("input keyevent 4")
-            time.sleep(1)
-            try:
-                tap_text(S["wizard_discard"], scroll=False, timeout=3)
-            except NotFound:
-                pass
+        recover_to_home()
         return [f"{name}: plan walk: {e}"]
     return []
 
@@ -665,8 +684,8 @@ def plan_create_walk(name):
         tap_text(S["wizard_next"], scroll=False)
         time.sleep(1.5)
         sh("input text Phone")
-        sh("input keyevent 66")
-        time.sleep(2.5)
+        finish_name_step(S["plan_it"])
+        time.sleep(1.5)
         tap_text(S["plan_it"], scroll=False)
         time.sleep(1.5)
         find("Planned: Phone", scroll=False, timeout=8, contains=True)
