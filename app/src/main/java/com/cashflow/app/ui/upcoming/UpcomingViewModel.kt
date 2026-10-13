@@ -4,6 +4,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.cashflow.app.LedgerSnapshots
 import com.cashflow.app.engine.AppDates
+import com.cashflow.app.engine.SeriesContext
+import com.cashflow.app.engine.SeriesList
+import com.cashflow.app.engine.SeriesRow
 import com.cashflow.app.engine.Upcoming
 import com.cashflow.app.engine.UpcomingFilter
 import com.cashflow.app.engine.UpcomingModel
@@ -17,7 +20,7 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.stateIn
 import java.time.LocalDate
 
-class UpcomingViewModel(private val snapshots: LedgerSnapshots) : ViewModel() {
+class UpcomingViewModel(private val snapshots: LedgerSnapshots, flags: StateFlow<SeriesContext>) : ViewModel() {
     private val _filter = MutableStateFlow(UpcomingFilter.ALL)
     val filter: StateFlow<UpcomingFilter> = _filter
 
@@ -27,6 +30,11 @@ class UpcomingViewModel(private val snapshots: LedgerSnapshots) : ViewModel() {
     val model: StateFlow<UpcomingModel?> = combine(snapshots.snapshot.filterNotNull(), _filter) { snap, filter ->
         Upcoming.build(snap.engine, snap.rules, filter, AppDates.firstDayOfWeek)
     }.flowOn(Dispatchers.Default).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    /** The Repeating list: one row per active series, soonest next occurrence first. */
+    val series: StateFlow<List<SeriesRow>> = combine(snapshots.snapshot.filterNotNull(), flags) { snap, ctx ->
+        SeriesList.build(snap.rules, snap.engine.transactions, ctx, snap.engine.today)
+    }.flowOn(Dispatchers.Default).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     fun setFilter(filter: UpcomingFilter) {
         _filter.value = filter

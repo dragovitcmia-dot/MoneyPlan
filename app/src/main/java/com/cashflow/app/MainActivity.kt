@@ -87,13 +87,15 @@ class MainActivity : ComponentActivity() {
     /** A tap on a notification: where to go (Upcoming, or the Calendar on a date). Consumed by the composition. */
     private var navRequest by mutableStateOf<NavRequest?>(null)
 
-    private class NavRequest(val route: NotificationRoute, val date: LocalDate?)
+    private class NavRequest(val route: NotificationRoute, val date: LocalDate?, val ruleId: Long?, val itemId: Long?)
 
     private fun readRequest(intent: android.content.Intent?) {
         val route = intent?.getStringExtra(EXTRA_ROUTE)?.let { runCatching { NotificationRoute.valueOf(it) }.getOrNull() } ?: return
         val date = intent.getStringExtra(EXTRA_DATE)?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
+        val rule = intent.getLongExtra(EXTRA_RULE, -1L).takeIf { it >= 0 }
+        val item = intent.getLongExtra(EXTRA_ITEM, -1L).takeIf { it >= 0 }
         intent.removeExtra(EXTRA_ROUTE)
-        navRequest = NavRequest(route, date)
+        navRequest = NavRequest(route, date, rule, item)
     }
 
     override fun onNewIntent(intent: android.content.Intent) {
@@ -135,10 +137,18 @@ class MainActivity : ComponentActivity() {
                     }.also { permissionHolder[0] = it }
                 }
 
-                fun navigate(route: NotificationRoute, date: LocalDate?) {
+                // A last-payment notification opens that series' sheet; an "ask the amount" notification opens that item's amount sheet.
+                var seriesRequest by rememberSaveable { mutableStateOf<Long?>(null) }
+                var itemRequest by rememberSaveable { mutableStateOf<Long?>(null) }
+
+                fun navigate(route: NotificationRoute, date: LocalDate?, ruleId: Long? = null, itemId: Long? = null) {
                     showCenter = NavLogic.closeCenter(NavState(tab, showCenter)).centerOpen
                     when (route) {
-                        NotificationRoute.UPCOMING -> tab = 2
+                        NotificationRoute.UPCOMING -> {
+                            tab = 2
+                            itemRequest = itemId
+                        }
+                        NotificationRoute.SERIES -> seriesRequest = ruleId
                         NotificationRoute.CALENDAR -> {
                             tab = 1
                             if (date != null) {
@@ -151,7 +161,7 @@ class MainActivity : ComponentActivity() {
                 val request = navRequest
                 LaunchedEffect(request) {
                     if (request != null) {
-                        navigate(request.route, request.date)
+                        navigate(request.route, request.date, request.ruleId, request.itemId)
                         navRequest = null
                     }
                 }
@@ -204,9 +214,12 @@ class MainActivity : ComponentActivity() {
                             when (selected) {
                                 0 -> HomeScreen(home, odometer, snackbar, padding, homeList)
                                 1 -> CalendarScreen(calendar, home, settings, snackbar, padding)
-                                2 -> UpcomingScreen(upcoming, home, settings, snackbar, padding, upcomingList)
+                                2 -> UpcomingScreen(upcoming, home, settings, snackbar, padding, upcomingList, openItemId = itemRequest, onOpenItemHandled = { itemRequest = null })
                                 else -> SettingsScreen(settings, app.repository, app.updateManager, padding, settingsScroll)
                             }
+                        }
+                        seriesRequest?.let { id ->
+                            com.cashflow.app.ui.items.SeriesFromNotification(id, home, snackbar, onDismiss = { seriesRequest = null })
                         }
                         if (showCenter) {
                             // The notification center covers the tab content (the bars stay); Back or the arrow closes it.
@@ -219,6 +232,7 @@ class MainActivity : ComponentActivity() {
                                         navigate(
                                             entry.type.routeOf(),
                                             entry.relatedDate,
+                                            ruleId = if (entry.key.startsWith("LAST|")) entry.key.split("|").getOrNull(1)?.toLongOrNull() else null,
                                         )
                                     },
                                 )
@@ -238,9 +252,15 @@ class MainActivity : ComponentActivity() {
     companion object {
         const val EXTRA_ROUTE = "notification_route"
         const val EXTRA_DATE = "notification_date"
+        const val EXTRA_RULE = "notification_rule"
+        const val EXTRA_ITEM = "notification_item"
     }
 }
 
 /** Shortage entries open the Calendar on their date; everything else opens Upcoming. */
 private fun com.cashflow.app.engine.NotificationType.routeOf(): NotificationRoute =
-    if (this == com.cashflow.app.engine.NotificationType.SHORTAGE) NotificationRoute.CALENDAR else NotificationRoute.UPCOMING
+    when (this) {
+        com.cashflow.app.engine.NotificationType.SHORTAGE -> NotificationRoute.CALENDAR
+        com.cashflow.app.engine.NotificationType.LAST_PAYMENT -> NotificationRoute.SERIES
+        else -> NotificationRoute.UPCOMING
+    }

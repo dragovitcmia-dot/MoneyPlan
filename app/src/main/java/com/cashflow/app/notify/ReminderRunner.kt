@@ -5,7 +5,9 @@ import com.cashflow.app.engine.BalanceEngine
 import com.cashflow.app.engine.DecisionAction
 import com.cashflow.app.engine.NotificationDecision
 import com.cashflow.app.engine.NotificationRoute
+import com.cashflow.app.engine.NoticeResolution
 import com.cashflow.app.engine.NotificationType
+import com.cashflow.app.engine.ShownNotice
 import com.cashflow.app.engine.Notifications
 import com.cashflow.app.engine.PostedKeys
 import kotlinx.coroutines.Dispatchers
@@ -45,12 +47,17 @@ class ReminderRunner(private val app: CashflowApp) {
                 val prefs = app.notificationPrefs
                 val ns = prefs.settingsFor(settings)
                 val posted = PostedKeys.prune(prefs.postedKeys(), today).toMutableSet()
-                val decisions = Notifications.reconcile(now, zone, ns, ledger, rules, forecast, posted)
+                val series = repo.seriesContext.value
+
+                // Resolve first: notifications about items that were answered, moved or deleted go away (or shrink) at once.
+                resolve(today, ns, ledger, rules, forecast, series)
+
+                val decisions = Notifications.reconcile(now, zone, ns, ledger, rules, forecast, posted, series)
 
                 val poster = app.notificationPoster
                 for (decision in decisions) {
                     if (decision.action == DecisionAction.CANCEL) {
-                        poster.cancel(decision.type)
+                        poster.cancel(decision.type, decision.ruleId)
                         continue
                     }
                     if (decision.post) {
@@ -67,6 +74,49 @@ class ReminderRunner(private val app: CashflowApp) {
                 decisions
             }
         }
+
+    /**
+     * The pure [NoticeResolution] decides; this executes it: the bell row goes (and the status-bar notification with it
+     * when it is the newest of its kind), or both are rewritten in place without a new sound.
+     */
+    private suspend fun resolve(
+        today: LocalDate,
+        settings: com.cashflow.app.engine.NotificationSettings,
+        ledger: List<com.cashflow.app.engine.Transaction>,
+        rules: List<com.cashflow.app.engine.RecurringRule>,
+        forecast: List<com.cashflow.app.engine.DayForecast>,
+        series: com.cashflow.app.engine.SeriesContext,
+    ) {
+        val center = app.notificationCenter
+        val rows = center.all()
+        val shown = rows.filter { it.key.isNotEmpty() }.map {
+            ShownNotice(it.key, it.type, it.relatedDate ?: today, it.title, it.body)
+        }
+        val plan = NoticeResolution.plan(today, settings, ledger, rules, forecast, shown, series)
+        if (plan.isEmpty) return
+        val poster = app.notificationPoster
+        fun ruleOf(key: String) = if (key.startsWith("LAST|")) key.split("|").getOrNull(1)?.toLongOrNull() else null
+        for (key in plan.remove) {
+            val row = rows.first { it.key == key }
+            val newest = rows.filter { it.type == row.type && (row.type != NotificationType.LAST_PAYMENT || ruleOf(it.key) == ruleOf(key)) }.maxByOrNull { it.createdAt }
+            if (newest?.key == key) poster.cancel(row.type, ruleOf(key))
+            center.removeKey(key)
+        }
+        for (u in plan.updates) {
+            val row = rows.first { it.key == u.key }
+            center.updateText(u.key, u.title, u.body)
+            val newest = rows.filter { it.type == row.type }.maxByOrNull { it.createdAt }
+            if (newest?.key == u.key && poster.isShown(row.type, ruleOf(u.key))) {
+                poster.post(
+                    NotificationDecision(
+                        key = u.key, type = row.type, title = u.title, body = u.body, relatedDate = row.relatedDate ?: today,
+                        route = NotificationRoute.UPCOMING, post = true, bellKey = null,
+                    ),
+                    silent = true,
+                )
+            }
+        }
+    }
 
     /** The "Send test notification" action: posts a sample at once and adds it to the bell. */
     suspend fun sendTest(now: Instant = Instant.now(), zone: ZoneId = ZoneId.systemDefault()): Boolean = withContext(Dispatchers.Default) {

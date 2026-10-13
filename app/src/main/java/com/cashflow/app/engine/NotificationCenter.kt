@@ -15,6 +15,8 @@ data class BellEntry(
     val amountMillimes: Long?,
     val createdAt: Instant,
     val readAt: Instant?,
+    /** The unique key the entry was written under (the series of a last-payment entry is in it). */
+    val key: String = "",
 ) {
     val unread get() = readAt == null
 }
@@ -77,7 +79,7 @@ object BellTones {
         NotificationType.AUTO_INCOME -> BellTone.INCOME
         NotificationType.INFO -> BellTone.INFO
         NotificationType.HEADS_UP_WEEK, NotificationType.HEADS_UP_DAY -> BellTone.EXPENSE
-        NotificationType.DAY_OF -> if ((amountMillimes ?: 0L) > 0L) BellTone.INCOME else BellTone.EXPENSE
+        NotificationType.DAY_OF, NotificationType.LAST_PAYMENT -> if ((amountMillimes ?: 0L) > 0L) BellTone.INCOME else BellTone.EXPENSE
     }
 }
 

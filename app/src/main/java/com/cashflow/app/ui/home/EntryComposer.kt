@@ -460,24 +460,28 @@ internal fun NameStep(
 /** Now / Later / Repeating on one screen; Later and Repeating open their fields right below. */
 @OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
 @Composable
-private fun WhenStep(
+internal fun WhenStep(
     form: EntryFormState,
     isExpense: Boolean,
     today: LocalDate,
     problems: List<FormProblem>,
+    /** False in the series editor: the schedule is always "Repeats", so the Now / Later / Repeats choice and the title are left out. */
+    showTimings: Boolean = true,
     change: ((EntryFormState) -> EntryFormState) -> Unit,
 ) {
     val haptics = rememberHaptics()
-    StepTitle(stringResource(R.string.wizard_when_title))
-    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        form.timings.forEach { t ->
-            FilterChip(
-                selected = form.timing == t,
-                onClick = { change { it.copy(timing = t) }; haptics.tick() },
-                label = { Text(t.label(form.nowDate != null), style = MaterialTheme.typography.titleMedium) },
-                modifier = Modifier.heightIn(min = 56.dp),
-                colors = selectedChipColors(),
-            )
+    if (showTimings) {
+        StepTitle(stringResource(R.string.wizard_when_title))
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            form.timings.forEach { t ->
+                FilterChip(
+                    selected = form.timing == t,
+                    onClick = { change { it.copy(timing = t) }; haptics.tick() },
+                    label = { Text(t.label(form.nowDate != null), style = MaterialTheme.typography.titleMedium) },
+                    modifier = Modifier.heightIn(min = 56.dp),
+                    colors = selectedChipColors(),
+                )
+            }
         }
     }
     when (form.timing) {

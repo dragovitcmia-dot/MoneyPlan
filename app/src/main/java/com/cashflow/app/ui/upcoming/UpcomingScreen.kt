@@ -85,8 +85,14 @@ fun UpcomingScreen(
     snackbar: SnackbarHostState,
     padding: PaddingValues,
     listState: LazyListState,
+    /** A tapped notification about one waiting item of an "ask me the amount" series: its amount sheet opens. */
+    openItemId: Long? = null,
+    onOpenItemHandled: () -> Unit = {},
 ) {
     val model by upcoming.model.collectAsStateWithLifecycle()
+    val seriesRows by upcoming.series.collectAsStateWithLifecycle()
+    val seriesCtx by home.series.collectAsStateWithLifecycle()
+    var openSeries by remember { mutableStateOf<Long?>(null) }
     val filter by upcoming.filter.collectAsStateWithLifecycle()
     val today by upcoming.today.collectAsStateWithLifecycle()
     val showHint by home.swipeHintVisible.collectAsStateWithLifecycle()
@@ -99,6 +105,12 @@ fun UpcomingScreen(
     var deleting by remember { mutableStateOf<UpcomingRow?>(null) }
     val rules by home.rules.collectAsStateWithLifecycle()
     val current = model
+    LaunchedEffect(openItemId, current) {
+        if (openItemId != null && current != null) {
+            current.groups.flatMap { it.rows }.firstOrNull { it.tx.id == openItemId }?.let { editing = it.tx }
+            onOpenItemHandled()
+        }
+    }
 
     LazyColumn(
         state = listState,
@@ -115,11 +127,11 @@ fun UpcomingScreen(
             Text(stringResource(R.string.upcoming_title), style = MaterialTheme.typography.headlineMedium, modifier = Modifier.semantics { heading() })
         }
         item(key = "filters", contentType = "filters") {
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 for ((value, label) in listOf(
                     UpcomingFilter.ALL to R.string.filter_all,
-                    UpcomingFilter.EXPENSES to R.string.filter_expenses,
-                    UpcomingFilter.INCOME to R.string.filter_income,
+                    UpcomingFilter.REPEATING to R.string.filter_repeating,
+                    UpcomingFilter.ONE_TIME to R.string.filter_one_time,
                 )) {
                     FilterChip(
                         selected = filter == value,
@@ -132,7 +144,21 @@ fun UpcomingScreen(
             }
         }
 
-        if (current != null) {
+        if (filter == UpcomingFilter.REPEATING) {
+            if (seriesRows.isEmpty()) {
+                item(key = "series-empty", contentType = "empty") {
+                    Text(
+                        stringResource(R.string.series_list_empty),
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 16.dp),
+                    )
+                }
+            }
+            items(seriesRows, key = { "series-" + it.rule.id }, contentType = { "series" }) { row ->
+                SeriesRowCard(row, onClick = { openSeries = row.rule.id }, modifier = Modifier.animateItem())
+            }
+        } else if (current != null) {
             current.dailyIncome?.let { total ->
                 item(key = "daily", contentType = "daily") { DailyIncomeRow(total) }
             }
@@ -155,7 +181,8 @@ fun UpcomingScreen(
                             haptics = haptics,
                             onConfirm = { fromSwipe ->
                                 if (fromSwipe) home.onSwipeCompleted()
-                                actions.confirm(row.tx)
+                                // A series that asks for the amount each time opens the amount sheet instead of accepting.
+                                if (actions.asksAmount(row.tx, seriesCtx)) editing = row.tx else actions.confirm(row.tx)
                             },
                             onSkip = { fromSwipe ->
                                 if (fromSwipe) home.onSwipeCompleted()
@@ -163,7 +190,7 @@ fun UpcomingScreen(
                             },
                             onOpen = { editing = row.tx },
                             modifier = Modifier.animateItem(),
-                            footer = if (row.repeating || row.shortBy != null) ({ RowTags(row) }) else null,
+                            footer = if (row.repeating || row.shortBy != null || row.last) ({ RowTags(row) }) else null,
                         )
                     } else {
                         SwipeToDelete(
@@ -191,6 +218,9 @@ fun UpcomingScreen(
         ItemEditSheet(tx = tx, actions = actions, onDismiss = { changing = null }, today = today)
     }
     RejectConfirmDialog(actions)
+    openSeries?.let { id ->
+        com.cashflow.app.ui.items.SeriesSheet(id, home, actions, today, onDismiss = { openSeries = null })
+    }
 
     deleting?.let { row ->
         val tx = row.tx
@@ -295,7 +325,7 @@ private fun UpcomingCard(row: UpcomingRow, onClick: () -> Unit, modifier: Modifi
                     color = if (income) MaterialTheme.cashflow.positive else MaterialTheme.cashflow.negative,
                 )
             }
-            if (row.repeating || row.shortBy != null) RowTags(row)
+            if (row.repeating || row.shortBy != null || row.last) RowTags(row)
         }
     }
 }
@@ -314,6 +344,7 @@ private fun RowTags(row: UpcomingRow) {
                 Text(stringResource(R.string.repeats_label), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
+        if (row.last) LastTag()
         row.shortBy?.let { short ->
             Surface(shape = MaterialTheme.shapes.extraSmall, color = MaterialTheme.colorScheme.errorContainer, contentColor = MaterialTheme.colorScheme.onErrorContainer) {
                 Text(
@@ -360,5 +391,48 @@ private fun NothingComing() {
     ) {
         Icon(Icons.Filled.CheckCircle, contentDescription = null, modifier = Modifier.size(40.dp), tint = MaterialTheme.colorScheme.outline)
         Text(stringResource(R.string.upcoming_empty), style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+/** The small "Last" tag on the final occurrence of a series that ends. */
+@Composable
+internal fun LastTag() {
+    Surface(shape = MaterialTheme.shapes.extraSmall, color = MaterialTheme.colorScheme.secondaryContainer, contentColor = MaterialTheme.colorScheme.onSecondaryContainer) {
+        Text(stringResource(R.string.tag_last), style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp))
+    }
+}
+
+/** One series of the Repeating list: name, signed amount, schedule line, end line and the "Ended" tag. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun SeriesRowCard(row: com.cashflow.app.engine.SeriesRow, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    val rule = row.rule
+    val income = rule.kind == TxKind.INCOME
+    AppCard(modifier.fillMaxWidth().heightIn(min = 72.dp), onClick = onClick) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Top) {
+                Text(
+                    rule.description.ifBlank { stringResource(if (income) R.string.item_income else R.string.item_expense) },
+                    style = MaterialTheme.typography.titleMedium,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f).padding(end = 12.dp),
+                )
+                Text(
+                    Money.formatSigned(rule.kind, rule.amount),
+                    style = MaterialTheme.typography.titleMedium,
+                    color = if (income) MaterialTheme.cashflow.positive else MaterialTheme.cashflow.negative,
+                )
+            }
+            Text(row.schedule, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(row.endLine, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                if (row.ended) {
+                    Surface(shape = MaterialTheme.shapes.extraSmall, color = MaterialTheme.colorScheme.errorContainer, contentColor = MaterialTheme.colorScheme.onErrorContainer) {
+                        Text(stringResource(R.string.series_tag_ended), style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp))
+                    }
+                }
+            }
+        }
     }
 }
