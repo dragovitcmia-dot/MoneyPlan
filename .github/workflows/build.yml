@@ -175,7 +175,7 @@ jobs:
 
       - name: Install Pillow and ffmpeg (screenshot / screen recording analysis)
         run: |
-          python3 -m pip install --break-system-packages pillow imageio-ffmpeg \
+          python3 -m pip install --break-system-packages pillow numpy imageio-ffmpeg \
             || { sudo apt-get install -y python3-pil ffmpeg && python3 -m pip install --break-system-packages imageio-ffmpeg; }
 
       - name: Install the preview APK, launch it and walk through the app
@@ -190,6 +190,14 @@ jobs:
           heap-size: 576M
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           script: bash scripts/ci-emulator.sh apk/app-preview.apk
+
+      - name: Render the launcher icon (circle, squircle, themed, Lab; 48 / 96 / 192 px) and check the safe zone
+        if: always()
+        continue-on-error: true
+        run: |
+          mkdir -p screens
+          python3 -m pip install --break-system-packages numpy >/dev/null 2>&1 || true
+          python3 scripts/icon/vd_render.py screens/icon-preview.png
 
       - name: Upload screenshots
         if: always()
