@@ -159,7 +159,8 @@ object BackupStartup {
             runCatching {
                 val engine = BackupEngine(
                     File(app.filesDir, "backups"), AndroidBackupParts.rawCopier(dbFile), AndroidBackupParts.counter,
-                    System::currentTimeMillis, ZoneId::systemDefault, appVersion, lastSeen ?: AppDatabase.SCHEMA_VERSION,
+                    com.cashflow.app.engine.AppClock::nowMillis, ZoneId::systemDefault, appVersion, lastSeen ?: AppDatabase.SCHEMA_VERSION,
+                    if (com.cashflow.app.AppIds.IS_LAB) com.cashflow.app.backup.BackupVariant.LAB else com.cashflow.app.backup.BackupVariant.REAL,
                 )
                 engine.create(SnapshotType.BEFORE_UPDATE, AndroidBackupParts.readSettings(app))
             }
@@ -180,10 +181,14 @@ class BackupManager(private val app: CashflowApp) {
     private val appVersion: String =
         runCatching { app.packageManager.getPackageInfo(app.packageName, 0).versionName }.getOrNull().orEmpty()
 
+    /** The real app and the Lab build mark their backups; the real app refuses a Lab one. */
+    private val variant = if (com.cashflow.app.AppIds.IS_LAB) com.cashflow.app.backup.BackupVariant.LAB else com.cashflow.app.backup.BackupVariant.REAL
+
     private val engine by lazy {
         BackupEngine(
             File(app.filesDir, "backups"), AndroidBackupParts.liveCopier(app.database), AndroidBackupParts.counter,
-            System::currentTimeMillis, ZoneId::systemDefault, appVersion, AppDatabase.SCHEMA_VERSION,
+            com.cashflow.app.engine.AppClock::nowMillis, ZoneId::systemDefault, appVersion, AppDatabase.SCHEMA_VERSION,
+            variant,
         )
     }
 
@@ -209,12 +214,12 @@ class BackupManager(private val app: CashflowApp) {
     /** A data change: about 60 seconds after the LAST one a snapshot is taken (quick edits collapse into one). */
     fun noteChange(scope: CoroutineScope) {
         if (restoring) return
-        val now = System.currentTimeMillis()
+        val now = com.cashflow.app.engine.AppClock.nowMillis()
         prefs.edit().putLong("last_change", now).apply()
         pending?.cancel()
         pending = scope.launch(Dispatchers.IO) {
             delay(SnapshotScheduler.DEBOUNCE_MILLIS)
-            val decision = SnapshotScheduler.afterChange(lastChange(), lastSnapshot(), System.currentTimeMillis())
+            val decision = SnapshotScheduler.afterChange(lastChange(), lastSnapshot(), com.cashflow.app.engine.AppClock.nowMillis())
             if (decision.takeNow) snapshot(SnapshotType.AUTO)
         }
     }
@@ -249,7 +254,7 @@ class BackupManager(private val app: CashflowApp) {
         val info = snapshot(SnapshotType.MANUAL) ?: return@withContext null
         val dir = File(app.cacheDir, "exports").also { it.mkdirs() }
         dir.listFiles()?.forEach { it.delete() }
-        val out = File(dir, BackupEngine.exportName(LocalDate.now()))
+        val out = File(dir, BackupEngine.exportName(com.cashflow.app.engine.AppClock.today(), variant))
         engine.file(info).copyTo(out, overwrite = true)
         out
     }

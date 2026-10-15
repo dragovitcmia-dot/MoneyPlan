@@ -81,7 +81,7 @@ fun NotificationCenterScreen(
     val scope = rememberCoroutineScope()
     val entries by app.notificationCenter.entries.collectAsStateWithLifecycle(emptyList())
     val zone = remember { ZoneId.systemDefault() }
-    val now = remember(entries) { Instant.now() }
+    val now = remember(entries) { com.cashflow.app.engine.AppClock.now() }
     val groups = remember(entries, now) { NotificationCenterModel.group(entries, now, zone) }
     val anyUnread = entries.any { it.unread }
 

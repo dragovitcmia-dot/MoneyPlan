@@ -358,6 +358,7 @@
     <string name="plan_loading">Calculating…</string>
 
     <!-- Repeating series: list, sheet, edit, extend -->
+    <string name="backup_lab_refused">This is a Lab backup</string>
     <string name="filter_repeating">Repeating</string>
     <string name="series_list_empty">No repeating payments yet.</string>
     <string name="series_tag_ended">Ended</string>

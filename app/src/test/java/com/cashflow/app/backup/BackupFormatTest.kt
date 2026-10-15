@@ -43,6 +43,51 @@ class BackupFormatTest {
         assertNull(ManifestCodec.decode(ManifestCodec.encode(manifest()).replace("\"manual\"", "\"weird\"")))
     }
 
+    // ---- variant (real app / Lab) ----------------------------------------------------------------------------------
+
+    private fun lab() = manifest().copy(variant = BackupVariant.LAB)
+
+    @Test fun the_variant_round_trips_and_a_manifest_without_one_is_a_real_backup() {
+        assertEquals(BackupVariant.LAB, ManifestCodec.decode(ManifestCodec.encode(lab()))!!.variant)
+        assertEquals(BackupVariant.REAL, ManifestCodec.decode(ManifestCodec.encode(manifest()))!!.variant)
+        val old = ManifestCodec.encode(manifest()).replace(",\"variant\":\"real\"", "").replace("\"variant\":\"real\",", "")
+        assertTrue(!old.contains("variant"))
+        assertEquals(BackupVariant.REAL, ManifestCodec.decode(old)!!.variant)
+    }
+
+    @Test fun an_unknown_variant_is_not_guessed() {
+        assertNull(ManifestCodec.decode(ManifestCodec.encode(lab()).replace("\"lab\"", "\"beta\"")))
+        assertNull(ManifestCodec.decode(ManifestCodec.encode(lab()).replace("\"variant\":\"lab\"", "\"variant\":5")))
+    }
+
+    @Test fun the_real_app_refuses_a_lab_backup() {
+        val check = BackupValidator.check(lab(), shas, 2, 2, BackupVariant.REAL)
+        assertEquals(BackupCheck.WrongVariant(BackupVariant.LAB), check)
+        // the default is the real app
+        assertEquals(BackupCheck.WrongVariant(BackupVariant.LAB), BackupValidator.check(lab(), shas, 2, 2))
+    }
+
+    @Test fun the_real_app_accepts_real_backups_and_the_lab_accepts_both() {
+        assertTrue(BackupValidator.check(manifest(), shas, 2, 2, BackupVariant.REAL) is BackupCheck.Ok)
+        assertTrue(BackupValidator.check(manifest(), shas, 2, 2, BackupVariant.LAB) is BackupCheck.Ok)
+        assertTrue(BackupValidator.check(lab(), shas, 2, 2, BackupVariant.LAB) is BackupCheck.Ok)
+        assertTrue(BackupVariants.canImport(BackupVariant.LAB, BackupVariant.REAL))
+        assertTrue(BackupVariants.canImport(BackupVariant.LAB, BackupVariant.LAB))
+        assertTrue(BackupVariants.canImport(BackupVariant.REAL, BackupVariant.REAL))
+        assertTrue(!BackupVariants.canImport(BackupVariant.REAL, BackupVariant.LAB))
+    }
+
+    @Test fun a_damaged_file_is_reported_as_damaged_before_its_variant_is_looked_at() {
+        val other = Hashing.sha256("y".toByteArray())
+        assertTrue(BackupValidator.check(lab(), mapOf(DB_ENTRY to other, SETTINGS_ENTRY to sha), 2, 2, BackupVariant.REAL) is BackupCheck.Corrupt)
+    }
+
+    @Test fun export_names_tell_the_variant() {
+        val day = java.time.LocalDate.of(2026, 10, 13)
+        assertEquals("cashflow-2026-10-13.cfbackup", BackupEngine.exportName(day))
+        assertEquals("cashflow-lab-2026-10-13.cfbackup", BackupEngine.exportName(day, BackupVariant.LAB))
+    }
+
     // ---- validation ----------------------------------------------------------------------------------------------
 
     @Test fun a_matching_backup_of_the_current_schema_is_accepted() {

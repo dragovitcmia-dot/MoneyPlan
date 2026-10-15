@@ -36,8 +36,8 @@ class NotificationCenterRepository(private val db: NotificationDatabase) {
 
     suspend fun updateText(key: String, title: String, body: String) = dao.updateText(key, title, body)
 
-    suspend fun markRead(id: Long) = dao.markRead(id, System.currentTimeMillis())
-    suspend fun markAllRead() = dao.markAllRead(System.currentTimeMillis())
+    suspend fun markRead(id: Long) = dao.markRead(id, com.cashflow.app.engine.AppClock.nowMillis())
+    suspend fun markAllRead() = dao.markAllRead(com.cashflow.app.engine.AppClock.nowMillis())
     suspend fun remove(id: Long) = dao.delete(id)
 
     /** Keeps the last 200 entries or 90 days, whichever is smaller. */

@@ -145,8 +145,8 @@ def foreground(lab=False):
     out.append("    </group>\n")
     if lab:
         # amber badge, bottom right, with a dark ring so it reads on any wallpaper (108 dp canvas units)
-        out.append(path_el(circle_path(73, 73, 9.4), fill="#FF0A0B0F", ind="    "))
-        out.append(path_el(circle_path(73, 73, 7.4), fill="#FFFFB300", ind="    "))
+        out.append(path_el(circle_path(73.5, 74, 7.8), fill="#FF0A0B0F", ind="    "))
+        out.append(path_el(circle_path(73.5, 74, 6.2), fill="#FFFFB300", ind="    "))
     out.append("</vector>\n")
     return "".join(out)
 
@@ -231,8 +231,18 @@ def legacy_pngs(res_root, fg_layer_xml):
             im.save(d / fname, optimize=True)
 
 
-def main():
+def write_lab():
+    lab = SRC / "lab/res"
+    write(lab / "drawable/ic_launcher_foreground.xml", foreground(lab=True))
+    write(lab / "mipmap-anydpi-v26/ic_launcher.xml", ADAPTIVE)
+    legacy_pngs(lab, lab / "drawable/ic_launcher_foreground.xml")
+
+
+def main(lab_only=False):
     m = SRC / "main/res"
+    if lab_only:  # the Lab variant only: the main artwork stays exactly as it is
+        write_lab()
+        return
     write(m / "drawable/ic_launcher_background.xml", background())
     write(m / "drawable/ic_launcher_foreground.xml", foreground())
     write(m / "drawable/ic_launcher_monochrome.xml", monochrome())
@@ -240,13 +250,10 @@ def main():
     old = m / "values/ic_launcher_background.xml"
     if old.exists(): old.unlink()
     legacy_pngs(m, m / "drawable/ic_launcher_foreground.xml")
-    lab = SRC / "lab/res"
-    write(lab / "drawable/ic_launcher_foreground.xml", foreground(lab=True))
-    write(lab / "mipmap-anydpi-v26/ic_launcher.xml", ADAPTIVE)
-    legacy_pngs(lab, lab / "drawable/ic_launcher_foreground.xml")
+    write_lab()
     s, tx, ty, (x0, y0, x1, y1, rmax) = fit()
     print(f"bbox {x0:.0f},{y0:.0f}-{x1:.0f},{y1:.0f} (reference units); scale {s:.5f}; artwork {(x1 - x0) * s:.1f} x {(y1 - y0) * s:.1f} dp; farthest point {rmax * s:.1f} dp from the centre")
 
 
 if __name__ == "__main__":
-    main()
+    main(lab_only="--lab-only" in sys.argv)

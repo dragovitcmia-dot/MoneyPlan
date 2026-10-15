@@ -295,7 +295,7 @@ fun CalendarScreen(
 private fun ShortBanner(day: LocalDate, onClick: () -> Unit) {
     val text = stringResource(
         R.string.calendar_runs_short,
-        AppDates.formatShort(day, LocalDate.now()).replace(' ', '\u00A0'), // "10 NOV" never breaks
+        AppDates.formatShort(day, com.cashflow.app.engine.AppClock.today()).replace(' ', '\u00A0'), // "10 NOV" never breaks
     )
     val action = stringResource(R.string.calendar_runs_short_action)
     Surface(

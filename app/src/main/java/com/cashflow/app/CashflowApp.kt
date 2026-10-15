@@ -111,7 +111,7 @@ class CashflowApp : Application() {
     val snapshots: LedgerSnapshots by lazy { LedgerSnapshots(repository, engineFactory, clock, appScope) }
 
     /** Device-local date; re-read on every call so a time zone change is picked up. */
-    val clock: () -> LocalDate = { LocalDate.now() }
+    val clock: () -> LocalDate = { com.cashflow.app.engine.AppClock.today() }
 }
 
 fun interface EngineFactory {

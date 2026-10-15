@@ -15,7 +15,13 @@ android {
         targetSdk = 35
         // CI run number so every build can install over the previous one; 1 for local builds.
         versionCode = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 1
-        versionName = "0.9.0"
+        versionName = "0.9.1"
+
+        // Per-variant identity. The real app is the default; the "lab" build type overrides all of these (see below).
+        buildConfigField("boolean", "IS_LAB", "false")
+        buildConfigField("String", "ID_SUFFIX", "\"\"")
+        buildConfigField("String", "UPDATE_VERSION_URL", "\"https://github.com/Dragovitcmia-dot/MoneyPlan/releases/download/latest-debug/version.json\"")
+        manifestPlaceholders["allowBackup"] = "true"
     }
 
     // A fixed, committed debug key: every CI build is signed identically and updates in place.
@@ -45,6 +51,20 @@ android {
             matchingFallbacks += listOf("release")
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
+        // "Cashflow Lab": the same code as the preview build, installable next to the real app with completely separate data.
+        // Own applicationId, label ("Cashflow Lab", src/lab/res), amber-badged icon (src/lab/res), no Google backup, its own update
+        // channel. Same committed key, R8-minified, not debuggable. Lab-only code lives in src/lab/java; every other variant gets
+        // no-op stand-ins from src/labStub/java, so the real app contains no lab code at all.
+        create("lab") {
+            initWith(getByName("preview"))
+            applicationIdSuffix = ".lab"
+            versionNameSuffix = "-lab"
+            matchingFallbacks += listOf("preview", "release")
+            buildConfigField("boolean", "IS_LAB", "true")
+            buildConfigField("String", "ID_SUFFIX", "\".lab\"")
+            buildConfigField("String", "UPDATE_VERSION_URL", "\"https://github.com/Dragovitcmia-dot/MoneyPlan/releases/download/latest-lab/version.json\"")
+            manifestPlaceholders["allowBackup"] = "false"
+        }
     }
 
     // The debug-only tools (Load sample data, Clear all data) are also part of the preview build.
@@ -52,6 +72,14 @@ android {
         getByName("preview") {
             java.srcDir("src/debug/java")
         }
+        // The lab build has the debug tools' data helpers (reference scenario, scenario catalogue) and its own lab code.
+        getByName("lab") {
+            java.srcDir("src/debug/java")
+        }
+        // No-op stand-ins for the lab hooks everywhere except the lab build.
+        getByName("debug") { java.srcDir("src/labStub/java") }
+        getByName("release") { java.srcDir("src/labStub/java") }
+        getByName("preview") { java.srcDir("src/labStub/java") }
     }
 
     compileOptions {
@@ -63,6 +91,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 

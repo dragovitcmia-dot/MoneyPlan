@@ -43,7 +43,7 @@ class LedgerSnapshots(
         scope.launch {
             while (true) {
                 day.value = clock()
-                val now = LocalDateTime.now()
+                val now = com.cashflow.app.engine.AppClock.dateTime()
                 delay(Duration.between(now, now.toLocalDate().plusDays(1).atStartOfDay()).toMillis() + 1_000)
             }
         }

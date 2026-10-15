@@ -34,6 +34,6 @@ class UpdateStatusReceiver : BroadcastReceiver() {
     }
 
     companion object {
-        const val ACTION = "com.cashflow.app.UPDATE_STATUS"
+        const val ACTION = com.cashflow.app.AppIds.UPDATE_STATUS_ACTION
     }
 }

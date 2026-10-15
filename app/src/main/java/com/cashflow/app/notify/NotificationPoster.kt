@@ -34,6 +34,7 @@ class NotificationPoster(context: Context) {
 
     /** False when the permission is missing or the user blocked the app's notifications. The bell works regardless. */
     fun canPost(): Boolean {
+        if (!com.cashflow.app.lab.LabHooks.systemNotificationsAllowed()) return false // Lab: off until its switch is on
         if (Build.VERSION.SDK_INT >= 33 &&
             ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
         ) {
@@ -82,8 +83,8 @@ class NotificationPoster(context: Context) {
     }
 
     companion object {
-        const val CHANNEL_PAYMENTS = "payments"
-        const val CHANNEL_HEADS_UP = "heads_up"
+        const val CHANNEL_PAYMENTS = com.cashflow.app.AppIds.CHANNEL_PAYMENTS
+        const val CHANNEL_HEADS_UP = com.cashflow.app.AppIds.CHANNEL_HEADS_UP
 
         /** One id per type: a newer notification of the same type (a nag, the next day's summary) replaces the old one. */
         fun idOf(type: NotificationType, ruleId: Long? = null): Int =

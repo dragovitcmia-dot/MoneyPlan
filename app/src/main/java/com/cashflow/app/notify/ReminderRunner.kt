@@ -29,7 +29,7 @@ class ReminderRunner(private val app: CashflowApp) {
     private val lock = Mutex()
 
     /** Returns the decisions that were executed (for the "Run reminder check now" button). */
-    suspend fun run(now: Instant = Instant.now(), zone: ZoneId = ZoneId.systemDefault()): List<NotificationDecision> =
+    suspend fun run(now: Instant = com.cashflow.app.engine.AppClock.now(), zone: ZoneId = ZoneId.systemDefault()): List<NotificationDecision> =
         lock.withLock {
             withContext(Dispatchers.Default) {
                 val repo = app.repository
@@ -120,7 +120,7 @@ class ReminderRunner(private val app: CashflowApp) {
     }
 
     /** The "Send test notification" action: posts a sample at once and adds it to the bell. */
-    suspend fun sendTest(now: Instant = Instant.now(), zone: ZoneId = ZoneId.systemDefault()): Boolean = withContext(Dispatchers.Default) {
+    suspend fun sendTest(now: Instant = com.cashflow.app.engine.AppClock.now(), zone: ZoneId = ZoneId.systemDefault()): Boolean = withContext(Dispatchers.Default) {
         val today = LocalDate.ofInstant(now, zone)
         val sample = NotificationDecision(
             key = "TEST|${now.toEpochMilli()}",
