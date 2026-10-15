@@ -29,9 +29,11 @@ jobs:
       - name: Merged manifest backup attributes
         if: always()
         run: |
-          M=$(find app/build/intermediates -path '*merged_manifests*' -name AndroidManifest.xml | head -1)
-          echo "merged manifest: $M"
-          echo "::notice title=Merged manifest::$(grep -o 'android:allowBackup="[a-z]*"\|android:fullBackupContent="[^"]*"\|android:dataExtractionRules="[^"]*"\|android:name="com.cashflow.app.RestartActivity"\|android:process=":restart"' "$M" | tr '\n' ' ')"
+          for V in preview lab; do
+            M=$(find app/build/intermediates -path "*merged_manifests/$V*" -name AndroidManifest.xml | head -1)
+            echo "merged manifest ($V): $M"
+            [ -n "$M" ] && echo "::notice title=Merged manifest ($V)::$(grep -o 'android:allowBackup="[a-z]*"\|android:fullBackupContent="[^"]*"\|android:dataExtractionRules="[^"]*"\|android:name="com.cashflow.app.RestartActivity"\|android:process=":restart"\|android:label="[^"]*"\|android:authorities="[^"]*"' "$M" | tr '\n' ' ')"
+          done
           for f in app/src/main/res/xml/backup_rules.xml app/src/main/res/xml/data_extraction_rules.xml; do echo "--- $f"; cat "$f"; done
 
       - name: Show the exported Room schemas
@@ -167,6 +169,7 @@ jobs:
           [ -n "$CERT" ] && [ "$CERT" = "$KS" ] || { echo "Lab signing certificate does not match debug.keystore"; exit 1; }
           [ "$LDEBUG" = "no" ] || { echo "Lab APK is debuggable"; exit 1; }
           [ "$PKGNAME" = "com.cashflow.app.lab" ] || { echo "Lab package is $PKGNAME"; exit 1; }
+          [ "$LABEL" = "Cashflow Lab" ] || { echo "Lab label is '$LABEL'"; exit 1; }
           case "$LVN" in *-lab) ;; *) echo "Lab versionName $LVN has no -lab suffix"; exit 1;; esac
           grep -q "R8CHECK OK" r8check.txt || { echo "lab code check failed"; exit 1; }
           if [ "$GITHUB_REF" = "refs/heads/main" ] && [ "$LVC" != "$GITHUB_RUN_NUMBER" ]; then echo "Lab versionCode $LVC != run number"; exit 1; fi
