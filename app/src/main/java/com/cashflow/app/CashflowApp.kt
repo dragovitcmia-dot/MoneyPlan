@@ -38,6 +38,7 @@ class CashflowApp : Application() {
         AppDates.firstDayOfWeek = java.time.temporal.WeekFields.of(java.util.Locale.getDefault()).firstDayOfWeek
         java.util.Locale.setDefault(AppDates.LOCALE)
         super.onCreate()
+        com.cashflow.app.lab.LabHooks.onAppCreate(this) // no-op outside the Lab build; the Lab restores its clock first
         // BEFORE anything can open the database: an update with a different schema gets a "Before update" snapshot first.
         runCatching { BackupStartup.beforeRoomOpens(this, versionName()) }
         UpdateManager.deleteCachedApk(this) // never keep a downloaded update across launches

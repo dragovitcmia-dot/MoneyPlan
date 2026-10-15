@@ -30,6 +30,11 @@ import java.time.LocalDate
 /** Debug and preview builds only; the release source set has an empty stand-in with the same signature. */
 @Composable
 fun DebugSection(repository: LedgerRepository, onDataChanged: () -> Unit) {
+    if (com.cashflow.app.AppIds.IS_LAB) {
+        // The Lab build has its own card (scenarios, time machine, ...) instead of these buttons.
+        com.cashflow.app.lab.LabHooks.Card(repository, onDataChanged)
+        return
+    }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val app = context.applicationContext as CashflowApp

@@ -21,10 +21,10 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v4
 
-      - name: Unit tests and debug APK
+      - name: Unit tests, preview APK and Lab APK
         run: |
           set -o pipefail
-          ./gradlew testDebugUnitTest assemblePreview --stacktrace 2>&1 | tee gradle.log
+          ./gradlew testDebugUnitTest assemblePreview assembleLab --stacktrace 2>&1 | tee gradle.log
 
       - name: Merged manifest backup attributes
         if: always()
@@ -134,6 +134,51 @@ jobs:
           echo "VC=$VC" >> "$GITHUB_ENV"
           echo "VN=$VN" >> "$GITHUB_ENV"
 
+      - name: Verify the Lab APK (own package, same key, not debuggable) and that the real APK holds no lab code
+        run: |
+          APK=app/build/outputs/apk/lab/app-lab.apk
+          REAL=app/build/outputs/apk/preview/app-preview.apk
+          BT=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
+          "$BT/apksigner" verify --verbose --print-certs "$APK" 2>&1 | tee apksigner-lab.txt || true
+          CERT=$(sed -n 's/^.*Signer.*certificate SHA-256 digest: //p' apksigner-lab.txt | head -1 | tr 'A-F' 'a-f')
+          KS=$(keytool -list -keystore app/debug.keystore -storepass android 2>/dev/null | sed -n 's/^Certificate fingerprint (SHA-256): //p' | tr -d ':' | tr 'A-F' 'a-f')
+          BADGING=$("$BT/aapt2" dump badging "$APK")
+          PKGNAME=$(echo "$BADGING" | sed -n "s/^package: name='\([^']*\)'.*/\1/p" | head -1)
+          LVC=$(echo "$BADGING" | sed -n "s/.*versionCode='\([0-9]*\)'.*/\1/p" | head -1)
+          LVN=$(echo "$BADGING" | sed -n "s/.*versionName='\([^']*\)'.*/\1/p" | head -1)
+          LABEL=$(echo "$BADGING" | sed -n "s/^application-label:'\(.*\)'$/\1/p" | head -1)
+          LDEBUG=no; echo "$BADGING" | grep -q "application-debuggable" && LDEBUG=yes
+          # R8 check: strings that exist only in lab code must be in the Lab APK's dex files and in none of the real APK's.
+          python3 - "$APK" "$REAL" <<'PY' | tee r8check.txt
+          import sys, zipfile
+          def dex(path):
+              z = zipfile.ZipFile(path)
+              return b"".join(z.read(n) for n in z.namelist() if n.startswith("classes") and n.endswith(".dex"))
+          lab, real = dex(sys.argv[1]), dex(sys.argv[2])
+          probes = [b"Permanent history (v0.9.0)", b"Import real backup copy", b"Reset lab data", b"Time machine"]
+          print("lab apk has:", [p.decode() for p in probes if p in lab])
+          print("real apk has:", [p.decode() for p in probes if p in real])
+          if not all(p in lab for p in probes) or any(p in real for p in probes):
+              print("R8CHECK FAILED"); sys.exit(1)
+          print("R8CHECK OK")
+          PY
+          echo "::notice title=Lab APK verification::package=$PKGNAME label=$LABEL cert=$CERT keystore=$KS debuggable=$LDEBUG versionCode=$LVC versionName=$LVN"
+          echo "::notice title=Lab code in the real APK::$(tr '\n' ' ' < r8check.txt)"
+          [ -n "$CERT" ] && [ "$CERT" = "$KS" ] || { echo "Lab signing certificate does not match debug.keystore"; exit 1; }
+          [ "$LDEBUG" = "no" ] || { echo "Lab APK is debuggable"; exit 1; }
+          [ "$PKGNAME" = "com.cashflow.app.lab" ] || { echo "Lab package is $PKGNAME"; exit 1; }
+          case "$LVN" in *-lab) ;; *) echo "Lab versionName $LVN has no -lab suffix"; exit 1;; esac
+          grep -q "R8CHECK OK" r8check.txt || { echo "lab code check failed"; exit 1; }
+          if [ "$GITHUB_REF" = "refs/heads/main" ] && [ "$LVC" != "$GITHUB_RUN_NUMBER" ]; then echo "Lab versionCode $LVC != run number"; exit 1; fi
+          echo "LVC=$LVC" >> "$GITHUB_ENV"
+          echo "LVN=$LVN" >> "$GITHUB_ENV"
+
+      - name: Upload Lab APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: cashflow-lab-apk
+          path: app/build/outputs/apk/lab/app-lab.apk
+
       - name: Write version.json
         if: github.ref == 'refs/heads/main'
         run: |
@@ -156,6 +201,24 @@ jobs:
           gh release upload latest-debug cashflow-debug.apk --clobber
           gh release upload latest-debug version.json --clobber
 
+      - name: Publish the Lab pre-release assets
+        if: github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          APK=app/build/outputs/apk/lab/app-lab.apk
+          mkdir -p lab-release
+          SHA=$(sha256sum "$APK" | cut -d' ' -f1)
+          cp "$APK" lab-release/cashflow-lab.apk
+          printf '{"versionCode": %s, "versionName": "%s", "sha256": "%s", "apkUrl": "https://github.com/Dragovitcmia-dot/MoneyPlan/releases/download/latest-lab/cashflow-lab.apk"}\n' "$LVC" "$LVN" "$SHA" > lab-release/version.json
+          cat lab-release/version.json
+          echo "::notice title=Lab release build::versionCode=$LVC versionName=$LVN sha256=$SHA"
+          gh release view latest-lab >/dev/null 2>&1 || \
+            gh release create latest-lab --prerelease --target "$GITHUB_SHA" \
+              --title "Cashflow Lab (latest)" --notes "Automated Cashflow Lab build from main. Installs next to the real app; separate data."
+          gh release upload latest-lab lab-release/cashflow-lab.apk --clobber
+          gh release upload latest-lab lab-release/version.json --clobber
+
   emulator:
     needs: build
     runs-on: ubuntu-latest
@@ -166,6 +229,11 @@ jobs:
         with:
           name: cashflow-debug-apk
           path: apk
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: cashflow-lab-apk
+          path: apk-lab
 
       - name: Enable KVM
         run: |
@@ -189,7 +257,9 @@ jobs:
           ram-size: 4096M
           heap-size: 576M
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
-          script: bash scripts/ci-emulator.sh apk/app-preview.apk
+          script: |
+            bash scripts/ci-emulator.sh apk/app-preview.apk
+            bash scripts/ci-emulator-lab.sh apk-lab/app-lab.apk
 
       - name: Render the launcher icon (circle, squircle, themed, Lab; 48 / 96 / 192 px) and check the safe zone
         if: always()

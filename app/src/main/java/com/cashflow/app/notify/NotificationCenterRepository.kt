@@ -32,6 +32,9 @@ class NotificationCenterRepository(private val db: NotificationDatabase) {
     /** Every row, for deciding which notifications are resolved. */
     suspend fun all(): List<BellEntry> = dao.getAll().map { it.toBell() }
 
+    /** Removes every bell row (the Lab build resets with it). */
+    suspend fun clear() = dao.getAll().forEach { dao.delete(it.id) }
+
     suspend fun removeKey(key: String) = dao.deleteByKey(key)
 
     suspend fun updateText(key: String, title: String, body: String) = dao.updateText(key, title, body)

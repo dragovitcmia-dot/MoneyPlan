@@ -43,7 +43,11 @@ fun AppTopBar(unread: Int, onBell: () -> Unit) {
         Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.background).statusBarsPadding().height(BELL_TAP_DP.dp).padding(end = 8.dp),
         horizontalArrangement = androidx.compose.foundation.layout.Arrangement.End,
         verticalAlignment = Alignment.CenterVertically,
-    ) { Bell(unread, onBell) }
+    ) {
+        // The Lab build shows its amber "LAB" tag at the start of the bar; everywhere else this box is empty.
+        Box(Modifier.weight(1f).padding(start = 20.dp)) { com.cashflow.app.lab.LabHooks.Tag() }
+        Bell(unread, onBell)
+    }
 }
 
 /**
