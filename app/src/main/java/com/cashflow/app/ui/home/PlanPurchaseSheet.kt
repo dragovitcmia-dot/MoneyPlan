@@ -84,7 +84,7 @@ import kotlinx.coroutines.launch
 
 /**
  * "Plan a purchase": price on the numpad, a name, then when it can be paid without the balance ever going below
- * what it would be anyway, as "Pay all" or in 2 to 6 parts, with a calendar strip of the next 60 days. Same sheet,
+ * what it would be anyway, as "Pay all" or in 2 to 6 parts, with a calendar strip around the purchase. Same sheet,
  * discard guard and insets as the Add wizard. "Plan it" creates ordinary one-time planned expenses.
  */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -298,14 +298,14 @@ private fun ResultStep(baseline: PlanBaseline?, result: PurchaseResult?, option:
         }
     }
     if (option != null) {
-        Text(PurchaseStrip.summary(option), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+        Text(PurchaseStrip.label(option, baseline.today), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
         CalendarStrip(PurchaseStrip.cells(baseline, option), option)
     }
 }
 
 private val StripShape = RoundedCornerShape(3.dp)
 
-/** The next 60 days with the plan applied; scrolls itself to the first purchase day when the choice changes. */
+/** The days around the purchase with the plan applied; scrolls itself to the first purchase day when the choice changes. */
 @Composable
 private fun CalendarStrip(cells: List<StripCell>, option: PurchaseOption) {
     val listState = rememberLazyListState()

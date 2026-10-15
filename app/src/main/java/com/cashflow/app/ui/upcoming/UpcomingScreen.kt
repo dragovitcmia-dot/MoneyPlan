@@ -2,6 +2,14 @@ package com.cashflow.app.ui.upcoming
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.IconButtonDefaults
+import androidx.compose.material3.IconToggleButton
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -60,7 +68,7 @@ import com.cashflow.app.engine.Money
 import com.cashflow.app.engine.Transaction
 import com.cashflow.app.engine.TxKind
 import com.cashflow.app.engine.Upcoming
-import com.cashflow.app.engine.UpcomingKind
+import com.cashflow.app.engine.UpcomingView
 import com.cashflow.app.engine.UpcomingTap
 import com.cashflow.app.engine.UpcomingType
 import androidx.compose.material3.minimumInteractiveComponentSize
@@ -98,8 +106,7 @@ fun UpcomingScreen(
     val seriesRows by upcoming.series.collectAsStateWithLifecycle()
     val seriesCtx by home.series.collectAsStateWithLifecycle()
     var openSeries by remember { mutableStateOf<Long?>(null) }
-    val type by upcoming.type.collectAsStateWithLifecycle()
-    val kind by upcoming.kind.collectAsStateWithLifecycle()
+    val view by upcoming.view.collectAsStateWithLifecycle()
     val today by upcoming.today.collectAsStateWithLifecycle()
     val showHint by home.swipeHintVisible.collectAsStateWithLifecycle()
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { upcoming.refreshDay() }
@@ -133,30 +140,15 @@ fun UpcomingScreen(
             Text(stringResource(R.string.upcoming_title), style = MaterialTheme.typography.headlineMedium, modifier = Modifier.semantics { heading() })
         }
         item(key = "filters", contentType = "filters") {
-            // Two slim rows: the type, then the kind. Chips look 32 dp tall with a 48 dp touch area and 13 sp text.
-            Column(Modifier.fillMaxWidth()) {
-                FilterRow(
-                    selected = type,
-                    options = listOf(
-                        UpcomingType.ALL to R.string.filter_all,
-                        UpcomingType.EXPENSES to R.string.filter_expenses,
-                        UpcomingType.INCOME to R.string.filter_income,
-                    ),
-                    onSelect = { haptics.tick(); upcoming.setType(it) },
-                )
-                FilterRow(
-                    selected = kind,
-                    options = listOf(
-                        UpcomingKind.ALL to R.string.filter_all,
-                        UpcomingKind.REPEATING to R.string.filter_repeating,
-                        UpcomingKind.ONE_TIME to R.string.filter_one_time,
-                    ),
-                    onSelect = { haptics.tick(); upcoming.setKind(it) },
-                )
-            }
+            // One row: three equal tabs (All, Expenses, Income) and, at the end, the toggle between occurrences and the series list.
+            UpcomingTabs(
+                view = view,
+                onType = { haptics.tick(); upcoming.setType(it) },
+                onToggleSeries = { haptics.tick(); upcoming.toggleSeries() },
+            )
         }
 
-        if (kind == UpcomingKind.REPEATING) {
+        if (view.showSeries) {
             if (seriesRows.isEmpty()) {
                 item(key = "series-empty", contentType = "empty") {
                     Text(
@@ -177,7 +169,7 @@ fun UpcomingScreen(
                         // Every row opens something: the series of a single daily income, or the Repeating list when there are several.
                         when (val tap = Upcoming.tapForDaily(current)) {
                             is UpcomingTap.OpenSeries -> openSeries = tap.ruleId
-                            UpcomingTap.ShowRepeating -> upcoming.setKind(UpcomingKind.REPEATING)
+                            UpcomingTap.ShowRepeating -> upcoming.showSeries()
                             else -> Unit
                         }
                     }
@@ -454,16 +446,46 @@ private fun SeriesRowCard(row: com.cashflow.app.engine.SeriesRow, onClick: () ->
 /** One group of filter chips in a row: 32 dp look, 48 dp touch area, 13 sp text. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun <T> FilterRow(selected: T, options: List<Pair<T, Int>>, onSelect: (T) -> Unit) {
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-        for ((value, label) in options) {
-            FilterChip(
-                selected = selected == value,
-                onClick = { onSelect(value) },
-                label = { Text(stringResource(label), fontSize = 13.sp) },
-                modifier = Modifier.minimumInteractiveComponentSize(),
-                colors = selectedChipColors(),
-            )
+private fun UpcomingTabs(view: UpcomingView, onType: (UpcomingType) -> Unit, onToggleSeries: () -> Unit) {
+    val primary = MaterialTheme.colorScheme.primary
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.weight(1f).selectableGroup()) {
+            for ((type, label) in listOf(
+                UpcomingType.ALL to R.string.filter_all,
+                UpcomingType.EXPENSES to R.string.filter_expenses,
+                UpcomingType.INCOME to R.string.filter_income,
+            )) {
+                val selected = view.type == type
+                Box(
+                    Modifier.weight(1f).height(48.dp).selectable(selected = selected, onClick = { onType(type) }, role = Role.Tab),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        stringResource(label),
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+                        color = if (selected) primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    if (selected) {
+                        Box(
+                            Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(3.dp)
+                                .background(primary, RoundedCornerShape(topStart = 3.dp, topEnd = 3.dp)),
+                        )
+                    }
+                }
+            }
+        }
+        IconToggleButton(
+            checked = view.showSeries,
+            onCheckedChange = { onToggleSeries() },
+            modifier = Modifier.size(48.dp),
+            colors = IconButtonDefaults.iconToggleButtonColors(
+                contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                checkedContainerColor = primary,
+                checkedContentColor = MaterialTheme.colorScheme.onPrimary,
+            ),
+        ) {
+            Icon(Icons.Filled.Refresh, contentDescription = stringResource(R.string.filter_repeating))
         }
     }
 }

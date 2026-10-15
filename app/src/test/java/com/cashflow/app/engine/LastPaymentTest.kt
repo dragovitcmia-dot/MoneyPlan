@@ -190,7 +190,7 @@ class LastPaymentTest {
     @Test fun the_last_payment_is_flagged_in_the_upcoming_rows_and_the_day_sheet() {
         val items = rows(gym).filter { !it.date.isBefore(today) }
         val engine = BalanceEngine(settings(d(2026, 10, 1), 1000), items, today)
-        val upcoming = Upcoming.build(engine, listOf(gym), UpcomingFilter.ALL, DayOfWeek.MONDAY)
+        val upcoming = Upcoming.build(engine, listOf(gym), UpcomingType.ALL, DayOfWeek.MONDAY)
         val flagged = upcoming.groups.flatMap { it.rows }.filter { it.last }
         assertEquals(1, flagged.size)
         assertEquals(d(2026, 12, 5), flagged.single().tx.date)

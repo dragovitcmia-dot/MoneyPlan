@@ -30,6 +30,11 @@ import java.time.LocalDate
 /** Debug and preview builds only; the release source set has an empty stand-in with the same signature. */
 @Composable
 fun DebugSection(repository: LedgerRepository, onDataChanged: () -> Unit) {
+    if (com.cashflow.app.AppIds.IS_LAB) {
+        // The Lab build has its own card (scenarios, time machine, ...) instead of these buttons.
+        com.cashflow.app.lab.LabHooks.Card(repository, onDataChanged)
+        return
+    }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val app = context.applicationContext as CashflowApp
@@ -46,7 +51,7 @@ fun DebugSection(repository: LedgerRepository, onDataChanged: () -> Unit) {
             stringResource(R.string.debug_load_sample),
             onClick = {
                 scope.launch {
-                    repository.loadReferenceScenario(LocalDate.now())
+                    repository.loadReferenceScenario(com.cashflow.app.engine.AppClock.today())
                     onDataChanged()
                 }
             },
@@ -86,7 +91,7 @@ fun DebugSection(repository: LedgerRepository, onDataChanged: () -> Unit) {
                 TextButton(onClick = {
                     confirmClear = false
                     scope.launch {
-                        repository.clearAll(LocalDate.now())
+                        repository.clearAll(com.cashflow.app.engine.AppClock.today())
                         onDataChanged()
                     }
                 }) { Text(stringResource(R.string.clear_confirm)) }

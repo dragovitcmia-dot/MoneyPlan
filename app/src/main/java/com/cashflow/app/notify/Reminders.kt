@@ -18,7 +18,7 @@ class ReminderWorker(context: Context, params: WorkerParameters) : CoroutineWork
 }
 
 object Reminders {
-    const val WORK_NAME = "reminders"
+    const val WORK_NAME = com.cashflow.app.AppIds.REMINDER_WORK
 
     fun schedule(context: Context) {
         val request = PeriodicWorkRequestBuilder<ReminderWorker>(15, TimeUnit.MINUTES).build()

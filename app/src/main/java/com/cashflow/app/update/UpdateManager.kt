@@ -55,7 +55,7 @@ class UpdateManager(context: Context) {
         _state.value = UpdateState.Checking
         scope.launch {
             try {
-                val remote = withContext(Dispatchers.IO) { UpdateLogic.parseVersionInfo(fetchText(UpdateLogic.VERSION_URL)) }
+                val remote = withContext(Dispatchers.IO) { UpdateLogic.parseVersionInfo(fetchText(com.cashflow.app.BuildConfig.UPDATE_VERSION_URL)) }
                 when (val decision = UpdateLogic.decide(remote, installedVersionCode, app.packageManager.canRequestPackageInstalls())) {
                     UpdateLogic.Decision.UpToDate -> _state.value = UpdateState.UpToDate
                     is UpdateLogic.Decision.NeedsPermission -> {

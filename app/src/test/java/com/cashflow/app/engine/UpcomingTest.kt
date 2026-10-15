@@ -61,9 +61,9 @@ class UpcomingTest {
     private fun build(
         rows: List<Transaction>,
         rules: List<RecurringRule> = emptyList(),
-        filter: UpcomingFilter = UpcomingFilter.ALL,
+        type: UpcomingType = UpcomingType.ALL,
         balance: Long = 1000,
-    ) = Upcoming.build(BalanceEngine(settings(start, balance), rows, today), rules, filter, monday)
+    ) = Upcoming.build(BalanceEngine(settings(start, balance), rows, today), rules, type, monday)
 
     @Test fun groups_are_ordered_waiting_tomorrow_week_then_months() {
         val rows = listOf(
@@ -109,8 +109,8 @@ class UpcomingTest {
     @Test fun filters_split_expenses_and_income() {
         val rows = listOf(tx(d(2026, 10, 20), 5, id = 1), tx(d(2026, 10, 20), 7, TxKind.INCOME, id = 2))
         assertEquals(listOf(1L, 2L), build(rows).groups.flatMap { it.rows }.map { it.tx.id })
-        assertEquals(listOf(1L), build(rows, filter = UpcomingFilter.EXPENSES).groups.flatMap { it.rows }.map { it.tx.id })
-        assertEquals(listOf(2L), build(rows, filter = UpcomingFilter.INCOME).groups.flatMap { it.rows }.map { it.tx.id })
+        assertEquals(listOf(1L), build(rows, type = UpcomingType.EXPENSES).groups.flatMap { it.rows }.map { it.tx.id })
+        assertEquals(listOf(2L), build(rows, type = UpcomingType.INCOME).groups.flatMap { it.rows }.map { it.tx.id })
     }
 
     @Test fun a_row_whose_day_closes_negative_carries_the_shortfall() {
@@ -148,8 +148,8 @@ class UpcomingTest {
     @Test fun pinned_daily_income_follows_enabled_flag_and_filter() {
         val rows = emptyList<Transaction>()
         assertNull(build(rows, listOf(daily.copy(enabled = false))).dailyIncome)
-        assertNull(build(rows, listOf(daily), filter = UpcomingFilter.EXPENSES).dailyIncome)
-        assertEquals(tnd(30), build(rows, listOf(daily), filter = UpcomingFilter.INCOME).dailyIncome)
+        assertNull(build(rows, listOf(daily), type = UpcomingType.EXPENSES).dailyIncome)
+        assertEquals(tnd(30), build(rows, listOf(daily), type = UpcomingType.INCOME).dailyIncome)
         assertNull(build(rows, listOf(incomeSource(RecurrencePattern.Weekly(DayOfWeek.MONDAY), start))).dailyIncome)
     }
 

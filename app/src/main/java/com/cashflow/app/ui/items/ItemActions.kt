@@ -48,7 +48,7 @@ class ItemActions(
         haptics.confirm()
         viewModel.confirm(tx.id, newAmount)
         // "Accepted. Undo" for six seconds: the token knows the row before and after, so Undo restores exactly that and nothing else.
-        val token = AcceptUndo.token(tx, amount = newAmount ?: tx.amount, nowMillis = System.currentTimeMillis())
+        val token = AcceptUndo.token(tx, amount = newAmount ?: tx.amount, nowMillis = com.cashflow.app.engine.AppClock.nowMillis())
         announcer.announce(resources.getString(R.string.confirmed_item, labelOf(tx))) { viewModel.undoAccept(token) }
     }
 
@@ -91,7 +91,7 @@ class ItemActions(
     fun done(tx: Transaction, amount: Long, description: String, date: LocalDate) {
         haptics.confirm()
         viewModel.updateItem(tx.id, amount, description, date, TxStatus.CONFIRMED)
-        val token = AcceptUndo.token(tx, amount = amount, description = description.trim(), date = date, nowMillis = System.currentTimeMillis())
+        val token = AcceptUndo.token(tx, amount = amount, description = description.trim(), date = date, nowMillis = com.cashflow.app.engine.AppClock.nowMillis())
         announcer.announce(resources.getString(R.string.confirmed_item, labelOf(tx))) { viewModel.undoAccept(token) }
     }
 

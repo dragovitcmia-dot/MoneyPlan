@@ -354,12 +354,12 @@
     <string name="plan_saved_parts">Planned: %1$s, %2$d parts</string>
     <string name="plan_chip_desc_all">Pay all at once</string>
     <string name="plan_chip_desc_parts">%1$d payments</string>
-    <string name="plan_strip_desc">Next 60 days with this plan</string>
+    <string name="plan_strip_desc">Days around the purchase with this plan</string>
     <string name="plan_loading">Calculating…</string>
 
     <!-- Repeating series: list, sheet, edit, extend -->
+    <string name="backup_lab_refused">This is a Lab backup</string>
     <string name="filter_repeating">Repeating</string>
-    <string name="filter_one_time">One-time</string>
     <string name="series_list_empty">No repeating payments yet.</string>
     <string name="series_tag_ended">Ended</string>
     <string name="tag_last">Last</string>

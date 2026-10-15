@@ -73,6 +73,7 @@ internal fun BackupCard() {
         is BackupCheck.TooOld -> R.string.backup_too_old
         is BackupCheck.Corrupt -> R.string.backup_corrupt
         BackupCheck.Unreadable -> R.string.backup_unreadable
+        is BackupCheck.WrongVariant -> R.string.backup_lab_refused
         is BackupCheck.Ok -> R.string.backup_done
     }
 

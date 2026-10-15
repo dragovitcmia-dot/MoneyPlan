@@ -152,27 +152,59 @@ data class StripCell(
     val purchaseText get() = purchase?.let { "-" + CompactAmount.format(it) }
 }
 
-object PurchaseStrip {
-    const val DAYS = 60
+/** The days of the strip, as indexes into the baseline (0 = today), both ends included. */
+data class StripWindow(val from: Int, val to: Int) {
+    val size get() = to - from + 1
+}
 
-    fun cells(baseline: PlanBaseline, option: PurchaseOption?, days: Int = DAYS): List<StripCell> {
+object PurchaseStrip {
+    /** Days shown before the first and after the last purchase day. */
+    const val MARGIN_DAYS = 3
+
+    /** Days shown when there is no plan to show (a flat week from today). */
+    const val IDLE_DAYS = 7
+
+    /**
+     * Only the window around the purchase: [MARGIN_DAYS] before the first part to [MARGIN_DAYS] after the last one (a single
+     * purchase is a window of 7 days). It never starts before today and never runs past the simulated [horizon] (the baseline size).
+     */
+    fun window(option: PurchaseOption?, horizon: Int): StripWindow {
+        val last = (horizon - 1).coerceAtLeast(0)
+        if (option == null) return StripWindow(0, minOf(IDLE_DAYS - 1, last))
+        val first = option.outflows.minOf { it.dayIndex }
+        val end = option.outflows.maxOf { it.dayIndex }
+        val from = (first - MARGIN_DAYS).coerceIn(0, last)
+        val to = (end + MARGIN_DAYS).coerceIn(from, last)
+        return StripWindow(from, to)
+    }
+
+    /** The cells of the window, with balances from the baseline simulation (the 180-day one) with the plan applied. */
+    fun cells(baseline: PlanBaseline, option: PurchaseOption?, window: StripWindow = window(option, baseline.size)): List<StripCell> {
         val sim = if (option == null) baseline.closings else PurchasePlanner.simulate(baseline, option.outflows)
         val byDay = option?.outflows?.associate { it.dayIndex to it.amount }.orEmpty()
-        return (0 until minOf(days, baseline.size)).map { i ->
+        return (window.from..window.to).map { i ->
             val date = baseline.date(i)
-            StripCell(date, date.dayOfMonth, sim[i], byDay[i], isToday = i == 0, label = if (i == 0 || date.dayOfMonth == 1) AppDates.dayMonth(date) else date.dayOfMonth.toString())
+            StripCell(
+                date, date.dayOfMonth, sim[i], byDay[i], isToday = i == 0,
+                label = if (i == window.from || date.dayOfMonth == 1) AppDates.dayMonth(date) else date.dayOfMonth.toString(),
+            )
         }
     }
 
     fun firstPurchaseIndex(cells: List<StripCell>): Int? = cells.indexOfFirst { it.purchase != null }.takeIf { it >= 0 }
 
-    /** "05 NOV" for pay all; "2 x 150 TND, 25 OCT to 08 NOV" for parts. */
-    fun summary(option: PurchaseOption): String =
-        if (option.parts == 1) {
-            AppDates.dayMonth(option.start)
+    /**
+     * The line above the strip: "Buy on 14 FEB 2027" for pay all; "2 x 150 TND, 25 OCT to 08 NOV" for parts (the year is added to
+     * a date that is not in the year of [today]).
+     */
+    fun label(option: PurchaseOption, today: LocalDate): String {
+        fun date(d: LocalDate) = if (d.year == today.year) AppDates.dayMonth(d) else AppDates.format(d)
+        return if (option.parts == 1) {
+            "Buy on ${AppDates.format(option.start)}"
         } else {
-            "${option.parts} x ${Money.formatDisplay(option.amounts.first())}, ${AppDates.dayMonth(option.start)} to ${AppDates.dayMonth(option.end)}"
+            "${option.parts} x ${Money.formatDisplay(option.amounts.first())}, ${date(option.start)} to ${date(option.end)}"
         }
+    }
 
     /** The chip labels in order: "Pay all", "2", "3" ... */
     fun chipLabel(option: PurchaseOption): String = if (option.parts == 1) "Pay all" else option.parts.toString()

@@ -112,7 +112,7 @@ class HomeViewModel(
         val day = clock()
         viewModelScope.launch {
             repository.runMaintenance(day)
-            repository.applyAutoAccept(LocalDateTime.now()) // income of repeating series, when the setting is on
+            repository.applyAutoAccept(com.cashflow.app.engine.AppClock.dateTime()) // income of repeating series, when the setting is on
             today.value = day
         }
     }
@@ -256,7 +256,7 @@ class HomeViewModel(
     }
 
     private fun millisUntilNextDay(): Long {
-        val now = LocalDateTime.now()
+        val now = com.cashflow.app.engine.AppClock.dateTime()
         return Duration.between(now, now.toLocalDate().plusDays(1).atStartOfDay()).toMillis()
     }
 }

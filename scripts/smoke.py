@@ -642,14 +642,14 @@ def finish_name_step(expect_text):
 
 
 def series_walk(name):
-    """Upcoming with its filter chips (All, Repeating, One-time), the series list, a series sheet with the Extend choices,
+    """Upcoming with its tabs (All, Expenses, Income) and the repeat toggle, the series list, a series sheet with the Extend choices,
     and the Edit form; each screen is photographed as it is reached."""
     try:
         tap_text(NAV_UPCOMING, scroll=False)
         time.sleep(1.5)
-        scroll_to_top(15)  # the list keeps its position from the earlier walk: the chips are at the very top
+        scroll_to_top(15)  # the list keeps its position from the earlier walk: the tabs are at the very top
         screenshot(f"{name}-upcoming-chips")
-        tap_text(S["filter_repeating"], scroll=False)
+        tap_text(S["filter_repeating"], scroll=False)  # the repeat toggle at the end of the tab row
         time.sleep(1.5)
         screenshot(f"{name}-series-list")
         tap_text("Sunday expense", scroll=False, contains=True)
@@ -665,7 +665,7 @@ def series_walk(name):
         time.sleep(1)
         sh("input keyevent 4")
         time.sleep(1)
-        tap_text(S["filter_all"], scroll=False, timeout=8)
+        tap_text(S["filter_repeating"], scroll=False, timeout=8)  # toggle off: back to the occurrences
         time.sleep(1)
     except NotFound as e:
         screenshot(f"{name}-series-FAILED")

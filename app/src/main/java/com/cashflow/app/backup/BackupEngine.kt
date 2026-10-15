@@ -27,6 +27,7 @@ class BackupEngine(
     private val zone: () -> ZoneId,
     private val appVersion: String,
     private val dbVersion: Int,
+    private val variant: BackupVariant = BackupVariant.REAL,
 ) {
     /** Newest first. */
     fun list(): List<SnapshotInfo> =
@@ -53,6 +54,7 @@ class BackupEngine(
                 type = type,
                 counts = counter.counts(tmp),
                 parts = mapOf(DB_ENTRY to Hashing.sha256(tmp), SETTINGS_ENTRY to Hashing.sha256(settingsJson.toByteArray())),
+                variant = variant,
             )
             val target = File(dir, SnapshotNames.nameOf(at, type))
             val partial = File(dir, target.name + ".part")
@@ -73,7 +75,7 @@ class BackupEngine(
     /** Opens [file] (a snapshot or an imported backup) and checks it against this app's schema. */
     fun check(file: File, minDbVersion: Int): BackupCheck {
         val opened = BackupArchive.open(file)
-        return BackupValidator.check(opened.manifest, opened.actualSha, dbVersion, minDbVersion)
+        return BackupValidator.check(opened.manifest, opened.actualSha, dbVersion, minDbVersion, variant)
     }
 
     /** Writes the database of [file] to [targetDb] (through a temporary file, so a failure never leaves half a database). */
@@ -88,7 +90,8 @@ class BackupEngine(
     fun readSettings(file: File): SettingsSnapshot? = BackupArchive.readText(file, SETTINGS_ENTRY)?.let(SettingsJson::decode)
 
     companion object {
-        /** cashflow-2026-10-13.cfbackup */
-        fun exportName(day: LocalDate) = "cashflow-$day.cfbackup"
+        /** cashflow-2026-10-13.cfbackup; a Lab export is cashflow-lab-2026-10-13.cfbackup. */
+        fun exportName(day: LocalDate, variant: BackupVariant = BackupVariant.REAL) =
+            if (variant == BackupVariant.LAB) "cashflow-lab-$day.cfbackup" else "cashflow-$day.cfbackup"
     }
 }
