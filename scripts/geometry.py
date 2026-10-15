@@ -104,6 +104,21 @@ def wait_for(text, timeout=20):
     raise SystemExit(f"GEOMETRY FAILED: {text!r} never appeared. Visible: {texts}")
 
 
+def wait_until(pred, timeout=15.0, interval=0.5):
+    """Dumps the UI every `interval` seconds, up to `timeout`, until pred(nodes) returns something truthy. Returns (nodes, result);
+    result is None when the time ran out. A failed dump is retried by the next round (dump() itself retries too). Replaces a fixed
+    wait followed by one dump, which flaked once on a slow emulator."""
+    deadline = time.time() + timeout
+    while True:
+        nodes = dump()
+        res = pred(nodes) if nodes else None
+        if res:
+            return nodes, res
+        if time.time() >= deadline:
+            return nodes, None
+        time.sleep(interval)
+
+
 def chain(n):
     out = []
     while n is not None:
@@ -177,64 +192,80 @@ def tap(n):
     sh(f"input tap {(n.b[0] + n.b[2]) // 2} {(n.b[1] + n.b[3]) // 2}")
 
 
+def inside_screen(n, W, bottom):
+    return n.b[0] >= 0 and n.b[2] <= W and n.b[1] >= 0 and n.b[3] <= bottom
+
+
 def check_upcoming(W, H, dp, nav_top):
-    """Loads the sample data (Settings > Developer tools), opens Upcoming and measures the filter chips; then selects
-    Repeating and checks that the series rows are clickable and inside the screen."""
+    """Loads the sample data (Settings > Developer tools), opens Upcoming and measures the tab row (three equal tabs and the
+    repeat toggle at its end: at least 48 dp tall, inside the screen); then switches the toggle on and checks that the series rows
+    are clickable and inside the screen, with the Income tab too."""
     problems = []
     nodes, hits = wait_for(S["nav_settings"])
     tap(clickable_of(max(hits, key=lambda n: n.b[3])))
-    time.sleep(1.5)
     for _ in range(12):  # the developer tools card is at the bottom of Settings
         nodes = dump()
         load = [n for n in nodes if n.text == S["debug_load_sample"] or n.desc == S["debug_load_sample"]]
         if load:
             break
         sh(f"input swipe {W // 2} {int(H * 0.75)} {W // 2} {int(H * 0.30)} 300")
-        time.sleep(0.8)
+        time.sleep(0.5)
     else:
         return ["Settings: 'Load sample data' not found"]
     tap(clickable_of(load[0]))
-    time.sleep(3)
     nodes, hits = wait_for(S["nav_upcoming"])
     tap(clickable_of(max(hits, key=lambda n: n.b[3])))
-    time.sleep(2)
-    # Two groups of chips: type (All, Expenses, Income) and kind (All, Repeating, One-time). "All" appears twice: top-most is the type.
-    nodes, _ = wait_for(S["filter_repeating"])
-    alls = sorted([n for n in nodes if n.text == S["filter_all"] or n.desc == S["filter_all"]], key=lambda n: n.b[1])
-    chips = {}
-    if len(alls) >= 2:
-        chips["type All"] = clickable_of(alls[0])
-        chips["kind All"] = clickable_of(alls[1])
-    else:
-        problems.append("the two 'All' chips were not both found")
-    for label, key in (("Expenses", "filter_expenses"), ("Income", "filter_income"), ("Repeating", "filter_repeating"), ("One-time", "filter_one_time")):
-        nodes, hit = wait_for(S[key])
-        chips[label] = clickable_of(min(hit, key=lambda n: n.b[1]))
+
+    labels = {"All": S["filter_all"], "Expenses": S["filter_expenses"], "Income": S["filter_income"]}
+    def tab_row(nodes):
+        found = {}
+        for name, label in labels.items():
+            hit = [n for n in nodes if (n.text == label or n.desc == label) and n.b[3] < nav_top]
+            if hit:
+                found[name] = min(hit, key=lambda n: n.b[1])
+        toggle = [n for n in nodes if n.desc == S["filter_repeating"]]
+        return (found, toggle[0]) if len(found) == 3 and toggle else None
+    nodes, row = wait_until(tab_row, timeout=20)
+    if row is None:
+        return ["the Upcoming tab row (All, Expenses, Income and the repeat toggle) was not found"]
+    found, toggle_node = row
+    tabs = {name: clickable_of(n) for name, n in found.items()}
+    toggle = clickable_of(toggle_node)
     lines = []
-    for label, chip in chips.items():
-        inside = chip.b[0] >= 0 and chip.b[2] <= W and chip.b[1] >= 0 and chip.b[3] <= H
-        lines.append(f"{label}: {chip.w / dp:.0f} x {chip.h / dp:.0f} dp {'ok' if inside else 'OUTSIDE'}")
-        if chip.h / dp < MIN_NAV_HEIGHT_DP:
-            problems.append(f"Upcoming chip {label!r} touch area is {chip.h / dp:.0f} dp tall, needs >= {MIN_NAV_HEIGHT_DP}")
-        if chip.w / dp < MIN_NAV_HEIGHT_DP:
-            problems.append(f"Upcoming chip {label!r} touch area is {chip.w / dp:.0f} dp wide, needs >= {MIN_NAV_HEIGHT_DP}")
+    for label, ctl in [*tabs.items(), ("Repeat toggle", toggle)]:
+        inside = inside_screen(ctl, W, H)
+        lines.append(f"{label}: {ctl.w / dp:.0f} x {ctl.h / dp:.0f} dp {'ok' if inside else 'OUTSIDE'}")
+        if ctl.h / dp < MIN_NAV_HEIGHT_DP:
+            problems.append(f"Upcoming {label!r} touch area is {ctl.h / dp:.0f} dp tall, needs >= {MIN_NAV_HEIGHT_DP}")
+        if ctl.w / dp < MIN_NAV_HEIGHT_DP:
+            problems.append(f"Upcoming {label!r} touch area is {ctl.w / dp:.0f} dp wide, needs >= {MIN_NAV_HEIGHT_DP}")
         if not inside:
-            problems.append(f"Upcoming chip {label!r} is not inside the screen: {chip.b}")
-        if not chip.clickable:
-            problems.append(f"Upcoming chip {label!r} is not clickable")
-    print("UPCOMING CHIPS:", "; ".join(lines))
-    notice("Geometry: Upcoming filter chips", "; ".join(lines))
-    tap(chips["Repeating"])
-    time.sleep(2)
-    nodes = dump()
-    rows = [n for n in nodes if n.text.startswith("Sunday expense") or n.desc.startswith("Sunday expense") or "Daily income" in (n.text + n.desc)]
-    rows = [clickable_of(r) for r in rows if r.b[1] > chips["Repeating"].b[3]]
+            problems.append(f"Upcoming {label!r} is not inside the screen: {ctl.b}")
+        if not (ctl.clickable or ctl.selected):
+            problems.append(f"Upcoming {label!r} is not clickable")
+    widths = [t.w for t in tabs.values()]
+    if max(widths) - min(widths) > 2 * dp:
+        problems.append(f"the three Upcoming tabs are not equal width: {[round(w / dp) for w in widths]} dp")
+    ys = sorted(c.b[1] for c in [*tabs.values(), toggle])
+    if ys[-1] - ys[0] > 8 * dp:
+        problems.append("the tabs and the repeat toggle are not on one row")
+    if toggle.b[0] < max(t.b[2] for t in tabs.values()) - 2:
+        problems.append("the repeat toggle is not at the right end of the tab row")
+    print("UPCOMING TABS:", "; ".join(lines))
+    notice("Geometry: Upcoming tabs", "; ".join(lines))
+
+    def series_rows(nodes):
+        rows = [n for n in nodes if n.text.startswith("Sunday expense") or n.desc.startswith("Sunday expense") or "Daily income" in (n.text + n.desc)]
+        rows = [clickable_of(r) for r in rows if r.b[1] > toggle.b[3]]
+        return rows or None
+    tap(toggle)
+    nodes, rows = wait_until(series_rows, timeout=15)
     if not rows:
-        problems.append("with Repeating selected no series row was found")
+        problems.append("with the repeat toggle on no series row was found")
     else:
         lines = []
         for r in rows:
-            inside = r.b[0] >= 0 and r.b[2] <= W and r.b[1] >= 0 and r.b[3] <= nav_top
+            inside = inside_screen(r, W, nav_top)
             lines.append(f"[{r.b[0]},{r.b[1]}][{r.b[2]},{r.b[3]}] {r.w / dp:.0f} x {r.h / dp:.0f} dp clickable={r.clickable} inside={inside}")
             if not r.clickable:
                 problems.append(f"a series row is not clickable: {r.b}")
@@ -242,6 +273,19 @@ def check_upcoming(W, H, dp, nav_top):
                 problems.append(f"a series row is not inside the screen above the bar: {r.b}")
         print("SERIES ROWS:", "; ".join(lines))
         notice("Geometry: series rows", "; ".join(lines))
+    # the toggle is a toggle: with it on, the Income tab still lists series (the daily income) and Expenses lists the expense series
+    tap(tabs["Income"])
+    nodes, inc = wait_until(lambda nodes: [n for n in nodes if "Daily income" in (n.text + n.desc) and n.b[1] > toggle.b[3]] or None, timeout=15)
+    if not inc:
+        problems.append("with the repeat toggle on and the Income tab selected the income series was not listed")
+    elif not clickable_of(inc[0]).clickable:
+        problems.append("the income series row is not clickable with the Income tab selected")
+    tap(toggle)  # back to the occurrences: the series rows ("Ends ..." / "No end") are gone
+    def occurrences(nodes):
+        return not any((n.text.startswith("Ends ") or n.text == "No end") and n.b[1] > toggle.b[3] for n in nodes)
+    nodes, back = wait_until(occurrences, timeout=10)
+    if not back:
+        problems.append("switching the repeat toggle off did not return the list to occurrences")
     return problems
 
 
@@ -318,8 +362,11 @@ def main():
         cal = open_items.get(S["nav_calendar"])
         if cal is not None:
             sh(f"input tap {(cal.b[0] + cal.b[2]) // 2} {(cal.b[1] + cal.b[3]) // 2}")
-            time.sleep(1.5)
-            nodes = dump()
+            def calendar_shown(nodes):
+                closed = not any(n.text == S["center_mark_all"] for n in nodes)
+                sel = any((n.text == S["nav_calendar"] or n.desc == S["nav_calendar"]) and any(c.selected for c in chain(n)) for n in nodes)
+                return closed and sel
+            nodes, _ok = wait_until(calendar_shown, timeout=15)
             still_open = any(n.text == S["center_mark_all"] for n in nodes)
             cal_selected = any((n.text == S["nav_calendar"] or n.desc == S["nav_calendar"]) and any(c.selected for c in chain(n)) for n in nodes)
             print(f"TAP ON CALENDAR WITH CENTER OPEN: center still open={still_open}, calendar tab selected={cal_selected}")

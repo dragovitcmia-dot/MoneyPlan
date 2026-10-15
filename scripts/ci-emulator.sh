@@ -17,9 +17,15 @@ for attempt in 1 2 3; do
   adb logcat -c
   OUT=$(adb shell monkey -p "$PKG" -c android.intent.category.LAUNCHER 1 2>&1 || true)
   echo "$OUT" | grep -E "Events injected|aborted" || true
-  sleep 6
-  PID=$(adb shell pidof "$PKG" || true)
-  echo "attempt $attempt: pid after 6 s: ${PID:-none}"
+  # Poll every 500 ms for the process (up to 15 s), then let it settle for 4 s and look again: no fixed wait on a slow emulator.
+  PID=""
+  for _ in $(seq 1 30); do
+    PID=$(adb shell pidof "$PKG" || true)
+    [ -n "$PID" ] && break
+    sleep 0.5
+  done
+  [ -n "$PID" ] && sleep 4 && PID=$(adb shell pidof "$PKG" || true)
+  echo "attempt $attempt: pid after launch: ${PID:-none}"
   # Only real crashes: "FATAL EXCEPTION" blocks and error-level AndroidRuntime lines (the monkey tool logs
   # harmless D/I AndroidRuntime lines that mention the package).
   CRASH=$(adb logcat -d | grep -E "FATAL EXCEPTION| E AndroidRuntime" -A4 | grep "$PKG" || true)

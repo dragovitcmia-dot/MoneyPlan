@@ -469,30 +469,40 @@ class HistoryInvariantTest {
 
     private val daily = incomeSource(RecurrencePattern.Daily, today, id = 2, amount = 30)
 
-    @Test fun type_and_kind_filters_combine() {
+    @Test fun the_tabs_filter_the_occurrence_list_by_type() {
         val oneOffExpense = tx(today.plusDays(2), 10, id = 1)
         val seriesExpense = rule(RecurrencePattern.Weekly(DayOfWeek.FRIDAY), today, id = 3).occurrenceFor(today.plusDays(3)).copy(id = 2)
         val oneOffIncome = tx(today.plusDays(4), 20, TxKind.INCOME, id = 3)
         val engine = engineWith(oneOffExpense, seriesExpense, oneOffIncome)
         val rules = listOf(rule(RecurrencePattern.Weekly(DayOfWeek.FRIDAY), today, id = 3))
-        fun ids(t: UpcomingType, k: UpcomingKind) = Upcoming.build(engine, rules, t, k, DayOfWeek.MONDAY).groups.flatMap { it.rows }.map { it.tx.id }.toSet()
-        assertEquals(setOf(1L, 2L, 3L), ids(UpcomingType.ALL, UpcomingKind.ALL))
-        assertEquals(setOf(1L, 2L), ids(UpcomingType.EXPENSES, UpcomingKind.ALL))
-        assertEquals(setOf(3L), ids(UpcomingType.INCOME, UpcomingKind.ALL))
-        assertEquals(setOf(1L, 3L), ids(UpcomingType.ALL, UpcomingKind.ONE_TIME))
-        assertEquals(setOf(1L), ids(UpcomingType.EXPENSES, UpcomingKind.ONE_TIME))
-        assertEquals(setOf(3L), ids(UpcomingType.INCOME, UpcomingKind.ONE_TIME))
-        assertEquals(emptySet<Long>(), ids(UpcomingType.ALL, UpcomingKind.REPEATING))
+        fun ids(t: UpcomingType) = Upcoming.build(engine, rules, t, DayOfWeek.MONDAY).groups.flatMap { it.rows }.map { it.tx.id }.toSet()
+        assertEquals(setOf(1L, 2L, 3L), ids(UpcomingType.ALL))
+        assertEquals(setOf(1L, 2L), ids(UpcomingType.EXPENSES))
+        assertEquals(setOf(3L), ids(UpcomingType.INCOME))
     }
 
-    @Test fun the_old_single_filter_still_maps_onto_the_two_groups() {
-        val engine = engineWith(tx(today.plusDays(2), 10, id = 1), tx(today.plusDays(4), 20, TxKind.INCOME, id = 2))
-        fun ids(f: UpcomingFilter) = Upcoming.build(engine, emptyList(), f, DayOfWeek.MONDAY).groups.flatMap { it.rows }.map { it.tx.id }.toSet()
-        assertEquals(setOf(1L, 2L), ids(UpcomingFilter.ALL))
-        assertEquals(setOf(1L), ids(UpcomingFilter.EXPENSES))
-        assertEquals(setOf(2L), ids(UpcomingFilter.INCOME))
-        assertEquals(setOf(1L, 2L), ids(UpcomingFilter.ONE_TIME))
-        assertEquals(emptySet<Long>(), ids(UpcomingFilter.REPEATING))
+    @Test fun the_view_state_keeps_the_tab_when_the_series_toggle_flips_and_the_other_way_round() {
+        val start = UpcomingView()
+        assertEquals(UpcomingType.ALL, start.type)
+        assertFalse(start.showSeries)
+        val income = start.withType(UpcomingType.INCOME)
+        val series = income.toggleSeries()
+        assertTrue(series.showSeries)
+        assertEquals(UpcomingType.INCOME, series.type)
+        assertEquals(UpcomingType.EXPENSES, series.withType(UpcomingType.EXPENSES).type)
+        assertTrue(series.withType(UpcomingType.EXPENSES).showSeries)
+        assertEquals(income, series.toggleSeries())
+        assertTrue(start.withSeries(true).showSeries)
+        assertTrue(start.withSeries(true).withSeries(true).showSeries)
+    }
+
+    @Test fun the_series_view_is_filtered_by_the_selected_tab() {
+        val exp = rule(RecurrencePattern.Daily, today, id = 1)
+        val inc = incomeSource(RecurrencePattern.Weekly(DayOfWeek.MONDAY), today, id = 2)
+        fun ids(view: UpcomingView) = SeriesList.build(listOf(exp, inc), emptyList(), SeriesContext(), today, view.type).map { it.rule.id }.toSet()
+        assertEquals(setOf(1L, 2L), ids(UpcomingView(UpcomingType.ALL, true)))
+        assertEquals(setOf(1L), ids(UpcomingView(UpcomingType.EXPENSES, true)))
+        assertEquals(setOf(2L), ids(UpcomingView(UpcomingType.INCOME, true)))
     }
 
     @Test fun the_series_list_follows_the_type_filter() {
@@ -511,7 +521,7 @@ class HistoryInvariantTest {
             rules[1].occurrenceFor(today.plusDays(3)).copy(id = 5), rules[1].occurrenceFor(today.plusDays(100)).copy(id = 6),
             daily.occurrenceFor(today).copy(id = 7), daily.occurrenceFor(today.plusDays(1)).copy(id = 8), daily.occurrenceFor(today.plusDays(110)).copy(id = 9),
         )
-        val model = Upcoming.build(engineWith(*rows.toTypedArray()), rules, UpcomingType.ALL, UpcomingKind.ALL, DayOfWeek.MONDAY)
+        val model = Upcoming.build(engineWith(*rows.toTypedArray()), rules, UpcomingType.ALL, DayOfWeek.MONDAY)
         val listed = model.groups.flatMap { it.rows }
         assertTrue(listed.isNotEmpty())
         for (row in listed) assertEquals(UpcomingTap.OpenDetails(row.tx.id), Upcoming.tapFor(row))
@@ -521,13 +531,13 @@ class HistoryInvariantTest {
     }
 
     @Test fun the_pinned_daily_income_row_is_tappable_too() {
-        val model = Upcoming.build(engineWith(daily.occurrenceFor(today).copy(id = 1)), listOf(daily), UpcomingType.ALL, UpcomingKind.ALL, DayOfWeek.MONDAY)
+        val model = Upcoming.build(engineWith(daily.occurrenceFor(today).copy(id = 1)), listOf(daily), UpcomingType.ALL, DayOfWeek.MONDAY)
         assertEquals(UpcomingTap.OpenSeries(2), Upcoming.tapForDaily(model))
         val two = listOf(daily, incomeSource(RecurrencePattern.Daily, today, id = 4))
-        assertEquals(UpcomingTap.ShowRepeating, Upcoming.tapForDaily(Upcoming.build(engineWith(), two, UpcomingType.ALL, UpcomingKind.ALL, DayOfWeek.MONDAY)))
-        assertNull(Upcoming.tapForDaily(Upcoming.build(engineWith(), emptyList(), UpcomingType.ALL, UpcomingKind.ALL, DayOfWeek.MONDAY)))
-        assertNull(Upcoming.tapForDaily(Upcoming.build(engineWith(), two, UpcomingType.EXPENSES, UpcomingKind.ALL, DayOfWeek.MONDAY)))
-        assertNull(Upcoming.tapForDaily(Upcoming.build(engineWith(), two, UpcomingType.ALL, UpcomingKind.ONE_TIME, DayOfWeek.MONDAY)))
+        assertEquals(UpcomingTap.ShowRepeating, Upcoming.tapForDaily(Upcoming.build(engineWith(), two, UpcomingType.ALL, DayOfWeek.MONDAY)))
+        assertNull(Upcoming.tapForDaily(Upcoming.build(engineWith(), emptyList(), UpcomingType.ALL, DayOfWeek.MONDAY)))
+        assertNull(Upcoming.tapForDaily(Upcoming.build(engineWith(), two, UpcomingType.EXPENSES, DayOfWeek.MONDAY)))
+        assertNotNull(Upcoming.tapForDaily(Upcoming.build(engineWith(), two, UpcomingType.INCOME, DayOfWeek.MONDAY)))
     }
 
     @Test fun a_future_item_opens_details_with_accept_off_and_postpone_on() {

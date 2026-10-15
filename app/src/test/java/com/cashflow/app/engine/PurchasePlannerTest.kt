@@ -242,51 +242,98 @@ class PurchasePlannerTest {
 
     // ---- strip --------------------------------------------------------------------------------------------
 
-    @Test fun the_strip_has_sixty_days_with_the_plan_applied_and_today_marked() {
+    @Test fun the_window_is_three_days_either_side_of_a_single_purchase() {
         val b = flat(100, 181)
-        val option = PurchasePlanner.plan(b, tnd(90)).option(3)!!
+        val far = PurchaseOption(1, listOf(Outflow(100, tnd(10))), listOf(today.plusDays(100)))
+        assertEquals(StripWindow(97, 103), PurchaseStrip.window(far, b.size))
+        assertEquals(7, PurchaseStrip.window(far, b.size).size)
+        val cells = PurchaseStrip.cells(b, far)
+        assertEquals(7, cells.size)
+        assertEquals(today.plusDays(97), cells.first().date)
+        assertEquals(today.plusDays(103), cells.last().date)
+        assertEquals(3, PurchaseStrip.firstPurchaseIndex(cells))
+        assertFalse(cells.any { it.isToday })
+    }
+
+    @Test fun the_window_never_starts_before_today_and_never_passes_the_horizon() {
+        fun one(day: Int) = PurchaseOption(1, listOf(Outflow(day, tnd(10))), listOf(today.plusDays(day.toLong())))
+        assertEquals(StripWindow(0, 3), PurchaseStrip.window(one(0), 181))
+        assertEquals(StripWindow(0, 4), PurchaseStrip.window(one(1), 181))
+        assertEquals(StripWindow(0, 6), PurchaseStrip.window(one(3), 181))
+        assertEquals(StripWindow(1, 7), PurchaseStrip.window(one(4), 181))
+        assertEquals(StripWindow(177, 180), PurchaseStrip.window(one(180), 181))
+        assertEquals(StripWindow(0, 3), PurchaseStrip.window(one(0), 4))
+        val cellsToday = PurchaseStrip.cells(flat(100, 181), one(0))
+        assertEquals(4, cellsToday.size)
+        assertTrue(cellsToday[0].isToday)
+        assertEquals(0, PurchaseStrip.firstPurchaseIndex(cellsToday))
+    }
+
+    @Test fun the_window_of_instalments_runs_from_before_the_first_part_to_after_the_last() {
+        val b = flat(1000, 181)
+        val two = PurchaseOption(2, listOf(Outflow(40, tnd(150)), Outflow(54, tnd(150))), listOf(today.plusDays(40), today.plusDays(54)))
+        assertEquals(StripWindow(37, 57), PurchaseStrip.window(two, b.size))
+        val cells = PurchaseStrip.cells(b, two)
+        assertEquals(21, cells.size)
+        assertEquals(listOf(3, 17), cells.mapIndexedNotNull { i, c -> i.takeIf { c.purchase != null } })
+        // the balances come from the whole simulation: the second part lowers every later day
+        assertEquals(tnd(850), cells[3].closing)
+        assertEquals(tnd(700), cells[17].closing)
+        val six = PlanBaseline(today, List(181) { tnd(10_000) })
+        val plan = PurchasePlanner.installments(six, tnd(600), 6)!!
+        val opt = PurchaseOption(6, plan, plan.map { six.date(it.dayIndex) })
+        assertEquals(StripWindow(0, 5 * 7 + 3), PurchaseStrip.window(opt, six.size))
+    }
+
+    @Test fun balances_in_the_window_come_from_the_180_day_simulation_not_from_a_short_one() {
+        val engine = BalanceEngine(settings(today, 100), listOf(tx(today.plusDays(30), 40, id = 1), tx(today.plusDays(120), 25, TxKind.INCOME, id = 2)), today)
+        val b = PlanBaseline.of(engine)
+        val option = PurchaseOption(1, listOf(Outflow(125, tnd(10))), listOf(today.plusDays(125)))
         val cells = PurchaseStrip.cells(b, option)
-        assertEquals(60, cells.size)
-        assertTrue(cells[0].isToday)
-        assertFalse(cells[1].isToday)
-        assertEquals(tnd(70), cells[0].closing)
-        assertEquals(tnd(40), cells[7].closing)
-        assertEquals(tnd(10), cells[14].closing)
-        assertEquals(listOf(0, 7, 14), cells.mapIndexedNotNull { i, c -> i.takeIf { c.purchase != null } })
-        assertEquals(tnd(30), cells[7].purchase)
-        assertEquals("-30", cells[7].purchaseText)
-        assertEquals(today.plusDays(2).dayOfMonth, cells[2].dayNumber)
+        assertEquals(tnd(85), cells.first().closing) // 100 - 40 + 25 on day 122, no purchase yet
+        assertEquals(tnd(75), cells[3].closing)
+        assertEquals(tnd(75), cells.last().closing)
     }
 
     @Test fun the_first_cell_and_the_first_of_a_month_carry_the_month() {
-        val cells = PurchaseStrip.cells(flat(100, 181), null)
-        assertEquals("12 OCT", cells[0].label)
-        assertEquals("13", cells[1].label)
-        assertEquals("01 NOV", cells[20].label)
-        assertEquals("02", cells[21].label.padStart(2, '0'))
+        val cells = PurchaseStrip.cells(flat(100, 181), PurchaseOption(1, listOf(Outflow(22, tnd(5))), listOf(today.plusDays(22))))
+        assertEquals("31 OCT", cells[0].label)
+        assertEquals("01 NOV", cells[1].label)
+        assertEquals("2", cells[2].label)
     }
 
-    @Test fun without_an_option_the_strip_shows_the_baseline() {
+    @Test fun without_an_option_the_strip_shows_a_flat_week_from_today() {
         val cells = PurchaseStrip.cells(flat(100, 181), null)
+        assertEquals(7, cells.size)
         assertTrue(cells.all { it.closing == tnd(100) && it.purchase == null })
+        assertTrue(cells[0].isToday)
+        assertEquals("12 OCT", cells[0].label)
         assertNull(PurchaseStrip.firstPurchaseIndex(cells))
+        assertEquals(StripWindow(0, 2), PurchaseStrip.window(null, 3))
     }
 
-    @Test fun the_strip_scrolls_to_the_first_purchase_day_and_marks_negative_days() {
-        val b = PlanBaseline(today, List(10) { tnd(100) } + List(10) { tnd(30) } + List(161) { tnd(500) })
-        val cells = PurchaseStrip.cells(b, PurchasePlanner.plan(b, tnd(60)).option(1))
-        assertEquals(20, PurchaseStrip.firstPurchaseIndex(cells))
-        val cheap = PurchaseStrip.cells(base(10, -5, 7, 7), null, days = 4)
+    @Test fun negative_days_are_marked_and_the_purchase_text_is_compact() {
+        val cheap = PurchaseStrip.cells(base(10, -5, 7, 7), null)
         assertEquals(listOf(false, true, false, false), cheap.map { it.negative })
         assertEquals("-5", cheap[1].closingText)
+        val b = flat(100, 181)
+        val cells = PurchaseStrip.cells(b, PurchasePlanner.plan(b, tnd(90)).option(3)!!)
+        assertEquals(18, cells.size) // days 0..17: three parts on days 0, 7 and 14, three days after the last
+        assertEquals("-30", cells[7].purchaseText)
+        assertEquals(tnd(70), cells[0].closing)
+        assertEquals(tnd(40), cells[7].closing)
     }
 
-    @Test fun the_summary_line_reads_like_the_examples() {
-        val b = flat(500, 60)
-        val payAll = PurchasePlanner.plan(b, tnd(100)).option(1)!!
-        assertEquals(AppDates.dayMonth(today), PurchaseStrip.summary(payAll))
-        val two = PurchasePlanner.plan(b, tnd(300)).option(2)!!
-        assertEquals("2 x 150 TND, ${AppDates.dayMonth(today)} to ${AppDates.dayMonth(today.plusDays(7))}", PurchaseStrip.summary(two))
+    @Test fun the_label_reads_like_the_examples() {
+        val b = flat(500, 181)
+        val payAll = PurchaseOption(1, listOf(Outflow(125, tnd(100))), listOf(d(2027, 2, 14)))
+        assertEquals("Buy on 14 FEB 2027", PurchaseStrip.label(payAll, today))
+        val soon = PurchasePlanner.plan(b, tnd(100)).option(1)!!
+        assertEquals("Buy on 12 OCT 2026", PurchaseStrip.label(soon, today))
+        val two = PurchaseOption(2, listOf(Outflow(13, tnd(150)), Outflow(27, tnd(150))), listOf(d(2026, 10, 25), d(2026, 11, 8)))
+        assertEquals("2 x 150 TND, 25 OCT to 08 NOV", PurchaseStrip.label(two, today))
+        val across = PurchaseOption(2, listOf(Outflow(80, tnd(150)), Outflow(94, tnd(150))), listOf(d(2026, 12, 30), d(2027, 1, 13)))
+        assertEquals("2 x 150 TND, 30 DEC to 13 JAN 2027", PurchaseStrip.label(across, today))
         assertEquals("Pay all", PurchaseStrip.chipLabel(payAll))
         assertEquals("2", PurchaseStrip.chipLabel(two))
     }

@@ -6,13 +6,18 @@ import java.time.YearMonth
 import java.time.temporal.ChronoUnit
 import java.time.temporal.TemporalAdjusters
 
-/** ALL and ONE_TIME list occurrences; REPEATING shows the series list instead (see [SeriesList]). */
-enum class UpcomingFilter { ALL, EXPENSES, INCOME, REPEATING, ONE_TIME }
-
-/** The two independent filter groups of Upcoming; they combine (AND). */
+/** The three tabs of Upcoming. */
 enum class UpcomingType { ALL, EXPENSES, INCOME }
 
-enum class UpcomingKind { ALL, REPEATING, ONE_TIME }
+/**
+ * What Upcoming shows: the tab (All, Expenses, Income) and, independent of it, whether the repeating SERIES list replaces the
+ * occurrence list (the toggle at the end of the tab row). The tab filters both views.
+ */
+data class UpcomingView(val type: UpcomingType = UpcomingType.ALL, val showSeries: Boolean = false) {
+    fun withType(next: UpcomingType) = copy(type = next)
+    fun toggleSeries() = copy(showSeries = !showSeries)
+    fun withSeries(on: Boolean) = copy(showSeries = on)
+}
 
 /** What a tap on something in the Upcoming list does. */
 sealed interface UpcomingTap {
@@ -95,22 +100,10 @@ object Upcoming {
         else -> UpcomingTap.ShowRepeating
     }
 
-    fun build(engine: BalanceEngine, rules: List<RecurringRule>, filter: UpcomingFilter, firstDayOfWeek: DayOfWeek): UpcomingModel {
-        val (type, kind) = when (filter) {
-            UpcomingFilter.ALL -> UpcomingType.ALL to UpcomingKind.ALL
-            UpcomingFilter.EXPENSES -> UpcomingType.EXPENSES to UpcomingKind.ALL
-            UpcomingFilter.INCOME -> UpcomingType.INCOME to UpcomingKind.ALL
-            UpcomingFilter.REPEATING -> UpcomingType.ALL to UpcomingKind.REPEATING
-            UpcomingFilter.ONE_TIME -> UpcomingType.ALL to UpcomingKind.ONE_TIME
-        }
-        return build(engine, rules, type, kind, firstDayOfWeek)
-    }
-
     fun build(
         engine: BalanceEngine,
         rules: List<RecurringRule>,
         type: UpcomingType,
-        kind: UpcomingKind,
         firstDayOfWeek: DayOfWeek,
     ): UpcomingModel {
         val today = engine.today
@@ -124,13 +117,6 @@ object Upcoming {
             .flatMap { it.items.asSequence() }
             .filter { it.status == TxStatus.PENDING }
             .filter { type == UpcomingType.ALL || (type == UpcomingType.EXPENSES) == (it.kind == TxKind.EXPENSE) }
-            .filter {
-                when (kind) {
-                    UpcomingKind.ALL -> true
-                    UpcomingKind.ONE_TIME -> it.recurringRuleId == null
-                    UpcomingKind.REPEATING -> false // the series list replaces the occurrences
-                }
-            }
             // Future occurrences of a daily income source are summarized in the pinned row, not listed.
             .filter { !(it.date.isAfter(today) && it.source == TxSource.RECURRING && it.kind == TxKind.INCOME && it.recurringRuleId in dailyRuleIds) }
             .map { tx ->
@@ -151,7 +137,7 @@ object Upcoming {
             .map { (key, list) -> UpcomingGroup(key, list.sortedWith(compareBy<UpcomingRow> { it.tx.date }.thenBy { it.tx.id })) }
             .sortedBy { order(it.key) }
 
-        val dailySeries = if (kind == UpcomingKind.ALL && type != UpcomingType.EXPENSES) {
+        val dailySeries = if (type != UpcomingType.EXPENSES) {
             rules.filter {
                 it.enabled && it.kind == TxKind.INCOME && it.pattern == RecurrencePattern.Daily &&
                     (it.endDate == null || !it.endDate.isBefore(today))
