@@ -87,7 +87,7 @@ fun NotificationCenterScreen(
     val anyUnread = entries.any { it.unread }
 
     Column(
-        Modifier.fillMaxSize().padding(top = contentPadding.calculateTopPadding(), start = 8.dp, end = 20.dp),
+        Modifier.fillMaxSize().padding(top = contentPadding.calculateTopPadding(), start = Spacing.s, end = Spacing.l),
     ) {
         Row(Modifier.fillMaxWidth().heightIn(min = 56.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onClose, modifier = Modifier.size(48.dp)) {

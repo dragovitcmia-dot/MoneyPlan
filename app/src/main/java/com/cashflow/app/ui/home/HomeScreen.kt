@@ -160,8 +160,8 @@ private fun HomeContent(
         state = listState,
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(
-            start = 20.dp,
-            end = 20.dp,
+            start = Spacing.l,
+            end = Spacing.l,
             top = padding.calculateTopPadding() + Spacing.l,
             bottom = padding.calculateBottomPadding() + Spacing.xl,
         ),

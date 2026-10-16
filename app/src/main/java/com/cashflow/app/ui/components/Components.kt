@@ -201,7 +201,7 @@ fun LabeledTextField(
     /** Applied to the text field itself (e.g. a focus requester). */
     fieldModifier: Modifier = Modifier,
 ) {
-    Column(modifier.semantics(mergeDescendants = true) {}, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    Column(modifier.semantics(mergeDescendants = true) {}, verticalArrangement = Arrangement.spacedBy(Spacing.s)) {
         CompositionLocalProvider(LocalContentColor provides if (isError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant) {
             ProvideTextStyle(MaterialTheme.typography.labelLarge) { label() }
         }
@@ -275,7 +275,7 @@ fun AppListRow(
     AppCard(modifier.fillMaxWidth(), onClick = onClick) {
         Column(Modifier.padding(Spacing.l), verticalArrangement = Arrangement.spacedBy(Spacing.s)) {
             androidx.compose.foundation.layout.Row(
-                Modifier.fillMaxWidth().heightIn(min = com.cashflow.app.ui.theme.ShapeTokens.rowMinHeight - Spacing.xl),
+                Modifier.fillMaxWidth().heightIn(min = com.cashflow.app.ui.theme.ShapeTokens.rowMinHeight - Spacing.l * 2),
                 verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(Spacing.m),
             ) {

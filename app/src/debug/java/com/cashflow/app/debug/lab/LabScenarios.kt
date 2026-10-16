@@ -114,6 +114,7 @@ object LabScenarios {
             "Repeat toggle on: the list becomes the series (Gym, Phone, Rent, Salary, Freelance, Daily income) filtered by the tab; off returns to occurrences.",
             "Repeating rows show a small circular arrow in the type colour (income green, expense red); one-time rows (Dentist, Car repair, Refund, Bonus) have none.",
             "Tap any row, also Car repair in NOV and Bonus in JAN: the details sheet opens; Accept is disabled for future items.",
+            "Colours (v0.10.0): the selected All tab is neutral, Expenses red, Income green; the repeat toggle is neutral; income amounts and arrows are green, expense ones red.",
         ),
         clock = at(BASE_DAY),
         seed = { t ->
@@ -255,7 +256,111 @@ object LabScenarios {
         },
     )
 
-    val all: List<LabScenario> = listOf(reference, empty, upcomingTabs, purchaseFar, purchaseInstalments, historyGuard, askAmount, backupRestore)
+    private val lastPaymentTomorrow = LabScenario(
+        id = "last-payment-tomorrow",
+        title = "Last payment tomorrow (v0.9.1)",
+        description = "A daily series that ends in 3 days; the clock starts at 11:55, five minutes before the 12:00 reminder time.",
+        checklist = listOf(
+            "Lab card: turn System notifications on (allow the permission when asked).",
+            "After 12:00 (5 minutes), tap Run reminder check now: the bell gets 'Last payment: Trial subscription -5 TND ends 15 OCT. Extend?'.",
+            "Tap that row: the series sheet opens with the Extend choices. Extend by +1 month: the reminder row disappears at the next check.",
+            "Time machine +2 d: the last payment is tomorrow; its row on 15 OCT carries the 'Last' tag in Upcoming and on the Calendar.",
+        ),
+        clock = LocalDateTime.of(BASE_DAY, LocalTime.of(11, 55)),
+        seed = { t ->
+            LabSeed(
+                settings = settings(200, t.minusDays(2)),
+                rules = listOf(series(1, "Trial subscription", 5, TxKind.EXPENSE, RecurrencePattern.Daily, t, end = t.plusDays(3))),
+            )
+        },
+    )
+
+    private val overduePending = LabScenario(
+        id = "overdue-pending",
+        title = "Overdue and pending items on Home (v0.9.1)",
+        description = "Five items waiting, two of them income, from 10 days ago to today, plus one accepted item and one for later.",
+        checklist = listOf(
+            "Home: Available is 340 TND (400 minus the accepted Groceries): waiting items never change it, however overdue.",
+            "Under 'Waiting for you' the cards run oldest first: Rent (02 OCT), Salary (07 OCT), Phone (09 OCT), Pharmacy (11 OCT), Lunch (12 OCT).",
+            "The status line reads 'Next: Lunch -15 TND, 12 OCT'. Accept Rent: Available drops to 220 TND and the card goes.",
+            "Reject Phone: it disappears for good (after the question). Accept Salary: Available rises by 300 TND.",
+        ),
+        clock = at(BASE_DAY),
+        seed = { t ->
+            LabSeed(
+                settings = settings(400, t.minusDays(12)),
+                transactions = listOf(
+                    one(t.minusDays(10), 120, "Rent"),
+                    one(t.minusDays(5), 300, "Salary", TxKind.INCOME),
+                    one(t.minusDays(3), 35, "Phone"),
+                    one(t.minusDays(1), 25, "Pharmacy"),
+                    one(t, 15, "Lunch"),
+                    one(t.minusDays(8), 60, "Groceries", status = TxStatus.CONFIRMED),
+                    one(t.plusDays(4), 80, "Bonus", TxKind.INCOME),
+                ),
+            )
+        },
+    )
+
+    private val homeStates = LabScenario(
+        id = "home-states",
+        title = "Home states (v0.10.0)",
+        description = "Normal now; a shortage ahead after the time machine moves 30 days; empty and crowded states via the other scenarios.",
+        checklist = listOf(
+            "Normal: Home shows 500 TND and the quiet line 'Next: Rent -300 TND, 05 NOV' (plain text, not red).",
+            "Time machine +30 d: the line turns red, 'Short by 250 TND before 06 DEC 2027'. Tap it: the Calendar opens on that day.",
+            "Rent is now overdue: its card sits under 'Waiting for you'. Accept it: Available becomes 200 TND.",
+            "Empty: Reset lab data shows the balance and the lines 'Nothing pending' and no status line.",
+            "Many pending: load 'Overdue and pending items on Home' for five cards.",
+        ),
+        clock = at(BASE_DAY),
+        seed = { t ->
+            LabSeed(
+                settings = settings(500, t),
+                transactions = listOf(one(t.plusDays(24), 300, "Rent"), one(t.plusDays(420), 450, "Car repair")),
+            )
+        },
+    )
+
+    private val smartSuggestions = LabScenario(
+        id = "smart-suggestions",
+        title = "Smart suggestions (v0.10.0)",
+        description = "History with repeating names (Gym, Rent, Salary) and one-time ones (Coffee beans, Taxi, Pharmacy, Refund).",
+        checklist = listOf(
+            "EXPENSE: the Amount step shows three small chips, 12, 22 and 25 TND (the most recent different amounts); tap one: the amount fills.",
+            "Name step: type Gym. One line appears: 'Same as last time: 75 TND, every week'. Tap it: amount and schedule fill and the wizard jumps to Review.",
+            "Type Coffee beans: 'Same as last time: 22 TND' (the newer of 18 and 22). Rent: '300 TND, every month'. Yoga: no line.",
+            "INCOME: chips 80 and 1 200 TND. Name Salary: 'Same as last time: 1 200 TND, every month'. EXPENSE named Salary: no line.",
+        ),
+        clock = at(BASE_DAY),
+        seed = { t ->
+            val gym = series(1, "Gym", 75, TxKind.EXPENSE, RecurrencePattern.Weekly(DayOfWeek.MONDAY), LocalDate.of(2026, 9, 7))
+            val rent = series(2, "Rent", 300, TxKind.EXPENSE, RecurrencePattern.DayOfMonth(5), LocalDate.of(2026, 9, 5))
+            val salary = series(3, "Salary", 1200, TxKind.INCOME, RecurrencePattern.MonthLast, LocalDate.of(2026, 9, 30))
+            val done = listOf(
+                answered(gym, LocalDate.of(2026, 9, 7)), answered(gym, LocalDate.of(2026, 9, 14)), answered(gym, LocalDate.of(2026, 9, 21)),
+                answered(gym, LocalDate.of(2026, 9, 28)), answered(gym, LocalDate.of(2026, 10, 5)),
+                answered(rent, LocalDate.of(2026, 9, 5)), answered(rent, LocalDate.of(2026, 10, 5)),
+                answered(salary, LocalDate.of(2026, 9, 30)),
+            )
+            LabSeed(
+                settings = settings(800, LocalDate.of(2026, 9, 1)),
+                rules = listOf(gym, rent, salary),
+                transactions = done + listOf(
+                    one(LocalDate.of(2026, 9, 20), 18, "Coffee beans", status = TxStatus.CONFIRMED),
+                    one(LocalDate.of(2026, 10, 8), 22, "Coffee beans", status = TxStatus.CONFIRMED),
+                    one(LocalDate.of(2026, 10, 10), 12, "Taxi", status = TxStatus.CONFIRMED),
+                    one(LocalDate.of(2026, 10, 2), 25, "Pharmacy", status = TxStatus.CONFIRMED),
+                    one(LocalDate.of(2026, 10, 3), 80, "Refund", TxKind.INCOME, TxStatus.CONFIRMED),
+                ),
+            )
+        },
+    )
+
+    val all: List<LabScenario> = listOf(
+        reference, empty, upcomingTabs, purchaseFar, purchaseInstalments, historyGuard, askAmount, backupRestore,
+        lastPaymentTomorrow, overduePending, homeStates, smartSuggestions,
+    )
 
     fun byId(id: String): LabScenario? = all.firstOrNull { it.id == id }
 }

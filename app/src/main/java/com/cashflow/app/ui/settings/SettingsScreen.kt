@@ -75,8 +75,8 @@ fun SettingsScreen(
 
     Column(
         Modifier.fillMaxSize().verticalScroll(scrollState).padding(
-            start = 20.dp,
-            end = 20.dp,
+            start = Spacing.l,
+            end = Spacing.l,
             top = contentPadding.calculateTopPadding() + Spacing.l,
             bottom = contentPadding.calculateBottomPadding() + Spacing.xl,
         ),

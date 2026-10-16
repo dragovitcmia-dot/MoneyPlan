@@ -242,6 +242,9 @@ def launch():
         sh(f"am force-stop {PKG}")
         if attempt == 1:
             sh(f"pm clear {PKG}")
+            # `pm clear` also revokes runtime permissions: grant the notification permission again so Android's own
+            # "Allow Cashflow to send you notifications?" box never covers the app during the walk.
+            sh(f"pm grant {PKG} android.permission.POST_NOTIFICATIONS", check=False)
             adb("logcat", "-c", check=False)
         time.sleep(3)
         sh(f"monkey -p {PKG} -c android.intent.category.LAUNCHER 1")
@@ -533,6 +536,10 @@ def auto_accept_flow(name):
     screenshot(f"{name}-settings-auto-on")
     tap_text(TEXT_HOME, scroll=False)
     time.sleep(3)
+    # The Home list keeps its scroll position from the earlier walks; the balance is the first item, and a scrolled-off item is not in
+    # the accessibility tree at all (that, not the app, was why "Available" could not be read before v0.10.0).
+    scroll_to_top(8)
+    time.sleep(1)
     # Daily income of earlier days is caught up at once; today's only from the "Remind me at" time (12:00).
     income_days = max((today - _dt.date(2026, 10, 11)).days, 0) + (1 if now.hour >= 12 and today >= _dt.date(2026, 10, 11) else 0)
     want = str(REF_BALANCE + 30 * income_days)
@@ -542,10 +549,17 @@ def auto_accept_flow(name):
     pending_expenses = sum(1 for i in range((today - REF_START).days + 1) if ref_expenses_on(REF_START + _dt.timedelta(days=i)))
     pending_income_today = 1 if (now.hour < 12 and today >= _dt.date(2026, 10, 11)) else 0
     want_waiting = pending_expenses + pending_income_today
-    got_waiting = waiting_count()
-    if got_waiting != want_waiting:
-        problems.append(f"{name}: waiting count should be {want_waiting} (expenses never auto-accepted) but is {got_waiting}")
-    print(f"  auto-accept: Available {got} (expected {want}), waiting {got_waiting} (expected {want_waiting})")
+    # The "N waiting" chip is gone: the pending cards sit under the header "Waiting for you" (expenses are never auto-accepted).
+    header_present = False
+    for _ in range(6):
+        if any((t.strip() == S["waiting_header"]) for t, _, _ in (dump_nodes() or [])):
+            header_present = True
+            break
+        swipe_up(0.7, 0.4)
+    if want_waiting > 0 and not header_present:
+        problems.append(f"{name}: {want_waiting} items should still be waiting (expenses never auto-accepted) but the header '{S['waiting_header']}' was not found")
+    print(f"  auto-accept: Available {got} (expected {want}), waiting header {'shown' if header_present else 'not shown'} (items expected: {want_waiting})")
+    scroll_to_top(8)
     screenshot(f"{name}-home-auto-income")
     return problems
 
@@ -584,6 +598,39 @@ def wizard_walk(name):
         print("  wizard walk:", e)
         recover_to_home()
         return [f"{name}: wizard walk: {e}"]
+    return []
+
+
+def wizard_review_walk(name):
+    """A big expense: the Below-zero screen, then (Add anyway) the Review screen; leaves through Discard."""
+    try:
+        tap_text(TEXT_EXPENSE)
+        find("1", scroll=False, last=True)
+        for digit in ("9", "9", "9"):
+            tap_text(digit, last=True, scroll=False)
+        tap_text(S["wizard_next"], scroll=False)
+        time.sleep(1.5)
+        sh("input text Laptop")
+        time.sleep(0.8)
+        finish_name_step(S["timing_repeats"])
+        tap_text(S["wizard_next"], scroll=False)  # When: Now
+        time.sleep(2.5)
+        find(S["dip_title"], scroll=False, timeout=12)
+        screenshot(f"{name}-wizard-below-zero")
+        tap_text(S["dip_add_anyway"], scroll=False)
+        time.sleep(1.5)
+        find(S["wizard_add_expense"], scroll=False, timeout=10)
+        screenshot(f"{name}-wizard-review")
+        sh("input keyevent 4")
+        time.sleep(1.2)
+        find(S["wizard_keep_going"], scroll=False, timeout=8)
+        tap_text(S["wizard_discard"], scroll=False)
+        time.sleep(1.2)
+    except NotFound as e:
+        screenshot(f"{name}-wizard-review-FAILED")
+        print("  wizard review walk:", e)
+        recover_to_home()
+        return [f"{name}: wizard review walk: {e}"]
     return []
 
 
@@ -649,6 +696,14 @@ def series_walk(name):
         time.sleep(1.5)
         scroll_to_top(15)  # the list keeps its position from the earlier walk: the tabs are at the very top
         screenshot(f"{name}-upcoming-chips")
+        tap_text(S["filter_expenses"], scroll=False)
+        time.sleep(1.2)
+        screenshot(f"{name}-upcoming-expenses")
+        tap_text(S["filter_income"], scroll=False)
+        time.sleep(1.2)
+        screenshot(f"{name}-upcoming-income")
+        tap_text(S["filter_all"], scroll=False)
+        time.sleep(1)
         tap_text(S["filter_repeating"], scroll=False)  # the repeat toggle at the end of the tab row
         time.sleep(1.5)
         screenshot(f"{name}-series-list")
@@ -780,6 +835,7 @@ def run_config(name, night, font, size, density):
         sh("input keyevent 4")
         time.sleep(1.2)
         extra += wizard_walk(name)
+        extra += wizard_review_walk(name)
         if name in CALENDAR_CONFIGS:
             today = device_now().date()
             extra += calendar_flow(name, today)
@@ -1083,7 +1139,7 @@ def run_hero_animation():
 
 def main():
     problems = []
-    only = os.environ.get("SMOKE_CONFIGS", "dark-720").split(",")  # best effort: one configuration by default
+    only = os.environ.get("SMOKE_CONFIGS", "dark-normal,light-normal,dark-font2").split(",")  # the visual gate: dark normal, light normal, dark font scale 2.0
     try:
         for cfg in CONFIGS:
             if cfg[0] in only or "all" in only:

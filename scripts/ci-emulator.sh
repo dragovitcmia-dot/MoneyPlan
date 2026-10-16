@@ -9,6 +9,8 @@ APK=${1:-apk/app-preview.apk}
 adb shell pm disable-user --user 0 com.google.android.googlequicksearchbox || true
 
 adb install -r "$APK"
+# Android's own notification-permission box must never cover the app during the walks (smoke.py also grants it after each pm clear).
+adb shell pm grant "$PKG" android.permission.POST_NOTIFICATIONS || true
 
 PID=""
 CRASH=""
@@ -43,4 +45,4 @@ python3 scripts/geometry.py
 
 # Best effort: screenshots of one configuration (dark theme, normal font). A failure here never fails the build;
 # the gate is the launch check above.
-timeout 900 python3 scripts/smoke.py screens || echo "SMOKE (best effort) did not finish cleanly: not a build failure"
+timeout 2700 python3 scripts/smoke.py screens || echo "SMOKE (best effort) did not finish cleanly: not a build failure"
