@@ -45,4 +45,4 @@ python3 scripts/geometry.py
 
 # Best effort: screenshots of one configuration (dark theme, normal font). A failure here never fails the build;
 # the gate is the launch check above.
-timeout 2700 python3 scripts/smoke.py screens || echo "SMOKE (best effort) did not finish cleanly: not a build failure"
+timeout 4500 python3 scripts/smoke.py screens || echo "SMOKE (best effort) did not finish cleanly: not a build failure"

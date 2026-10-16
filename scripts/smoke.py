@@ -535,7 +535,13 @@ def auto_accept_flow(name):
     now = device_now()
     today = now.date()
     scroll_to_top()
-    tap_text(S["auto_income_title"], scroll=False, last=True)  # the switch has the same description as its label
+    # The label is a TEXT node and the switch carries the same words as its DESCRIPTION: tap the description (the switch). The old
+    # "bottom-most match" picked the label once the helper line under it was gone (the label's top edge then sat below the switch's).
+    switch = [b for t, d, b in (dump_nodes() or []) if d.strip() == S["auto_income_title"] and not t.strip()]
+    if not switch:
+        raise NotFound(f"the switch described as {S['auto_income_title']!r} was not found")
+    sh(f"input tap {(switch[0][0] + switch[0][2]) // 2} {(switch[0][1] + switch[0][3]) // 2}")
+    time.sleep(0.8)
     time.sleep(3)  # the catch-up runs when the setting changes
     screenshot(f"{name}-settings-auto-on")
     tap_text(TEXT_HOME, scroll=False)
