@@ -318,7 +318,7 @@ private fun CalendarStrip(cells: List<StripCell>, option: PurchaseOption) {
         modifier = Modifier.fillMaxWidth().semantics { contentDescription = desc },
         horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
     ) {
-        items(cells, key = { it.date.toEpochDay() }) { cell -> StripCellView(cell) }
+        items(cells, key = { it.date.toEpochDay() }) { cell -> com.cashflow.app.ui.theme.CappedFontScale { StripCellView(cell) } }
     }
 }
 

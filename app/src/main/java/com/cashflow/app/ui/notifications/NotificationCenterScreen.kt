@@ -89,6 +89,7 @@ fun NotificationCenterScreen(
     Column(
         Modifier.fillMaxSize().padding(top = contentPadding.calculateTopPadding(), start = Spacing.s, end = Spacing.l),
     ) {
+        com.cashflow.app.ui.theme.CappedFontScale {
         Row(Modifier.fillMaxWidth().heightIn(min = 56.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onClose, modifier = Modifier.size(48.dp)) {
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.center_back))
@@ -97,6 +98,7 @@ fun NotificationCenterScreen(
             TextButton(onClick = { scope.launch { app.notificationCenter.markAllRead() } }, enabled = anyUnread, modifier = Modifier.heightIn(min = 48.dp)) {
                 Text(stringResource(R.string.center_mark_all))
             }
+        }
         }
         if (entries.isEmpty()) {
             Text(

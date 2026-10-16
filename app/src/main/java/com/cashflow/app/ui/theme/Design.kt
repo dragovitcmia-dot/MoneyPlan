@@ -33,3 +33,16 @@ object Motion {
     fun <T> fast(): TweenSpec<T> = tween(FAST_MS, easing = Easing)
     fun <T> standard(): TweenSpec<T> = tween(STANDARD_MS, easing = Easing)
 }
+
+/**
+ * Content whose boxes have a fixed size (the tab row, the strip cells, a screen header next to an action) keeps the user's
+ * font size up to [max] and no further, like the bottom bar: at 2.0 the labels would not fit their boxes at all.
+ */
+@androidx.compose.runtime.Composable
+fun CappedFontScale(max: Float = 1.3f, content: @androidx.compose.runtime.Composable () -> Unit) {
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    androidx.compose.runtime.CompositionLocalProvider(
+        androidx.compose.ui.platform.LocalDensity provides androidx.compose.ui.unit.Density(density.density, minOf(density.fontScale, max)),
+        content = content,
+    )
+}

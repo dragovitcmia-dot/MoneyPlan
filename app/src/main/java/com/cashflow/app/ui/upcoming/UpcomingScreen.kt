@@ -151,11 +151,13 @@ fun UpcomingScreen(
         }
         item(key = "filters", contentType = "filters") {
             // One row: three equal tabs (All, Expenses, Income) and, at the end, the toggle between occurrences and the series list.
-            UpcomingTabs(
-                view = view,
-                onType = { haptics.tick(); upcoming.setType(it) },
-                onToggleSeries = { haptics.tick(); upcoming.toggleSeries() },
-            )
+            com.cashflow.app.ui.theme.CappedFontScale {
+                UpcomingTabs(
+                    view = view,
+                    onType = { haptics.tick(); upcoming.setType(it) },
+                    onToggleSeries = { haptics.tick(); upcoming.toggleSeries() },
+                )
+            }
         }
 
         if (view.showSeries) {
@@ -466,6 +468,8 @@ private fun UpcomingTabs(view: UpcomingView, onType: (UpcomingType) -> Unit, onT
                     Text(
                         stringResource(label),
                         style = MaterialTheme.typography.titleSmall,
+                        maxLines = 1,
+                        softWrap = false,
                         fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
                         color = if (selected) tabColor else MaterialTheme.colorScheme.onSurfaceVariant,
                     )

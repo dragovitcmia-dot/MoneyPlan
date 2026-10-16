@@ -50,7 +50,7 @@ CALENDAR_CONFIGS = {"dark-normal", "light-normal", "dark-font2", "dark-320dp", "
 # Configurations that also screenshot the bottom of Settings.
 SETTINGS_BOTTOM_CONFIGS = {"dark-normal", "dark-font2", "dark-720"}
 # The configuration that also switches "Accept my income automatically" on and checks what that does.
-AUTO_ACCEPT_CONFIG = "dark-720"
+AUTO_ACCEPT_CONFIG = "dark-normal"
 SAMPLE_MONTH = (2026, 11)  # the reference scenario's interesting month
 
 
@@ -494,7 +494,11 @@ def settings_flow(name):
     time.sleep(0.6)
     screenshot(f"{name}-settings-backup")  # the Backup card
     try:
-        tap_text(S["backup_now"], scroll=False, timeout=6)
+        try:
+            tap_text(S["backup_now"], scroll=False, timeout=4)
+        except NotFound:
+            swipe_down()  # the two swipes above can overshoot on a taller screen: look one screen back up
+            tap_text(S["backup_now"], scroll=True, timeout=10)
         time.sleep(3)
         screenshot(f"{name}-settings-backup-after")  # a Manual snapshot is in the list
     except NotFound as e:
@@ -792,7 +796,8 @@ def plan_create_walk(name):
         screenshot(f"{name}-plan-done")
         tap_text(NAV_UPCOMING, scroll=False)
         time.sleep(1.5)
-        find("Phone", scroll=True, timeout=20, contains=True)
+        scroll_to_top(15)  # the list keeps its position from the earlier walks; the planned item can be above or below it
+        find_slow("Phone", max_swipes=60)
         screenshot(f"{name}-plan-in-upcoming")
     except NotFound as e:
         screenshot(f"{name}-plan-create-FAILED")

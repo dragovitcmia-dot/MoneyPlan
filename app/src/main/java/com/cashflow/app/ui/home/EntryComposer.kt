@@ -341,14 +341,17 @@ fun EntryComposer(
 
         if (wizard.step != WizardStep.BELOW_ZERO) {
             // Back and Next / Add: white bold text on the kind color.
-            Row(Modifier.fillMaxWidth().padding(horizontal = Spacing.xl, vertical = Spacing.m), horizontalArrangement = Arrangement.spacedBy(Spacing.m)) {
+            val last = wizard.step == WizardStep.REVIEW
+            val stacked = androidx.compose.ui.platform.LocalDensity.current.fontScale > 1.3f // a very large font: the buttons sit one above the other
+            val backButton = @Composable { m: Modifier ->
                 AppButton(
                     stringResource(if (EntryWizard.back(wizard) == null) R.string.action_cancel else R.string.wizard_back),
                     onClick = ::goBack,
-                    modifier = Modifier.weight(1f).heightIn(min = 64.dp),
+                    modifier = m.heightIn(min = 64.dp),
                     style = AppButtonStyle.Outlined,
                 )
-                val last = wizard.step == WizardStep.REVIEW
+            }
+            val nextButton = @Composable { m: Modifier ->
                 AppButton(
                     text = stringResource(
                         when {
@@ -360,10 +363,21 @@ fun EntryComposer(
                     ),
                     onClick = { if (last) add() else goNext() },
                     enabled = !saving,
-                    modifier = Modifier.weight(1f).heightIn(min = 64.dp),
+                    modifier = m.heightIn(min = 64.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = accentFill, contentColor = colors.buttonLabel),
-                    textStyle = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                    textStyle = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                 )
+            }
+            if (stacked) {
+                Column(Modifier.fillMaxWidth().padding(horizontal = Spacing.xl, vertical = Spacing.m), verticalArrangement = Arrangement.spacedBy(Spacing.s)) {
+                    nextButton(Modifier.fillMaxWidth())
+                    backButton(Modifier.fillMaxWidth())
+                }
+            } else {
+                Row(Modifier.fillMaxWidth().padding(horizontal = Spacing.xl, vertical = Spacing.m), horizontalArrangement = Arrangement.spacedBy(Spacing.m)) {
+                    backButton(Modifier.weight(1f))
+                    nextButton(Modifier.weight(1f))
+                }
             }
         }
 
