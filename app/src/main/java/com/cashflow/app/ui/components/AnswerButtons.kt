@@ -1,6 +1,7 @@
 package com.cashflow.app.ui.components
 
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import com.cashflow.app.ui.theme.Spacing
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -35,7 +36,7 @@ fun AnswerButtons(
     acceptEnabled: Boolean = true,
     size: Dp = 72.dp,
 ) {
-    Row(modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(32.dp, Alignment.CenterHorizontally)) {
+    Row(modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Spacing.xl, Alignment.CenterHorizontally)) {
         RoundIconButton(Icons.Filled.Close, stringResource(R.string.action_reject), MaterialTheme.cashflow.expenseFill, true, onReject, size)
         RoundIconButton(Icons.Filled.Check, stringResource(R.string.action_accept), MaterialTheme.cashflow.incomeFill, acceptEnabled, onAccept, size)
     }
@@ -55,7 +56,7 @@ private fun RoundIconButton(
         onClick = onClick,
         enabled = enabled,
         modifier = Modifier.size(size).pressScale(source),
-        shape = CircleShape,
+        shape = MaterialTheme.shapes.medium, // no pills: only the EXPENSE / INCOME buttons are fully rounded
         color = if (enabled) fill else MaterialTheme.colorScheme.surfaceVariant,
         contentColor = MaterialTheme.cashflow.buttonLabel,
         interactionSource = source,
@@ -74,11 +75,11 @@ private fun RoundIconButton(
 fun SwipeHint(modifier: Modifier = Modifier) {
     val colors = MaterialTheme.cashflow
     Row(modifier.fillMaxWidth().clearAndSetSemantics {}, horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.s)) {
             Icon(Icons.Filled.Close, contentDescription = null, tint = colors.expenseFill, modifier = Modifier.size(28.dp))
             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(24.dp))
         }
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.s)) {
             Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(24.dp))
             Icon(Icons.Filled.Check, contentDescription = null, tint = colors.incomeFill, modifier = Modifier.size(28.dp))
         }

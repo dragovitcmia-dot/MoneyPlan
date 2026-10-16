@@ -6,6 +6,7 @@ PKG=com.cashflow.app.lab
 APK=${1:-apk-lab/app-lab.apk}
 
 adb install -r "$APK"
+adb shell pm grant "$PKG" android.permission.POST_NOTIFICATIONS || true
 # both apps are installed now: the real one must still be there, untouched
 adb shell pm list packages | grep -q "package:com.cashflow.app$" && echo "real app still installed next to the Lab"
 

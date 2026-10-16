@@ -1,6 +1,7 @@
 package com.cashflow.app.ui.items
 
 import androidx.compose.foundation.layout.Arrangement
+import com.cashflow.app.ui.theme.Spacing
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -103,13 +104,13 @@ fun ItemDetailsSheet(
 
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
         Column(
-            Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp).padding(bottom = 16.dp).navigationBarsPadding(),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
+            Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = Spacing.xl).padding(bottom = Spacing.l).navigationBarsPadding(),
+            verticalArrangement = Arrangement.spacedBy(Spacing.l),
         ) {
             Text(stringResource(R.string.details_title), style = MaterialTheme.typography.headlineSmall)
             Text(label, style = MaterialTheme.typography.titleLarge)
 
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(Spacing.s)) {
                 DetailRow(stringResource(R.string.detail_type), stringResource(if (income) R.string.detail_kind_income else R.string.detail_kind_expense))
                 DetailRow(
                     stringResource(R.string.detail_amount),
@@ -187,7 +188,7 @@ fun ItemDetailsSheet(
                 // One suggestion, chosen from the nature of the item, and a date picker for everything else.
                 val suggestion = Postpone.suggestionFor(rule?.pattern)
                 val suggestedDate = Postpone.suggestedDate(tx, rule?.pattern, today)
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(Spacing.s), verticalArrangement = Arrangement.spacedBy(Spacing.s)) {
                     if (suggestedDate != null) {
                         AppButton(
                             stringResource(
@@ -238,7 +239,7 @@ fun ItemDetailsSheet(
 
 @Composable
 private fun DetailRow(label: String, value: String, valueColor: androidx.compose.ui.graphics.Color = androidx.compose.ui.graphics.Color.Unspecified) {
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.Top) {
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Spacing.m), verticalAlignment = Alignment.Top) {
         Text(label, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(0.4f))
         Text(
             value,

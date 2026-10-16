@@ -203,7 +203,10 @@ class MainActivity : ComponentActivity() {
                                 ),
                                 selected = tab,
                                 // Every tab always works: with the notification center open, a tap leaves it and shows that tab.
-                                onSelect = { index -> NavLogic.selectTab(NavState(tab, showCenter), index).let { tab = it.tab; showCenter = it.centerOpen } },
+                                onSelect = { index ->
+                                    if (index != tab || showCenter) haptics.tick() // light tick on every tab change
+                                    NavLogic.selectTab(NavState(tab, showCenter), index).let { tab = it.tab; showCenter = it.centerOpen }
+                                },
                             )
                         }
                     },
@@ -212,7 +215,7 @@ class MainActivity : ComponentActivity() {
                     Box(Modifier.fillMaxSize()) {
                         Crossfade(targetState = tab, animationSpec = tween(120), label = "tabs") { selected ->
                             when (selected) {
-                                0 -> HomeScreen(home, odometer, snackbar, padding, homeList)
+                                0 -> HomeScreen(home, odometer, snackbar, padding, homeList, onOpenDay = { day -> navigate(NotificationRoute.CALENDAR, day) })
                                 1 -> CalendarScreen(calendar, home, settings, snackbar, padding)
                                 2 -> UpcomingScreen(upcoming, home, settings, snackbar, padding, upcomingList, openItemId = itemRequest, onOpenItemHandled = { itemRequest = null })
                                 else -> SettingsScreen(settings, app.repository, app.updateManager, padding, settingsScroll)

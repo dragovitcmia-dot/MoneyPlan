@@ -45,7 +45,7 @@ fun AppTopBar(unread: Int, onBell: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         // The Lab build shows its amber "LAB" tag at the start of the bar; everywhere else this box is empty.
-        Box(Modifier.weight(1f).padding(start = 20.dp)) { com.cashflow.app.lab.LabHooks.Tag() }
+        Box(Modifier.weight(1f).padding(start = com.cashflow.app.ui.theme.Spacing.l)) { com.cashflow.app.lab.LabHooks.Tag() }
         Bell(unread, onBell)
     }
 }

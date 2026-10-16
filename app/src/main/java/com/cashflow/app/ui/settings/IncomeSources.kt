@@ -1,6 +1,7 @@
 package com.cashflow.app.ui.settings
 
 import androidx.compose.foundation.layout.Arrangement
+import com.cashflow.app.ui.theme.Spacing
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -45,22 +46,18 @@ internal fun scheduleSummary(p: RecurrencePattern): String = when (p) {
  */
 @Composable
 internal fun IncomeCard(viewModel: SettingsViewModel, settings: AppSettings) {
+    val haptics = com.cashflow.app.ui.rememberHaptics()
     SectionCard {
         Text(stringResource(R.string.income_card_title), style = MaterialTheme.typography.titleLarge)
         Row(Modifier.fillMaxWidth().heightIn(min = 56.dp), verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f).padding(end = 12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Column(Modifier.weight(1f).padding(end = Spacing.m), verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
                 Text(stringResource(R.string.auto_income_title), style = MaterialTheme.typography.titleMedium)
-                Text(
-                    stringResource(R.string.auto_income_helper),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
             }
             val autoTitle = stringResource(R.string.auto_income_title)
             Switch(
                 modifier = Modifier.semantics { contentDescription = autoTitle },
                 checked = settings.autoAcceptIncome,
-                onCheckedChange = { on -> viewModel.update { it.copy(autoAcceptIncome = on) } },
+                onCheckedChange = { on -> haptics.tick(); viewModel.update { it.copy(autoAcceptIncome = on) } },
             )
         }
     }

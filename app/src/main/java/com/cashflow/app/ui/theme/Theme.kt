@@ -29,6 +29,7 @@ class CashflowColors(
     val elevated: Color,
     /** Red used for text on the app's backgrounds (darker in the light theme to stay readable). */
     val negative: Color,
+    /** GREEN: money coming in (income amounts, income icons, income confirmations). Not an accent and not for positive balances. */
     val positive: Color,
     val expenseFill: Color,
     val incomeFill: Color,
@@ -48,7 +49,7 @@ private fun ThemePalette.extra() = CashflowColors(
     hairline = Color(hairline),
     elevated = Color(elevated),
     negative = Color(negativeText),
-    positive = Color(accent),
+    positive = Color(incomeText),
     expenseFill = Color(expenseFill),
     incomeFill = Color(incomeFill),
     buttonLabel = Color(buttonLabel),
@@ -104,12 +105,13 @@ private fun ThemePalette.toLightScheme(): ColorScheme = lightColorScheme(
     inverseSurface = Color(inverseSurface), inverseOnSurface = Color(inverseOnSurface), inversePrimary = Color(inverseAccent),
 )
 
+/** One card shape (12 dp) for everything that is a card, sheet or button; small steps below it. No pills except the EXPENSE/INCOME buttons. */
 private val CashflowShapes = Shapes(
-    extraSmall = RoundedCornerShape(8.dp),
-    small = RoundedCornerShape(14.dp),
-    medium = RoundedCornerShape(20.dp),
-    large = RoundedCornerShape(24.dp),
-    extraLarge = RoundedCornerShape(28.dp),
+    extraSmall = RoundedCornerShape(Tokens.CELL_CORNER_MAX_DP.dp),
+    small = RoundedCornerShape(8.dp),
+    medium = RoundedCornerShape(Tokens.CARD_CORNER_DP.dp),
+    large = RoundedCornerShape(Tokens.CARD_CORNER_DP.dp),
+    extraLarge = RoundedCornerShape(Tokens.CARD_CORNER_DP.dp),
 )
 
 /** System font; tabular figures so amounts line up; nothing smaller than 16sp. */
@@ -121,22 +123,23 @@ private fun style(size: Int, weight: FontWeight = FontWeight.Normal, letterSpaci
     fontFeatureSettings = "tnum",
 )
 
+/**
+ * The type scale: hero (56, the balance), title (24), body (18), label (16, medium) and caption (16, plain). The Material slots
+ * are mapped onto these five; screens use the slots, so one change here changes every screen.
+ */
+private val Hero = style(Tokens.HERO_SP, FontWeight.SemiBold, (-1).sp)
+private val Title = style(Tokens.TITLE_SP, FontWeight.SemiBold)
+private val BodyStrong = style(Tokens.BODY_SP, FontWeight.SemiBold)
+private val Body = style(Tokens.BODY_SP)
+private val Label = style(Tokens.LABEL_SP, FontWeight.Medium)
+private val Caption = style(Tokens.CAPTION_SP)
+
 private val CashflowTypography = Typography(
-    displayLarge = style(56, FontWeight.SemiBold, (-1).sp),
-    displayMedium = style(44, FontWeight.SemiBold),
-    displaySmall = style(36, FontWeight.SemiBold),
-    headlineLarge = style(32, FontWeight.SemiBold),
-    headlineMedium = style(28, FontWeight.SemiBold),
-    headlineSmall = style(24, FontWeight.SemiBold),
-    titleLarge = style(22, FontWeight.SemiBold),
-    titleMedium = style(18, FontWeight.SemiBold),
-    titleSmall = style(16, FontWeight.Medium),
-    bodyLarge = style(18),
-    bodyMedium = style(16),
-    bodySmall = style(16),
-    labelLarge = style(16, FontWeight.Medium),
-    labelMedium = style(16, FontWeight.Medium),
-    labelSmall = style(16, FontWeight.Medium),
+    displayLarge = Hero, displayMedium = Hero, displaySmall = Hero,
+    headlineLarge = Title, headlineMedium = Title, headlineSmall = Title,
+    titleLarge = Title, titleMedium = BodyStrong, titleSmall = Label,
+    bodyLarge = Body, bodyMedium = Caption, bodySmall = Caption,
+    labelLarge = Label, labelMedium = Label, labelSmall = Label,
 )
 
 /** No dynamic color: the palette is the brand. Follows the system light/dark setting. */

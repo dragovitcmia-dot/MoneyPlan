@@ -1,6 +1,7 @@
 package com.cashflow.app.ui.settings
 
 import androidx.compose.foundation.layout.Arrangement
+import com.cashflow.app.ui.theme.Spacing
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -42,7 +43,7 @@ internal fun AppUpdatesSection(manager: UpdateManager) {
 
         when (val s = state) {
             UpdateState.Idle -> Unit
-            UpdateState.Checking -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            UpdateState.Checking -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.m)) {
                 CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 3.dp)
                 Text(stringResource(R.string.checking), style = MaterialTheme.typography.bodyLarge)
             }

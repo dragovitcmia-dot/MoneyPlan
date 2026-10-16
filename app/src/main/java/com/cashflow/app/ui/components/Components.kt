@@ -10,6 +10,8 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.interaction.InteractionSource
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.background
+import androidx.compose.ui.semantics.heading
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -48,6 +50,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.foundation.layout.size
+import com.cashflow.app.ui.theme.Spacing
 import com.cashflow.app.ui.theme.cashflow
 import androidx.compose.ui.composed
 import androidx.compose.ui.graphics.Color
@@ -76,7 +79,7 @@ fun Modifier.pressScale(interactionSource: InteractionSource): Modifier = compos
     val pressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(
         targetValue = if (pressed) 0.96f else 1f,
-        animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMedium),
+        animationSpec = com.cashflow.app.ui.theme.Motion.fast(),
         label = "pressScale",
     )
     drawWithContent {
@@ -110,17 +113,19 @@ fun AppButton(
     when (style) {
         AppButtonStyle.Primary -> Button(
             onClick, m, enabled = enabled, elevation = null, interactionSource = source,
+            shape = shape ?: MaterialTheme.shapes.medium,
             colors = colors ?: ButtonDefaults.buttonColors(),
         ) { Text(text, textAlign = TextAlign.Center, style = textStyle ?: LocalTextStyle.current) }
         AppButtonStyle.Tonal -> FilledTonalButton(
             onClick, m, enabled = enabled, elevation = null, interactionSource = source,
-            shape = shape ?: ButtonDefaults.filledTonalShape,
+            shape = shape ?: MaterialTheme.shapes.medium,
             colors = if (contentColor != null) ButtonDefaults.filledTonalButtonColors(contentColor = contentColor) else ButtonDefaults.filledTonalButtonColors(),
         ) {
             Text(text, textAlign = TextAlign.Center)
         }
         AppButtonStyle.Outlined -> OutlinedButton(
             onClick, m, enabled = enabled, interactionSource = source,
+            shape = shape ?: MaterialTheme.shapes.medium,
             border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
             colors = if (contentColor != null) ButtonDefaults.outlinedButtonColors(contentColor = contentColor) else ButtonDefaults.outlinedButtonColors(),
         ) { Text(text, textAlign = TextAlign.Center, style = textStyle ?: LocalTextStyle.current) }
@@ -139,7 +144,7 @@ fun AppCard(
         containerColor = if (elevated) MaterialTheme.cashflow.elevated else MaterialTheme.colorScheme.surface,
     )
     val border = BorderStroke(1.dp, MaterialTheme.cashflow.hairline)
-    val shape = MaterialTheme.shapes.large
+    val shape = MaterialTheme.shapes.medium // the one card shape (12 dp)
     if (onClick == null) {
         Card(modifier, shape = shape, colors = colors, border = border, elevation = CardDefaults.cardElevation(0.dp), content = content)
     } else {
@@ -161,7 +166,7 @@ fun AppCard(
 @Composable
 fun SectionCard(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
     AppCard(modifier.fillMaxWidth()) {
-        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp), content = content)
+        Column(Modifier.padding(Spacing.l), verticalArrangement = Arrangement.spacedBy(Spacing.m), content = content)
     }
 }
 
@@ -196,7 +201,7 @@ fun LabeledTextField(
     /** Applied to the text field itself (e.g. a focus requester). */
     fieldModifier: Modifier = Modifier,
 ) {
-    Column(modifier.semantics(mergeDescendants = true) {}, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    Column(modifier.semantics(mergeDescendants = true) {}, verticalArrangement = Arrangement.spacedBy(Spacing.s)) {
         CompositionLocalProvider(LocalContentColor provides if (isError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant) {
             ProvideTextStyle(MaterialTheme.typography.labelLarge) { label() }
         }
@@ -240,9 +245,78 @@ fun NameWithRepeat(name: String, repeating: Boolean, income: Boolean, modifier: 
             androidx.compose.material3.Icon(
                 androidx.compose.material.icons.Icons.Filled.Refresh,
                 contentDescription = androidx.compose.ui.res.stringResource(com.cashflow.app.R.string.repeats_label),
-                tint = if (income) MaterialTheme.cashflow.positive else MaterialTheme.cashflow.negative,
+                tint = com.cashflow.app.engine.SemanticColor.ofRepeatIcon(if (income) com.cashflow.app.engine.TxKind.INCOME else com.cashflow.app.engine.TxKind.EXPENSE).color(),
                 modifier = Modifier.padding(start = 6.dp).size(16.dp),
             )
         }
     }
+}
+
+/**
+ * One list-row style for items (Upcoming, the day sheet, the series list): a card at least 56 dp tall with a leading kind badge
+ * (+ green for money in, - red for money out), the name with its repeat arrow, an optional caption, and the signed amount aligned
+ * to the end. A [footer] (tags) goes under the row.
+ */
+@Composable
+fun AppListRow(
+    title: String,
+    kind: com.cashflow.app.engine.TxKind,
+    repeating: Boolean,
+    amountText: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    caption: String? = null,
+    amountColor: Color? = null,
+    struck: Boolean = false,
+    footer: (@Composable () -> Unit)? = null,
+) {
+    val income = kind == com.cashflow.app.engine.TxKind.INCOME
+    val token = com.cashflow.app.engine.SemanticColor.ofKind(kind).color()
+    AppCard(modifier.fillMaxWidth(), onClick = onClick) {
+        Column(Modifier.padding(Spacing.l), verticalArrangement = Arrangement.spacedBy(Spacing.s)) {
+            androidx.compose.foundation.layout.Row(
+                Modifier.fillMaxWidth().heightIn(min = com.cashflow.app.ui.theme.ShapeTokens.rowMinHeight - Spacing.l * 2),
+                verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(Spacing.m),
+            ) {
+                androidx.compose.foundation.layout.Box(
+                    Modifier.size(32.dp).background(token.copy(alpha = 0.16f), MaterialTheme.shapes.small),
+                    contentAlignment = androidx.compose.ui.Alignment.Center,
+                ) {
+                    Text(if (income) "+" else "\u2212", color = token, style = MaterialTheme.typography.titleMedium)
+                }
+                Column(Modifier.weight(1f)) {
+                    NameWithRepeat(title, repeating = repeating, income = income)
+                    if (caption != null) {
+                        Text(caption, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+                Text(
+                    amountText,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = amountColor ?: token,
+                    textDecoration = if (struck) androidx.compose.ui.text.style.TextDecoration.LineThrough else null,
+                )
+            }
+            footer?.invoke()
+        }
+    }
+}
+
+/** The one section-header style: body-strong text with a little air above it. */
+@Composable
+fun SectionHeader(text: String, modifier: Modifier = Modifier) {
+    Text(
+        text,
+        style = MaterialTheme.typography.titleMedium,
+        modifier = modifier.padding(top = Spacing.s).semantics { heading() },
+    )
+}
+
+/** Resolves a semantic [com.cashflow.app.engine.ColorToken] to the theme's color: green in, red out, normal text otherwise. */
+@Composable
+fun com.cashflow.app.engine.ColorToken.color(): Color = when (this) {
+    com.cashflow.app.engine.ColorToken.INCOME -> MaterialTheme.cashflow.positive
+    com.cashflow.app.engine.ColorToken.EXPENSE -> MaterialTheme.cashflow.negative
+    com.cashflow.app.engine.ColorToken.NEUTRAL -> MaterialTheme.colorScheme.onSurface
 }

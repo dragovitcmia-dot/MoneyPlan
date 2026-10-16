@@ -190,3 +190,89 @@ class LabScenariosTest {
         assertTrue(rows(seed, scenario("backup-restore").today(real)).any { it.recurringRuleId == seed.rules.single().id })
     }
 }
+
+/** The v0.10.0 scenarios (and the two v0.9.1 leftovers): the hand-worked numbers their checklists promise. */
+class LabScenariosV10Test {
+    private val real = LocalDate.of(2026, 10, 15)
+    private fun scenario(id: String) = LabScenarios.byId(id)!!
+
+    private fun rows(s: LabSeed, today: LocalDate): List<Transaction> {
+        var next = 1L
+        val seeded = s.transactions.map { it.copy(id = next++) }
+        val generated = s.rules.filter { RuleMaintenance.isActive(it) }.flatMap { rule ->
+            RuleMaintenance.materialize(rule, seeded.filter { it.recurringRuleId == rule.id }, today)
+        }.map { it.copy(id = next++) }
+        return seeded + generated
+    }
+
+    private fun engineAt(id: String, day: LocalDate? = null): Pair<BalanceEngine, LabSeed> {
+        val s = scenario(id)
+        val seed = s.build(real)
+        val today = day ?: s.today(real)
+        return BalanceEngine(seed.settings, rows(seed, s.today(real)).filter { !it.date.isBefore(seed.settings.balanceStartDate) }, today) to seed
+    }
+
+    @Test fun the_last_payment_scenario_ends_in_three_days_and_the_reminder_waits_for_noon() {
+        val s = scenario("last-payment-tomorrow")
+        assertEquals(LocalDateTime.of(2026, 10, 12, 11, 55), s.clock)
+        val seed = s.build(real)
+        val rule = seed.rules.single()
+        assertEquals(d(2026, 10, 15), rule.endDate)
+        val items = rows(seed, d(2026, 10, 12))
+        assertEquals(d(2026, 10, 15), SeriesLast.lastDate(rule, items))
+        assertEquals(4, items.size)
+        val zone = java.time.ZoneId.of("Africa/Tunis")
+        fun at(time: String, day: LocalDate = d(2026, 10, 12)) = day.atTime(java.time.LocalTime.parse(time)).atZone(zone).toInstant()
+        fun last(time: String, day: LocalDate = d(2026, 10, 12)) = Notifications.reconcile(at(time, day), zone, NotificationSettings(), items, seed.rules, emptyList(), emptySet())
+            .filter { it.type == NotificationType.LAST_PAYMENT }
+        assertTrue(last("11:55").isEmpty())
+        val fired = last("12:05").single()
+        assertEquals("Trial subscription −5 TND ends 15 OCT. Extend?", fired.body)
+        assertEquals(1L, fired.ruleId)
+        // two days later (the time machine +2 d) the last payment is tomorrow and the reminder still stands
+        assertEquals(1, last("12:05", d(2026, 10, 14)).size)
+        assertTrue(last("12:05", d(2026, 10, 16)).isEmpty()) // after the last day it is too late
+    }
+
+    @Test fun the_overdue_scenario_has_five_waiting_cards_and_340_available() {
+        val (engine, _) = engineAt("overdue-pending")
+        assertEquals(tnd(340), engine.available())
+        val waiting = engine.toConfirm()
+        assertEquals(listOf("Rent", "Salary", "Phone", "Pharmacy", "Lunch"), waiting.map { it.description })
+        assertEquals(listOf(d(2026, 10, 2), d(2026, 10, 7), d(2026, 10, 9), d(2026, 10, 11), d(2026, 10, 12)), waiting.map { it.date })
+        assertEquals("Next: Lunch −15 TND, 12 OCT", HomeStatusLine.text(HomeStatusLine.of(engine), engine.today))
+    }
+
+    @Test fun home_states_normal_then_shortage_after_thirty_days() {
+        val (day0, seed) = engineAt("home-states")
+        assertEquals(tnd(500), day0.available())
+        assertEquals("Next: Rent −300 TND, 05 NOV", HomeStatusLine.text(HomeStatusLine.of(day0), day0.today))
+        assertTrue(day0.toConfirm().isEmpty())
+        // the car repair (420 days away) is beyond the 400-day forecast on day 0 ...
+        assertTrue(day0.negativeDays().isEmpty())
+        // ... and inside it after the time machine moves 30 days: 500 - 300 - 450 = -250 on 06 DEC 2027
+        val later = BalanceEngine(seed.settings, rows(seed, d(2026, 10, 12)), d(2026, 11, 11))
+        assertEquals(HomeStatus.Short(tnd(250), d(2027, 12, 6)), HomeStatusLine.of(later))
+        assertEquals("Short by 250 TND before 06 DEC 2027", HomeStatusLine.text(HomeStatusLine.of(later), later.today))
+        assertEquals(d(2027, 12, 6), HomeStatusLine.tapDay(HomeStatusLine.of(later)))
+        assertEquals(listOf("Rent"), later.toConfirm().map { it.description }) // the rent is overdue now
+        assertEquals(tnd(500), later.available())
+    }
+
+    @Test fun smart_suggestions_have_the_chips_and_lines_the_checklist_promises() {
+        val s = scenario("smart-suggestions")
+        val seed = s.build(real)
+        val today = s.today(real)
+        val all = rows(seed, today)
+        assertEquals(listOf(tnd(12), tnd(22), tnd(25)), Suggestions.recentAmounts(TxKind.EXPENSE, all, seed.rules, today))
+        assertEquals(listOf(tnd(80), tnd(1200)), Suggestions.recentAmounts(TxKind.INCOME, all, seed.rules, today))
+        fun line(name: String, kind: TxKind = TxKind.EXPENSE) = Suggestions.sameAsLast(name, kind, all, seed.rules)?.let(Suggestions::line)
+        assertEquals("Same as last time: 75 TND, every week", line("Gym"))
+        assertEquals("Same as last time: 22 TND", line("Coffee beans"))
+        assertEquals("Same as last time: 300 TND, every month", line("Rent"))
+        assertEquals("Same as last time: ${Money.formatDisplay(tnd(1200))}, every month", line("Salary", TxKind.INCOME))
+        assertNull(line("Salary"))
+        assertNull(line("Yoga"))
+        assertEquals("Same as last time: 80 TND", line("refund", TxKind.INCOME))
+    }
+}

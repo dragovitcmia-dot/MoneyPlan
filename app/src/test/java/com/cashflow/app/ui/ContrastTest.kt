@@ -176,4 +176,53 @@ class ContrastTest {
             assertTrue("$name unselected label", Contrast.ratio(p.text, p.background) >= 4.5)
         }
     }
+
+    // ---- v0.10.0: green means money in, red means money out; everything else is neutral ------------------------------------------
+
+    private fun spread(c: Long): Long {
+        val ch = listOf((c shr 16) and 0xFF, (c shr 8) and 0xFF, c and 0xFF)
+        return ch.max() - ch.min()
+    }
+
+    @Test fun the_accent_and_everything_selected_are_neutral_in_both_themes() {
+        for ((name, p) in listOf("dark" to Palette.dark, "light" to Palette.light)) {
+            for ((what, color) in listOf(
+                "accent" to p.accent, "on accent" to p.onAccent, "primary container" to p.primaryContainer,
+                "on primary container" to p.onPrimaryContainer, "selected day fill" to p.daySelectedFill, "inverse accent" to p.inverseAccent,
+            )) {
+                assertTrue("$name $what 0x${color.toString(16)} is not neutral (channel spread ${spread(color)})", spread(color) <= 8)
+            }
+        }
+        assertEquals(0xFFE8E8EAL, Palette.dark.accent)
+        assertEquals(0xFF1C1C1EL, Palette.light.accent)
+    }
+
+    @Test fun income_text_is_green_and_is_never_the_accent() {
+        for ((name, p) in listOf("dark" to Palette.dark, "light" to Palette.light)) {
+            val r = (p.incomeText shr 16) and 0xFF
+            val g = (p.incomeText shr 8) and 0xFF
+            val b = p.incomeText and 0xFF
+            assertTrue("$name income text is green", g > r + 40 && g > b + 20)
+            assertTrue(p.incomeText != p.accent)
+            for (bg in listOf(p.background, p.surface, p.elevated)) {
+                assertTrue("$name income text on 0x${bg.toString(16)}: %.2f".format(Contrast.ratio(p.incomeText, bg)), Contrast.ratio(p.incomeText, bg) >= 4.5)
+            }
+            // expense red stays red
+            assertTrue(((p.negativeText shr 16) and 0xFF) > ((p.negativeText shr 8) and 0xFF) + 60)
+        }
+    }
+
+    @Test fun the_neutral_accent_is_a_visible_control_color_on_every_surface() {
+        for (p in listOf(Palette.dark, Palette.light)) {
+            for (bg in listOf(p.background, p.surface, p.elevated)) assertTrue(Contrast.ratio(p.accent, bg) >= 3.0)
+            assertTrue(Contrast.ratio(p.onAccent, p.accent) >= 4.5) // label on a primary non-money button
+            assertTrue(Contrast.ratio(p.onPrimaryContainer, p.primaryContainer) >= 4.5)
+        }
+    }
+
+    @Test fun the_kind_buttons_keep_red_and_green_with_white_text() {
+        assertEquals(0xFFEB0000L, Palette.EXPENSE_RED)
+        assertEquals(0xFF008800L, Palette.INCOME_GREEN)
+        assertEquals(0xFFFFFFFFL, Palette.KIND_LABEL)
+    }
 }

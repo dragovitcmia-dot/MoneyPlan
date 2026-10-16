@@ -1,6 +1,7 @@
 package com.cashflow.app.ui.notifications
 
 import androidx.compose.foundation.background
+import com.cashflow.app.ui.theme.Spacing
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -86,8 +87,9 @@ fun NotificationCenterScreen(
     val anyUnread = entries.any { it.unread }
 
     Column(
-        Modifier.fillMaxSize().padding(top = contentPadding.calculateTopPadding(), start = 8.dp, end = 20.dp),
+        Modifier.fillMaxSize().padding(top = contentPadding.calculateTopPadding(), start = Spacing.s, end = Spacing.l),
     ) {
+        com.cashflow.app.ui.theme.CappedFontScale {
         Row(Modifier.fillMaxWidth().heightIn(min = 56.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onClose, modifier = Modifier.size(48.dp)) {
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.center_back))
@@ -97,18 +99,19 @@ fun NotificationCenterScreen(
                 Text(stringResource(R.string.center_mark_all))
             }
         }
+        }
         if (entries.isEmpty()) {
             Text(
                 stringResource(R.string.center_empty),
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(start = 12.dp, top = 24.dp),
+                modifier = Modifier.padding(start = Spacing.m, top = Spacing.xl),
             )
         } else {
             LazyColumn(
-                Modifier.fillMaxSize().padding(start = 12.dp),
-                contentPadding = PaddingValues(bottom = contentPadding.calculateBottomPadding() + 24.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
+                Modifier.fillMaxSize().padding(start = Spacing.m),
+                contentPadding = PaddingValues(bottom = contentPadding.calculateBottomPadding() + Spacing.xl),
+                verticalArrangement = Arrangement.spacedBy(Spacing.s),
             ) {
                 for ((section, rows) in groups) {
                     item(key = "header-$section") {
@@ -116,7 +119,7 @@ fun NotificationCenterScreen(
                             stringResource(if (section == BellSection.TODAY) R.string.center_today else R.string.center_earlier),
                             style = MaterialTheme.typography.titleMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(top = 8.dp),
+                            modifier = Modifier.padding(top = Spacing.s),
                         )
                     }
                     items(rows, key = { it.id }) { entry ->
@@ -154,7 +157,7 @@ private fun SwipeToRemove(onRemove: () -> Unit, content: @Composable () -> Unit)
         backgroundContent = {
             val active = state.dismissDirection == SwipeToDismissBoxValue.EndToStart
             Box(
-                Modifier.fillMaxSize().clip(MaterialTheme.shapes.medium).background(if (active) MaterialTheme.colorScheme.errorContainer else androidx.compose.ui.graphics.Color.Transparent).padding(horizontal = 24.dp),
+                Modifier.fillMaxSize().clip(MaterialTheme.shapes.medium).background(if (active) MaterialTheme.colorScheme.errorContainer else androidx.compose.ui.graphics.Color.Transparent).padding(horizontal = Spacing.xl),
                 contentAlignment = Alignment.CenterEnd,
             ) {
                 if (active) Icon(Icons.Filled.Delete, contentDescription = label, tint = MaterialTheme.colorScheme.onErrorContainer)
@@ -172,10 +175,10 @@ private fun BellRow(entry: BellEntry, time: String, onClick: () -> Unit) {
             .background(if (entry.unread) colors.surfaceContainerHighest else colors.surface)
             .clickable(onClick = onClick)
             .heightIn(min = 64.dp)
-            .padding(horizontal = 12.dp, vertical = 10.dp)
+            .padding(horizontal = Spacing.m, vertical = Spacing.m)
             .semantics(mergeDescendants = true) { if (entry.unread) contentDescription = "$unreadText. ${entry.title}. ${entry.body}. $time" },
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        horizontalArrangement = Arrangement.spacedBy(Spacing.m),
     ) {
         val cash = MaterialTheme.cashflow
         val tone = BellTones.of(entry.type, entry.amountMillimes)
@@ -185,10 +188,10 @@ private fun BellRow(entry: BellEntry, time: String, onClick: () -> Unit) {
             BellTone.SHORTAGE -> cash.badge to colors.background
             BellTone.INFO -> colors.secondaryContainer to colors.onSecondaryContainer
         }
-        Box(Modifier.size(32.dp).clip(CircleShape).background(fill), contentAlignment = Alignment.Center) {
+        Box(Modifier.size(32.dp).clip(MaterialTheme.shapes.small).background(fill), contentAlignment = Alignment.Center) {
             Icon(iconOf(entry.type), contentDescription = null, tint = ink, modifier = Modifier.size(18.dp))
         }
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
             Text(
                 entry.title,
                 style = MaterialTheme.typography.titleSmall,
@@ -199,7 +202,7 @@ private fun BellRow(entry: BellEntry, time: String, onClick: () -> Unit) {
                 Text(entry.body, style = MaterialTheme.typography.bodyMedium, color = colors.onSurfaceVariant, maxLines = 2)
             }
         }
-        Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(Spacing.s)) {
             Text(time, style = MaterialTheme.typography.labelMedium, color = colors.onSurfaceVariant, maxLines = 1)
             if (entry.unread) Box(Modifier.size(8.dp).clip(CircleShape).background(colors.primary))
         }

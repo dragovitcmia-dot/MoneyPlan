@@ -1,6 +1,7 @@
 package com.cashflow.app.ui.settings
 
 import androidx.compose.foundation.ScrollState
+import com.cashflow.app.ui.theme.Spacing
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -74,12 +75,12 @@ fun SettingsScreen(
 
     Column(
         Modifier.fillMaxSize().verticalScroll(scrollState).padding(
-            start = 20.dp,
-            end = 20.dp,
-            top = contentPadding.calculateTopPadding() + 16.dp,
-            bottom = contentPadding.calculateBottomPadding() + 24.dp,
+            start = Spacing.l,
+            end = Spacing.l,
+            top = contentPadding.calculateTopPadding() + Spacing.l,
+            bottom = contentPadding.calculateBottomPadding() + Spacing.xl,
         ),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
+        verticalArrangement = Arrangement.spacedBy(Spacing.l),
     ) {
         Text(stringResource(R.string.settings_title), style = MaterialTheme.typography.headlineMedium)
         if (current != null) {
