@@ -26,7 +26,7 @@
     <string name="button_expense">EXPENSE</string>
     <string name="button_income">INCOME</string>
     <string name="waiting_header">Waiting for you</string>
-    <string name="caught_up">All caught up</string>
+    <string name="caught_up">Nothing pending</string>
     <string name="action_accept">Accept</string>
     <string name="action_reject">Reject</string>
     <string name="action_cancel">Cancel</string>
@@ -106,7 +106,7 @@
     <string name="day_end_have">You’ll have %1$s TND at the end of this day</string>
     <string name="day_end_had">You had %1$s TND at the end of this day</string>
     <string name="day_end_short">Short by %1$s TND at the end of this day</string>
-    <string name="day_nothing">Nothing planned for this day.</string>
+    <string name="day_nothing">Nothing planned</string>
     <string name="status_waiting">Waiting</string>
     <string name="status_planned">Planned</string>
     <string name="status_done">Accepted</string>
@@ -116,7 +116,7 @@
     <!-- Change one item -->
     <string name="item_edit_title">Change this item</string>
     <string name="item_date_label">Date</string>
-    <string name="item_series_note">Repeating payment. Changes here affect this day only.</string>
+    <string name="item_series_note">This day only</string>
     <string name="item_edit_series">Edit this repeating payment</string>
     <string name="action_mark_waiting">Mark as waiting</string>
     <string name="item_saved">Changes saved</string>
@@ -205,7 +205,7 @@
     <string name="detail_kind_income">Income</string>
     <string name="detail_series_line">%1$s · until %2$s</string>
     <string name="details_edit_item">Change this item</string>
-    <string name="details_future_note">Planned for a later day. You can answer it on its day.</string>
+    <string name="details_future_note">Planned for a later day</string>
 
     <!-- Postpone -->
     <string name="action_postpone">Postpone</string>
@@ -237,8 +237,8 @@
 
     <!-- Add from a day -->
     <string name="timing_happened">Already happened</string>
-    <string name="now_hint_past_expense">Spent on %1$s. It counts on that day.</string>
-    <string name="now_hint_past_income">Received on %1$s. It counts on that day.</string>
+    <string name="now_hint_past_expense">On %1$s</string>
+    <string name="now_hint_past_income">On %1$s</string>
 
     <!-- Upcoming -->
     <string name="upcoming_title">Coming up</string>
@@ -248,7 +248,7 @@
     <string name="upcoming_empty">Nothing coming up</string>
     <string name="group_this_week">This week</string>
     <string name="daily_income_row">Daily income +%1$s TND</string>
-    <string name="daily_income_row_hint">Every day, not listed one by one</string>
+    <string name="daily_income_row_hint">Every day</string>
     <string name="short_by_tag">Short by %1$s TND</string>
 
     <!-- Settings -->
@@ -326,13 +326,13 @@
     <string name="channel_heads_up">Heads-up</string>
     <string name="notif_card_title">Notifications</string>
     <string name="notif_master_title">Notifications</string>
-    <string name="notif_master_helper">Reminders about payments and shortages. Quiet from 22:00 to 08:00.</string>
+    <string name="notif_master_helper">Quiet from 22:00 to 08:00</string>
     <string name="notif_headsup_title">Heads-up</string>
-    <string name="notif_headsup_helper">A week and a day before a payment.</string>
+    <string name="notif_headsup_helper">A week and a day before</string>
     <string name="notif_keep_title">Keep reminding every 2 hours</string>
-    <string name="notif_keep_helper">Until what is due today is answered.</string>
+    <string name="notif_keep_helper">Until answered</string>
     <string name="notif_shortage_title">Shortage alerts</string>
-    <string name="notif_shortage_helper">When money runs short in the next 60 days.</string>
+    <string name="notif_shortage_helper">Next 60 days</string>
     <string name="notif_perm_ok">Allowed by the system.</string>
     <string name="notif_perm_blocked">Blocked by the system. The bell still works.</string>
     <string name="notif_perm_open">Open notification settings</string>
@@ -360,7 +360,7 @@
     <!-- Repeating series: list, sheet, edit, extend -->
     <string name="backup_lab_refused">This is a Lab backup</string>
     <string name="filter_repeating">Repeating</string>
-    <string name="series_list_empty">No repeating payments yet.</string>
+    <string name="series_list_empty">No repeating payments</string>
     <string name="series_tag_ended">Ended</string>
     <string name="tag_last">Last</string>
     <string name="series_next_line">Next: %1$s</string>
@@ -379,6 +379,7 @@
     <string name="series_ask_amount">Ask me the amount each time</string>
     <string name="series_ask_amount_helper">Accepting opens the amount first.</string>
     <string name="series_add_new">Add a new one</string>
+    <string name="series_list_add_one">Add one</string>
     <string name="series_last_payment_title">Last payment</string>
     <string name="series_form_name">Name</string>
 

@@ -1,6 +1,7 @@
 package com.cashflow.app.ui.components
 
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import com.cashflow.app.ui.theme.Spacing
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -37,12 +38,12 @@ fun KindButtons(onExpense: () -> Unit, onIncome: () -> Unit, modifier: Modifier 
         BigActionButton(stringResource(R.string.button_income), colors.incomeFill, colors.buttonLabel, onIncome, m)
     }
     if (stacked) {
-        Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(com.cashflow.app.ui.theme.Spacing.m)) {
             expense(Modifier.fillMaxWidth())
             income(Modifier.fillMaxWidth())
         }
     } else {
-        Row(modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Row(modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(com.cashflow.app.ui.theme.Spacing.m)) {
             expense(Modifier.weight(1f))
             income(Modifier.weight(1f))
         }
@@ -55,16 +56,16 @@ private fun BigActionButton(label: String, fill: Color, labelColor: Color, onCli
     Surface(
         onClick = onClick,
         modifier = modifier.pressScale(source),
-        shape = MaterialTheme.shapes.large,
+        shape = androidx.compose.foundation.shape.CircleShape, // the one place a pill is allowed (with the tab underline)
         color = fill,
         contentColor = labelColor,
         interactionSource = source,
     ) {
-        Box(Modifier.fillMaxWidth().heightIn(min = 80.dp).padding(horizontal = 8.dp, vertical = 12.dp), contentAlignment = Alignment.Center) {
+        Box(Modifier.fillMaxWidth().heightIn(min = 80.dp).padding(horizontal = Spacing.s, vertical = Spacing.m), contentAlignment = Alignment.Center) {
             Text(
                 label.uppercase(),
                 color = labelColor,
-                fontSize = 20.sp,
+                style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
                 textAlign = TextAlign.Center,
             )

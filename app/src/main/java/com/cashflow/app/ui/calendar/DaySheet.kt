@@ -1,6 +1,7 @@
 package com.cashflow.app.ui.calendar
 
 import androidx.compose.foundation.layout.Arrangement
+import com.cashflow.app.ui.theme.Spacing
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -56,8 +57,8 @@ fun DaySheet(
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
         Column(
-            Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp).padding(bottom = 16.dp).navigationBarsPadding(),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
+            Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = Spacing.xl).padding(bottom = Spacing.l).navigationBarsPadding(),
+            verticalArrangement = Arrangement.spacedBy(Spacing.l),
         ) {
             Text(AppDates.withWeekday(date), style = MaterialTheme.typography.headlineSmall)
 
@@ -94,42 +95,22 @@ fun DaySheet(
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun DayItemRow(item: DayItem, today: LocalDate, onClick: () -> Unit) {
     val tx = item.tx
     val income = tx.kind == TxKind.INCOME
     val skipped = tx.status == TxStatus.SKIPPED
-    val colors = MaterialTheme.cashflow
-    AppCard(Modifier.fillMaxWidth(), onClick = onClick) {
-        Row(
-            Modifier.fillMaxWidth().heightIn(min = 56.dp).padding(16.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.Top,
-        ) {
-            Column(Modifier.weight(1f).padding(end = 12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                NameWithRepeat(
-                    tx.description.ifBlank { stringResource(if (income) R.string.item_income else R.string.item_expense) },
-                    repeating = item.fromSeries,
-                    income = income,
-                )
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    Text(statusText(tx, today), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    if (item.last) com.cashflow.app.ui.upcoming.LastTag()
-                }
-            }
-            Text(
-                Money.formatSigned(tx.kind, tx.amount),
-                style = MaterialTheme.typography.titleMedium,
-                color = when {
-                    skipped -> MaterialTheme.colorScheme.onSurfaceVariant
-                    income -> colors.positive
-                    else -> colors.negative
-                },
-                textDecoration = if (skipped) TextDecoration.LineThrough else null,
-            )
-        }
-    }
+    com.cashflow.app.ui.components.AppListRow(
+        title = tx.description.ifBlank { stringResource(if (income) R.string.item_income else R.string.item_expense) },
+        kind = tx.kind,
+        repeating = item.fromSeries,
+        amountText = Money.formatSigned(tx.kind, tx.amount),
+        caption = statusText(tx, today),
+        onClick = onClick,
+        amountColor = if (skipped) MaterialTheme.colorScheme.onSurfaceVariant else null,
+        struck = skipped,
+        footer = if (item.last) ({ com.cashflow.app.ui.upcoming.LastTag() }) else null,
+    )
 }
 
 @Composable

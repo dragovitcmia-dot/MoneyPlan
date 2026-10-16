@@ -1,6 +1,7 @@
 package com.cashflow.app.ui.items
 
 import androidx.compose.animation.AnimatedVisibility
+import com.cashflow.app.ui.theme.Spacing
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
@@ -43,6 +44,7 @@ import com.cashflow.app.ui.Haptics
 import com.cashflow.app.ui.components.AppCard
 import com.cashflow.app.ui.components.NameWithRepeat
 import com.cashflow.app.ui.components.SwipeHint
+import com.cashflow.app.ui.components.color
 import com.cashflow.app.ui.theme.cashflow
 
 /**
@@ -93,7 +95,7 @@ fun WaitingCard(
                 SwipeToDismissBoxValue.Settled -> Color.Transparent
             }
             Box(
-                Modifier.fillMaxSize().clip(MaterialTheme.shapes.large).background(color).padding(horizontal = 28.dp),
+                Modifier.fillMaxSize().clip(MaterialTheme.shapes.large).background(color).padding(horizontal = Spacing.xl),
                 contentAlignment = if (direction == SwipeToDismissBoxValue.StartToEnd) Alignment.CenterStart else Alignment.CenterEnd,
             ) {
                 when (direction) {
@@ -117,9 +119,9 @@ fun WaitingCard(
             },
             onClick = onOpen,
         ) {
-            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(Modifier.padding(Spacing.l), verticalArrangement = Arrangement.spacedBy(Spacing.m)) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Top) {
-                    Column(Modifier.weight(1f).padding(end = 12.dp)) {
+                    Column(Modifier.weight(1f).padding(end = Spacing.m)) {
                         NameWithRepeat(
                             tx.description.ifBlank {
                                 stringResource(if (income) R.string.item_income else R.string.item_expense)
@@ -136,7 +138,7 @@ fun WaitingCard(
                     Text(
                         Money.formatSigned(tx.kind, tx.amount),
                         style = MaterialTheme.typography.titleMedium,
-                        color = if (income) MaterialTheme.colorScheme.primary else MaterialTheme.cashflow.negative,
+                        color = com.cashflow.app.engine.SemanticColor.ofKind(tx.kind).color(),
                     )
                 }
                 footer?.invoke()

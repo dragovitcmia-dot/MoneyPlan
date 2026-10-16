@@ -1,6 +1,7 @@
 package com.cashflow.app.ui.home
 
 import androidx.compose.animation.AnimatedVisibility
+import com.cashflow.app.ui.theme.Spacing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -77,8 +78,9 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.cashflow.app.R
+import com.cashflow.app.engine.HomeStatus
+import com.cashflow.app.engine.HomeStatusLine
 import com.cashflow.app.engine.Money
-import com.cashflow.app.engine.NextExpense
 import com.cashflow.app.engine.Transaction
 import com.cashflow.app.engine.TxKind
 import com.cashflow.app.ui.Haptics
@@ -88,6 +90,10 @@ import com.cashflow.app.ui.components.AppButton
 import com.cashflow.app.ui.components.AppButtonStyle
 import com.cashflow.app.ui.components.AnswerButtons
 import com.cashflow.app.ui.components.AppCard
+import com.cashflow.app.ui.components.SectionHeader
+import com.cashflow.app.ui.theme.Motion
+import androidx.compose.foundation.clickable
+import androidx.compose.ui.semantics.Role
 import com.cashflow.app.ui.components.KindButtons
 import com.cashflow.app.ui.items.ItemDetails
 import com.cashflow.app.ui.items.ItemEditSheet
@@ -103,9 +109,6 @@ import kotlinx.coroutines.launch
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
 
-/** Position of the "Waiting for you" header in the list below; the chip scrolls here. */
-private const val WAITING_HEADER_INDEX = 3
-
 @Composable
 fun HomeScreen(
     viewModel: HomeViewModel,
@@ -113,6 +116,8 @@ fun HomeScreen(
     snackbarHost: SnackbarHostState,
     contentPadding: PaddingValues,
     listState: LazyListState,
+    /** The shortage line opens the Calendar on that day. */
+    onOpenDay: (java.time.LocalDate) -> Unit = {},
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { viewModel.refresh() }
@@ -121,7 +126,7 @@ fun HomeScreen(
     if (ui == null) {
         HomeSkeleton(contentPadding) // nothing numeric until the first data emission
     } else {
-        HomeContent(ui, viewModel, odometer, snackbarHost, contentPadding, listState)
+        HomeContent(ui, viewModel, odometer, snackbarHost, contentPadding, listState, onOpenDay)
     }
 }
 
@@ -133,6 +138,7 @@ private fun HomeContent(
     snackbarHost: SnackbarHostState,
     padding: PaddingValues,
     listState: LazyListState,
+    onOpenDay: (java.time.LocalDate) -> Unit,
 ) {
     val scope = rememberCoroutineScope()
     val haptics = rememberHaptics()
@@ -156,19 +162,14 @@ private fun HomeContent(
         contentPadding = PaddingValues(
             start = 20.dp,
             end = 20.dp,
-            top = padding.calculateTopPadding() + 16.dp,
-            bottom = padding.calculateBottomPadding() + 24.dp,
+            top = padding.calculateTopPadding() + Spacing.l,
+            bottom = padding.calculateBottomPadding() + Spacing.xl,
         ),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
+        verticalArrangement = Arrangement.spacedBy(Spacing.l),
     ) {
-        item(key = "hero", contentType = "hero") {
-            Hero(
-                odometer = odometer,
-                waitingCount = ui.toConfirm.size,
-                onChipClick = { scope.launch { listState.animateScrollToItem(WAITING_HEADER_INDEX) } },
-            )
-        }
-        item(key = "next", contentType = "next") { NextExpenseCard(ui.nextExpense) }
+        item(key = "hero", contentType = "hero") { Hero(odometer = odometer) }
+        // One quiet line: the next expense, or (when a negative day is coming) how short and before when; that one opens the Calendar.
+        item(key = "status", contentType = "status") { StatusLine(ui.status, ui.today) { day -> haptics.tick(); onOpenDay(day) } }
         item(key = "buttons", contentType = "buttons") {
             KindButtons(
                 onExpense = { composerKind = TxKind.EXPENSE.name },
@@ -183,12 +184,10 @@ private fun HomeContent(
                 style = AppButtonStyle.Outlined,
             )
         }
-        item(key = "waitingHeader", contentType = "header") {
-            Text(stringResource(R.string.waiting_header), style = MaterialTheme.typography.titleMedium)
-        }
         if (ui.toConfirm.isEmpty()) {
-            item(key = "caughtUp", contentType = "empty") { CaughtUp() }
+            item(key = "caughtUp", contentType = "empty") { NothingPending() }
         } else {
+            item(key = "waitingHeader", contentType = "header") { SectionHeader(stringResource(R.string.waiting_header)) }
             items(ui.toConfirm, key = { it.id }, contentType = { "waiting" }) { tx ->
                 WaitingCard(
                     tx = tx,
@@ -204,7 +203,9 @@ private fun HomeContent(
                         reject(tx)
                     },
                     onOpen = { editing = tx },
-                    modifier = Modifier.animateItem(),
+                    modifier = Modifier.animateItem(
+                        fadeInSpec = Motion.standard(), placementSpec = Motion.standard(), fadeOutSpec = Motion.fast(),
+                    ),
                 )
             }
         }
@@ -256,13 +257,13 @@ private fun HomeContent(
 }
 
 @Composable
-private fun Hero(odometer: HeroOdometer, waitingCount: Int, onChipClick: () -> Unit) {
+private fun Hero(odometer: HeroOdometer) {
     val negative = MaterialTheme.cashflow.negative
-    val normal = MaterialTheme.colorScheme.onBackground
+    val normal = MaterialTheme.colorScheme.onBackground // a positive balance is plain text, never green
     Column(
-        Modifier.fillMaxWidth().padding(top = 12.dp, bottom = 4.dp),
+        Modifier.fillMaxWidth().padding(top = Spacing.m, bottom = Spacing.xs),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(4.dp),
+        verticalArrangement = Arrangement.spacedBy(Spacing.xs),
     ) {
         Text(
             stringResource(R.string.available_label),
@@ -271,80 +272,34 @@ private fun Hero(odometer: HeroOdometer, waitingCount: Int, onChipClick: () -> U
             modifier = Modifier.clearAndSetSemantics {}, // the number's description already says "Available"
         )
         HeroNumber(odometer = odometer, normalColor = normal, negativeColor = negative)
-        AnimatedVisibility(visible = waitingCount > 0, enter = fadeIn(), exit = fadeOut()) {
-            AssistChip(
-                onClick = onChipClick,
-                label = { Text(quantityString(R.plurals.waiting_chip, waitingCount, waitingCount)) },
-                colors = AssistChipDefaults.assistChipColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer,
-                    labelColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                ),
-                border = null,
-                shape = MaterialTheme.shapes.extraLarge,
-                modifier = Modifier.heightIn(min = 48.dp),
-            )
-        }
     }
 }
 
+/** The status line under the balance: quiet, centered, one line of text; the shortage variant is red and tappable. */
 @Composable
-private fun NextExpenseCard(next: NextExpense?) {
-    AppCard(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text(
-                stringResource(R.string.next_expense_label),
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            if (next == null) {
-                Text(stringResource(R.string.no_upcoming_expenses), style = MaterialTheme.typography.titleMedium)
-            } else {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Top) {
-                    Column(Modifier.weight(1f).padding(end = 12.dp)) {
-                        Text(daysAwayText(next.daysAway), style = MaterialTheme.typography.titleLarge)
-                        if (next.description.isNotBlank()) {
-                            Text(
-                                next.description,
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                maxLines = 2,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                        }
-                    }
-                    Text(
-                        Money.formatSigned(TxKind.EXPENSE, next.amount),
-                        style = MaterialTheme.typography.titleLarge,
-                        color = MaterialTheme.cashflow.negative,
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun daysAwayText(days: Int): String = when (days) {
-    0 -> stringResource(R.string.today)
-    1 -> stringResource(R.string.tomorrow)
-    else -> quantityString(R.plurals.in_days, days, days)
-}
-
-@Composable
-private fun CaughtUp() {
-    Column(
-        Modifier.fillMaxWidth().padding(vertical = 32.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+private fun StatusLine(status: HomeStatus, today: java.time.LocalDate, onOpenDay: (java.time.LocalDate) -> Unit) {
+    val text = HomeStatusLine.text(status, today) ?: return
+    val day = HomeStatusLine.tapDay(status)
+    val color = if (day != null) MaterialTheme.cashflow.negative else MaterialTheme.colorScheme.onSurfaceVariant
+    Box(
+        Modifier.fillMaxWidth().then(
+            if (day != null) Modifier.clip(MaterialTheme.shapes.small).clickable(role = Role.Button) { onOpenDay(day) }.heightIn(min = 48.dp) else Modifier,
+        ),
+        contentAlignment = Alignment.Center,
     ) {
-        Icon(
-            Icons.Filled.CheckCircle,
-            contentDescription = null,
-            modifier = Modifier.size(40.dp),
-            tint = MaterialTheme.colorScheme.outline,
-        )
-        Text(stringResource(R.string.caught_up), style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(text, style = MaterialTheme.typography.bodyLarge, color = color, textAlign = TextAlign.Center)
     }
+}
+
+@Composable
+private fun NothingPending() {
+    Text(
+        stringResource(R.string.caught_up),
+        style = MaterialTheme.typography.bodyLarge,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.fillMaxWidth().padding(vertical = Spacing.xl),
+        textAlign = TextAlign.Center,
+    )
 }
 
 @Composable
@@ -362,8 +317,8 @@ private fun HomeSkeleton(padding: PaddingValues) {
         )
     }
     Column(
-        Modifier.fillMaxSize().padding(padding).padding(horizontal = 20.dp, vertical = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
+        Modifier.fillMaxSize().padding(padding).padding(horizontal = Spacing.l, vertical = Spacing.l),
+        verticalArrangement = Arrangement.spacedBy(Spacing.l),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Block(Modifier.width(80.dp), 18)

@@ -1,6 +1,7 @@
 package com.cashflow.app.ui.settings
 
 import androidx.compose.foundation.layout.Arrangement
+import com.cashflow.app.ui.theme.Spacing
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -80,22 +81,19 @@ internal fun NotificationsCard(viewModel: SettingsViewModel, settings: AppSettin
             onChange = { on -> prefs.update { it.copy(shortageAlerts = on) } },
         )
         val allowed = permission?.allowed ?: true
-        Text(
-            stringResource(if (allowed) R.string.notif_perm_ok else R.string.notif_perm_blocked),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+        if (!allowed) {
+            Text(
+                stringResource(R.string.notif_perm_blocked),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
         if (!allowed) {
             OutlinedButton(
                 onClick = { NotificationPermission.openNotificationSettings(context) },
                 modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp),
             ) { Text(stringResource(R.string.notif_perm_open)) }
         }
-        Text(
-            stringResource(R.string.notif_battery_hint),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
         OutlinedButton(
             onClick = { NotificationPermission.openAppInfo(context) },
             modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp),
@@ -105,15 +103,16 @@ internal fun NotificationsCard(viewModel: SettingsViewModel, settings: AppSettin
 
 @Composable
 private fun SwitchRow(title: String, helper: String, checked: Boolean, onChange: (Boolean) -> Unit, enabled: Boolean = true) {
+    val haptics = com.cashflow.app.ui.rememberHaptics()
     Row(Modifier.fillMaxWidth().heightIn(min = 56.dp), verticalAlignment = Alignment.CenterVertically) {
-        Column(Modifier.weight(1f).padding(end = 12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Column(Modifier.weight(1f).padding(end = Spacing.m), verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
             Text(title, style = MaterialTheme.typography.titleMedium)
             Text(helper, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         Switch(
             modifier = Modifier.semantics { contentDescription = title },
             checked = checked,
-            onCheckedChange = onChange,
+            onCheckedChange = { on -> haptics.tick(); onChange(on) },
             enabled = enabled,
         )
     }

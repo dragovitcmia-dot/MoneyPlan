@@ -1,6 +1,7 @@
 package com.cashflow.app.ui.items
 
 import androidx.compose.foundation.layout.Arrangement
+import com.cashflow.app.ui.theme.Spacing
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -91,8 +92,8 @@ fun SeriesSheet(
 
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
         Column(
-            Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp).padding(bottom = 16.dp).navigationBarsPadding(),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
+            Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = Spacing.xl).padding(bottom = Spacing.l).navigationBarsPadding(),
+            verticalArrangement = Arrangement.spacedBy(Spacing.l),
         ) {
             if (rule == null) {
                 Text(stringResource(R.string.series_sheet_none), style = MaterialTheme.typography.titleMedium)
@@ -145,9 +146,8 @@ fun SeriesSheet(
             val ask = rule.id in series.askAmountRuleIds
             val askTitle = stringResource(R.string.series_ask_amount)
             Row(Modifier.fillMaxWidth().heightIn(min = 56.dp), verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f).padding(end = 12.dp)) {
+                Column(Modifier.weight(1f).padding(end = Spacing.m)) {
                     Text(askTitle, style = MaterialTheme.typography.titleMedium)
-                    Text(stringResource(R.string.series_ask_amount_helper), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 Switch(
                     modifier = Modifier.semantics { contentDescription = askTitle },
@@ -171,7 +171,7 @@ fun SeriesSheet(
 @Composable
 internal fun ExtendChoices(rule: RecurringRule, today: LocalDate, onPick: (ExtendChoice) -> Unit) {
     var picking by remember(rule.id) { mutableStateOf(false) }
-    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(Spacing.s), verticalArrangement = Arrangement.spacedBy(Spacing.s)) {
         for (choice in ExtendChoice.QUICK) {
             val label = when (choice) {
                 is ExtendChoice.Months -> stringResource(if (choice.n == 1) R.string.extend_1_month else if (choice.n == 3) R.string.extend_3_months else R.string.extend_1_year)
@@ -222,7 +222,7 @@ internal fun SeriesActions(
     var deleting by remember(rule.id) { mutableStateOf(false) }
     val label = rule.description.ifBlank { stringResource(if (rule.kind == TxKind.INCOME) R.string.item_income else R.string.item_expense) }
 
-    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(Spacing.s), verticalArrangement = Arrangement.spacedBy(Spacing.s)) {
         AppButton(stringResource(R.string.series_edit_action), onClick = { editing = true }, style = AppButtonStyle.Tonal)
         if (showExtend) AppButton(stringResource(R.string.series_extend_action), onClick = { extending = true }, style = AppButtonStyle.Tonal)
         AppButton(stringResource(R.string.series_end), onClick = { ending = true }, style = AppButtonStyle.Outlined)
@@ -285,7 +285,7 @@ internal fun SeriesEndDialog(rule: RecurringRule, earliest: LocalDate, initial: 
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.series_end_title, rule.description)) },
         text = {
-            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(Spacing.m)) {
                 Text(stringResource(R.string.series_end_body), style = MaterialTheme.typography.bodyMedium)
                 androidx.compose.material3.OutlinedButton(onClick = { picking = true }, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) {
                     Text(stringResource(R.string.field_value_format, stringResource(R.string.series_end_from), AppDates.format(from)))
@@ -329,8 +329,8 @@ internal fun SeriesEditSheet(
 
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
         Column(
-            Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp).padding(bottom = 16.dp).navigationBarsPadding(),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
+            Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = Spacing.xl).padding(bottom = Spacing.l).navigationBarsPadding(),
+            verticalArrangement = Arrangement.spacedBy(Spacing.l),
         ) {
             Text(stringResource(R.string.series_edit_title), style = MaterialTheme.typography.headlineSmall)
             Text(stringResource(R.string.series_edit_future_body), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -352,14 +352,14 @@ internal fun SeriesEditSheet(
                 modifier = Modifier.fillMaxWidth(),
             )
             WhenStep(form, rule.kind == TxKind.EXPENSE, today, problems, showTimings = false) { change -> form = change(form) }
+            val haptics = com.cashflow.app.ui.rememberHaptics()
             Row(Modifier.fillMaxWidth().heightIn(min = 56.dp), verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f).padding(end = 12.dp)) {
+                Column(Modifier.weight(1f).padding(end = Spacing.m)) {
                     Text(askTitle, style = MaterialTheme.typography.titleMedium)
-                    Text(stringResource(R.string.series_ask_amount_helper), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-                Switch(modifier = Modifier.semantics { contentDescription = askTitle }, checked = ask, onCheckedChange = { ask = it })
+                Switch(modifier = Modifier.semantics { contentDescription = askTitle }, checked = ask, onCheckedChange = { ask = it; haptics.tick() })
             }
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Spacing.m)) {
                 AppButton(stringResource(R.string.action_cancel), onClick = onDismiss, modifier = Modifier.weight(1f).heightIn(min = 56.dp), style = AppButtonStyle.Outlined)
                 AppButton(
                     stringResource(R.string.action_save),

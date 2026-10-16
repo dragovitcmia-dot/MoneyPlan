@@ -1,6 +1,7 @@
 package com.cashflow.app.ui.items
 
 import androidx.compose.foundation.layout.Arrangement
+import com.cashflow.app.ui.theme.Spacing
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -73,8 +74,8 @@ fun ItemEditSheet(
 
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
         Column(
-            Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp).padding(bottom = 16.dp).navigationBarsPadding(),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
+            Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = Spacing.xl).padding(bottom = Spacing.l).navigationBarsPadding(),
+            verticalArrangement = Arrangement.spacedBy(Spacing.l),
         ) {
             Text(stringResource(R.string.item_edit_title), style = MaterialTheme.typography.headlineSmall)
             Text(label, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)

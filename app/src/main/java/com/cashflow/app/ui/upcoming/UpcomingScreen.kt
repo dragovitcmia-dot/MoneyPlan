@@ -75,7 +75,14 @@ import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.ui.unit.sp
 import com.cashflow.app.engine.UpcomingGroupKey
 import com.cashflow.app.engine.UpcomingRow
+import com.cashflow.app.ui.components.AppButton
+import com.cashflow.app.ui.components.AppButtonStyle
 import com.cashflow.app.ui.components.AppCard
+import com.cashflow.app.ui.components.AppListRow
+import com.cashflow.app.ui.components.color
+import com.cashflow.app.ui.components.SectionHeader
+import com.cashflow.app.ui.theme.Motion
+import com.cashflow.app.ui.theme.Spacing
 import com.cashflow.app.ui.components.NameWithRepeat
 import com.cashflow.app.ui.components.quantityString
 import com.cashflow.app.ui.home.HomeViewModel
@@ -114,6 +121,9 @@ fun UpcomingScreen(
     val haptics = rememberHaptics()
     val actions = rememberItemActions(home, snackbar)
     var editing by remember { mutableStateOf<Transaction?>(null) }
+    // "Add one" on the empty series list opens the add wizard on Repeating (an income when the Income tab is selected).
+    var adding by remember { mutableStateOf<TxKind?>(null) }
+    val homeState by home.state.collectAsStateWithLifecycle()
     var changing by remember { mutableStateOf<Transaction?>(null) }
     var deleting by remember { mutableStateOf<UpcomingRow?>(null) }
     val rules by home.rules.collectAsStateWithLifecycle()
@@ -131,10 +141,10 @@ fun UpcomingScreen(
         contentPadding = PaddingValues(
             start = 20.dp,
             end = 20.dp,
-            top = padding.calculateTopPadding() + 16.dp,
-            bottom = padding.calculateBottomPadding() + 24.dp,
+            top = padding.calculateTopPadding() + Spacing.l,
+            bottom = padding.calculateBottomPadding() + Spacing.xl,
         ),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(Spacing.m),
     ) {
         item(key = "title", contentType = "title") {
             Text(stringResource(R.string.upcoming_title), style = MaterialTheme.typography.headlineMedium, modifier = Modifier.semantics { heading() })
@@ -151,16 +161,23 @@ fun UpcomingScreen(
         if (view.showSeries) {
             if (seriesRows.isEmpty()) {
                 item(key = "series-empty", contentType = "empty") {
-                    Text(
-                        stringResource(R.string.series_list_empty),
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(top = 16.dp),
-                    )
+                    Column(Modifier.fillMaxWidth().padding(top = Spacing.l), verticalArrangement = Arrangement.spacedBy(Spacing.m)) {
+                        Text(
+                            stringResource(R.string.series_list_empty),
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        AppButton(
+                            stringResource(R.string.series_list_add_one),
+                            onClick = { haptics.tick(); adding = if (view.type == UpcomingType.INCOME) TxKind.INCOME else TxKind.EXPENSE },
+                            modifier = Modifier.fillMaxWidth(),
+                            style = AppButtonStyle.Outlined,
+                        )
+                    }
                 }
             }
             items(seriesRows, key = { "series-" + it.rule.id }, contentType = { "series" }) { row ->
-                SeriesRowCard(row, onClick = { openSeries = row.rule.id }, modifier = Modifier.animateItem())
+                SeriesRowCard(row, onClick = { openSeries = row.rule.id }, modifier = Modifier.animateItem(fadeInSpec = Motion.standard(), placementSpec = Motion.standard(), fadeOutSpec = Motion.fast()))
             }
         } else if (current != null) {
             current.dailyIncome?.let { total ->
@@ -180,11 +197,7 @@ fun UpcomingScreen(
             }
             for (group in current.groups) {
                 item(key = "header-" + group.key.toString(), contentType = "header") {
-                    Text(
-                        groupTitle(group.key),
-                        style = MaterialTheme.typography.titleMedium,
-                        modifier = Modifier.padding(top = 8.dp).semantics { heading() },
-                    )
+                    SectionHeader(groupTitle(group.key))
                 }
                 items(group.rows, key = { it.tx.id }, contentType = { if (it.waiting) "waiting" else "row" }) { row ->
                     if (row.waiting) {
@@ -202,14 +215,14 @@ fun UpcomingScreen(
                                 actions.requestReject(row.tx)
                             },
                             onOpen = { editing = row.tx },
-                            modifier = Modifier.animateItem(),
+                            modifier = Modifier.animateItem(fadeInSpec = Motion.standard(), placementSpec = Motion.standard(), fadeOutSpec = Motion.fast()),
                             footer = if (row.shortBy != null || row.last) ({ RowTags(row) }) else null,
                         )
                     } else {
                         SwipeToDelete(
                             haptics = haptics,
                             onDelete = { deleting = row },
-                            modifier = Modifier.animateItem(),
+                            modifier = Modifier.animateItem(fadeInSpec = Motion.standard(), placementSpec = Motion.standard(), fadeOutSpec = Motion.fast()),
                         ) { UpcomingCard(row, onClick = { editing = row.tx }) }
                     }
                 }
@@ -231,6 +244,21 @@ fun UpcomingScreen(
         ItemEditSheet(tx = tx, actions = actions, onDismiss = { changing = null }, today = today)
     }
     RejectConfirmDialog(actions)
+    adding?.let { kind ->
+        val ui = homeState
+        if (ui != null) {
+            com.cashflow.app.ui.home.EntryComposer(
+                kind = kind,
+                ui = ui,
+                redDip = home::redDip,
+                resultingBalance = home::resultingBalance,
+                onSave = home::save,
+                onSaved = { message -> actions.announce(message) },
+                onDismiss = { adding = null },
+                startRepeating = true,
+            )
+        }
+    }
     openSeries?.let { id ->
         com.cashflow.app.ui.items.SeriesSheet(id, home, actions, today, onDismiss = { openSeries = null })
     }
@@ -270,7 +298,7 @@ private fun SwipeToDelete(haptics: Haptics, onDelete: () -> Unit, modifier: Modi
         backgroundContent = {
             val active = state.dismissDirection == SwipeToDismissBoxValue.EndToStart
             Box(
-                Modifier.fillMaxSize().clip(MaterialTheme.shapes.large).background(if (active) MaterialTheme.cashflow.expenseFill else Color.Transparent).padding(horizontal = 28.dp),
+                Modifier.fillMaxSize().clip(MaterialTheme.shapes.large).background(if (active) MaterialTheme.cashflow.expenseFill else Color.Transparent).padding(horizontal = Spacing.xl),
                 contentAlignment = Alignment.CenterEnd,
             ) {
                 if (active) Icon(Icons.Filled.Delete, contentDescription = deleteLabel, tint = MaterialTheme.cashflow.buttonLabel, modifier = Modifier.size(32.dp))
@@ -286,7 +314,7 @@ private fun DeleteConfirmDialog(inSeries: Boolean, onThisOne: () -> Unit, onThis
         title = { Text(stringResource(if (inSeries) R.string.swipe_delete_series_title else R.string.swipe_delete_title)) },
         text = {
             if (inSeries) {
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
                     TextButton(onClick = onThisOne, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) { Text(stringResource(R.string.swipe_delete_this_one)) }
                     TextButton(onClick = onThisAndFuture, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) { Text(stringResource(R.string.swipe_delete_future)) }
                 }
@@ -316,30 +344,16 @@ private fun groupTitle(key: UpcomingGroupKey): String = when (key) {
 private fun UpcomingCard(row: UpcomingRow, onClick: () -> Unit, modifier: Modifier = Modifier) {
     val tx = row.tx
     val income = tx.kind == TxKind.INCOME
-    AppCard(modifier.fillMaxWidth(), onClick = onClick) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Top) {
-                Column(Modifier.weight(1f).padding(end = 12.dp)) {
-                    NameWithRepeat(
-                        tx.description.ifBlank { stringResource(if (income) R.string.item_income else R.string.item_expense) },
-                        repeating = tx.recurringRuleId != null,
-                        income = income,
-                    )
-                    Text(
-                        AppDates.withWeekday(tx.date) + " · " + quantityString(R.plurals.in_days, row.daysAway, row.daysAway),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                Text(
-                    Money.formatSigned(tx.kind, tx.amount),
-                    style = MaterialTheme.typography.titleMedium,
-                    color = if (income) MaterialTheme.cashflow.positive else MaterialTheme.cashflow.negative,
-                )
-            }
-            if (row.shortBy != null || row.last) RowTags(row)
-        }
-    }
+    AppListRow(
+        title = tx.description.ifBlank { stringResource(if (income) R.string.item_income else R.string.item_expense) },
+        kind = tx.kind,
+        repeating = tx.recurringRuleId != null,
+        amountText = Money.formatSigned(tx.kind, tx.amount),
+        caption = AppDates.withWeekday(tx.date) + " \u00B7 " + quantityString(R.plurals.in_days, row.daysAway, row.daysAway),
+        onClick = onClick,
+        modifier = modifier,
+        footer = if (row.shortBy != null || row.last) ({ RowTags(row) }) else null,
+    )
 }
 
 /** "Repeats" with its icon, and the red "Short by X TND" tag when that day closes below zero. */
@@ -347,8 +361,8 @@ private fun UpcomingCard(row: UpcomingRow, onClick: () -> Unit, modifier: Modifi
 @Composable
 private fun RowTags(row: UpcomingRow) {
     FlowRow(
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
+        horizontalArrangement = Arrangement.spacedBy(Spacing.m),
+        verticalArrangement = Arrangement.spacedBy(Spacing.s),
     ) {
         if (row.last) LastTag()
         row.shortBy?.let { short ->
@@ -356,7 +370,7 @@ private fun RowTags(row: UpcomingRow) {
                 Text(
                     stringResource(R.string.short_by_tag, Money.formatDisplay(short, withCurrency = false)),
                     style = MaterialTheme.typography.labelMedium,
-                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                    modifier = Modifier.padding(horizontal = Spacing.m, vertical = Spacing.s),
                 )
             }
         }
@@ -367,9 +381,9 @@ private fun RowTags(row: UpcomingRow) {
 private fun DailyIncomeRow(total: Long, onClick: () -> Unit) {
     AppCard(Modifier.fillMaxWidth(), onClick = onClick) {
         Row(
-            Modifier.fillMaxWidth().heightIn(min = 56.dp).padding(16.dp),
+            Modifier.fillMaxWidth().heightIn(min = 56.dp).padding(Spacing.l),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(Spacing.m),
         ) {
             Icon(Icons.Filled.Refresh, contentDescription = null, tint = MaterialTheme.cashflow.positive)
             Column(Modifier.weight(1f)) {
@@ -391,9 +405,9 @@ private fun DailyIncomeRow(total: Long, onClick: () -> Unit) {
 @Composable
 private fun NothingComing() {
     Column(
-        Modifier.fillMaxWidth().padding(vertical = 32.dp),
+        Modifier.fillMaxWidth().padding(vertical = Spacing.xl),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(Spacing.s),
     ) {
         Icon(Icons.Filled.CheckCircle, contentDescription = null, modifier = Modifier.size(40.dp), tint = MaterialTheme.colorScheme.outline)
         Text(stringResource(R.string.upcoming_empty), style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -404,43 +418,29 @@ private fun NothingComing() {
 @Composable
 internal fun LastTag() {
     Surface(shape = MaterialTheme.shapes.extraSmall, color = MaterialTheme.colorScheme.secondaryContainer, contentColor = MaterialTheme.colorScheme.onSecondaryContainer) {
-        Text(stringResource(R.string.tag_last), style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp))
+        Text(stringResource(R.string.tag_last), style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(horizontal = Spacing.m, vertical = Spacing.s))
     }
 }
 
 /** One series of the Repeating list: name, signed amount, schedule line, end line and the "Ended" tag. */
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun SeriesRowCard(row: com.cashflow.app.engine.SeriesRow, onClick: () -> Unit, modifier: Modifier = Modifier) {
     val rule = row.rule
     val income = rule.kind == TxKind.INCOME
-    AppCard(modifier.fillMaxWidth().heightIn(min = 72.dp), onClick = onClick) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Top) {
-                Text(
-                    rule.description.ifBlank { stringResource(if (income) R.string.item_income else R.string.item_expense) },
-                    style = MaterialTheme.typography.titleMedium,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f).padding(end = 12.dp),
-                )
-                Text(
-                    Money.formatSigned(rule.kind, rule.amount),
-                    style = MaterialTheme.typography.titleMedium,
-                    color = if (income) MaterialTheme.cashflow.positive else MaterialTheme.cashflow.negative,
-                )
+    AppListRow(
+        title = rule.description.ifBlank { stringResource(if (income) R.string.item_income else R.string.item_expense) },
+        kind = rule.kind,
+        repeating = false,
+        amountText = Money.formatSigned(rule.kind, rule.amount),
+        caption = row.schedule + "\n" + row.endLine,
+        onClick = onClick,
+        modifier = modifier,
+        footer = if (row.ended) ({
+            Surface(shape = MaterialTheme.shapes.extraSmall, color = MaterialTheme.colorScheme.errorContainer, contentColor = MaterialTheme.colorScheme.onErrorContainer) {
+                Text(stringResource(R.string.series_tag_ended), style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(horizontal = Spacing.m, vertical = Spacing.xs))
             }
-            Text(row.schedule, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text(row.endLine, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                if (row.ended) {
-                    Surface(shape = MaterialTheme.shapes.extraSmall, color = MaterialTheme.colorScheme.errorContainer, contentColor = MaterialTheme.colorScheme.onErrorContainer) {
-                        Text(stringResource(R.string.series_tag_ended), style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp))
-                    }
-                }
-            }
-        }
-    }
+        }) else null,
+    )
 }
 
 /** One group of filter chips in a row: 32 dp look, 48 dp touch area, 13 sp text. */
@@ -456,6 +456,9 @@ private fun UpcomingTabs(view: UpcomingView, onType: (UpcomingType) -> Unit, onT
                 UpcomingType.INCOME to R.string.filter_income,
             )) {
                 val selected = view.type == type
+                // All is neutral, Expenses red, Income green (selected text and underline)
+                val token = com.cashflow.app.engine.SemanticColor.ofTab(type)
+                val tabColor = if (token == com.cashflow.app.engine.ColorToken.NEUTRAL) primary else token.color()
                 Box(
                     Modifier.weight(1f).height(48.dp).selectable(selected = selected, onClick = { onType(type) }, role = Role.Tab),
                     contentAlignment = Alignment.Center,
@@ -464,12 +467,12 @@ private fun UpcomingTabs(view: UpcomingView, onType: (UpcomingType) -> Unit, onT
                         stringResource(label),
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
-                        color = if (selected) primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = if (selected) tabColor else MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     if (selected) {
                         Box(
                             Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(3.dp)
-                                .background(primary, RoundedCornerShape(topStart = 3.dp, topEnd = 3.dp)),
+                                .background(tabColor, RoundedCornerShape(topStart = 3.dp, topEnd = 3.dp)),
                         )
                     }
                 }

@@ -47,7 +47,13 @@ data class HomeUiState(
     val available: Long,
     /** PENDING items dated today or earlier, oldest first. */
     val toConfirm: List<Transaction>,
-    val nextExpense: NextExpense?,
+    /** The one quiet line under the balance. */
+    val status: com.cashflow.app.engine.HomeStatus,
+    /** Everything entered so far, for the wizard's smart defaults (same as last time, recent amounts). */
+    val history: List<Transaction> = emptyList(),
+    val rules: List<RecurringRule> = emptyList(),
+    val recentExpenseAmounts: List<Long> = emptyList(),
+    val recentIncomeAmounts: List<Long> = emptyList(),
     val today: LocalDate,
     /** Default start date for a new recurring income source. */
     val newSourceStart: LocalDate,
@@ -73,13 +79,18 @@ class HomeViewModel(
         repository.settings.filterNotNull(),
         repository.transactions,
         today,
-    ) { settings, transactions, day ->
+        repository.rules,
+    ) { settings, transactions, day, rules ->
         val e = engineFactory.create(settings, transactions, day)
         engine = e
         HomeUiState(
             available = e.available(),
             toConfirm = e.toConfirm(),
-            nextExpense = e.nextExpense(),
+            status = com.cashflow.app.engine.HomeStatusLine.of(e),
+            history = transactions,
+            rules = rules,
+            recentExpenseAmounts = com.cashflow.app.engine.Suggestions.recentAmounts(TxKind.EXPENSE, transactions, rules, day),
+            recentIncomeAmounts = com.cashflow.app.engine.Suggestions.recentAmounts(TxKind.INCOME, transactions, rules, day),
             today = day,
             newSourceStart = RuleMaintenance.newSourceStartDate(settings, day),
             balanceStartDate = settings.balanceStartDate,

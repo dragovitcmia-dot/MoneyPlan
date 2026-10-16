@@ -1,6 +1,7 @@
 package com.cashflow.app.ui.home
 
 import androidx.activity.compose.BackHandler
+import com.cashflow.app.ui.theme.Spacing
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.ime
@@ -99,6 +100,8 @@ import com.cashflow.app.engine.Money
 import com.cashflow.app.engine.NewEntry
 import com.cashflow.app.engine.PatternChoice
 import com.cashflow.app.engine.RedDip
+import com.cashflow.app.engine.Suggestion
+import com.cashflow.app.engine.Suggestions
 import com.cashflow.app.engine.ResultingBalance
 import com.cashflow.app.engine.Timing
 import com.cashflow.app.engine.TxKind
@@ -171,6 +174,8 @@ fun EntryComposer(
     /** "Add as a normal expense" from Plan a purchase: the price and the name arrive filled in. */
     prefillAmount: String = "",
     prefillName: String = "",
+    /** "Add one" on an empty Repeating list: the wizard opens with Repeats already chosen on the When step. */
+    startRepeating: Boolean = false,
 ) {
     val scope = rememberCoroutineScope()
     val permission = LocalNotificationPermission.current
@@ -179,7 +184,9 @@ fun EntryComposer(
     val isExpense = kind == TxKind.EXPENSE
     val accentFill = if (isExpense) colors.expenseFill else colors.incomeFill
 
-    val initial = remember { EntryWizard.start(kind, ui.today, day, prefillAmount, prefillName) }
+    val initial = remember {
+        EntryWizard.start(kind, ui.today, day, prefillAmount, prefillName).let { if (startRepeating) it.copy(form = it.form.copy(timing = Timing.REPEATS)) else it }
+    }
     var wizard by remember { mutableStateOf(initial) }
     var discard by remember { mutableStateOf(DiscardState()) }
     var saving by remember { mutableStateOf(false) }
@@ -212,23 +219,33 @@ fun EntryComposer(
         haptics.tick()
     }
 
+    /** Leaving When: only now is the item checked against the next 90 days; then Below zero or the review. */
+    fun advanceFromWhen(state: WizardState) {
+        val built = EntryWizard.entryOf(state.form, defaultText, ui.balanceStartDate)
+        if (!EntryWizard.canAdvance(state) || built == null) {
+            wizard = state.copy(attempted = true)
+            haptics.reject()
+            return
+        }
+        scope.launch {
+            saving = true
+            val check = redDip(built)
+            saving = false
+            dip = check
+            wizard = EntryWizard.afterWhen(state, hasDip = check != null)
+            haptics.tick()
+        }
+    }
+
+    /** "Same as last time": fills the amount and the schedule and goes straight on to the review (still through the below-zero check). */
+    fun applySuggestion(s: Suggestion) {
+        haptics.tick()
+        advanceFromWhen(wizard.copy(form = Suggestions.apply(wizard.form, s, ui.today), step = WizardStep.WHEN, attempted = false))
+    }
+
     fun goNext() {
         if (wizard.step == WizardStep.WHEN) {
-            // Leaving When: only now is the item checked against the next 90 days.
-            val built = entry()
-            if (!EntryWizard.canAdvance(wizard) || built == null) {
-                wizard = wizard.copy(attempted = true)
-                haptics.reject()
-                return
-            }
-            scope.launch {
-                saving = true
-                val check = redDip(built)
-                saving = false
-                dip = check
-                wizard = EntryWizard.afterWhen(wizard, hasDip = check != null)
-                haptics.tick()
-            }
+            advanceFromWhen(wizard)
             return
         }
         val next = EntryWizard.next(wizard)
@@ -276,7 +293,7 @@ fun EntryComposer(
         Column(Modifier.fillMaxWidth().heightIn(max = maxSheetHeight)) {
         // Header: a band in the kind color with white bold text, like the big button on Home.
         Box(
-            Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp).clip(MaterialTheme.shapes.large).background(accentFill).padding(vertical = 10.dp),
+            Modifier.fillMaxWidth().padding(horizontal = Spacing.xl, vertical = Spacing.s).clip(MaterialTheme.shapes.large).background(accentFill).padding(vertical = Spacing.m),
             contentAlignment = Alignment.Center,
         ) {
             Text(
@@ -287,11 +304,11 @@ fun EntryComposer(
             )
         }
         val (position, total) = EntryWizard.progress(wizard)
-        Column(Modifier.padding(horizontal = 24.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Column(Modifier.padding(horizontal = Spacing.xl), verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
             LinearProgressIndicator(
                 progress = { position.toFloat() / total },
                 modifier = Modifier.fillMaxWidth(),
-                color = accentFill,
+                color = MaterialTheme.colorScheme.primary, // progress is not money: neutral accent
                 trackColor = MaterialTheme.colorScheme.surfaceVariant,
                 drawStopIndicator = {},
             )
@@ -304,12 +321,18 @@ fun EntryComposer(
 
         val problems = if (wizard.attempted) EntryWizard.problems(wizard) else emptyList()
         Column(
-            Modifier.weight(1f, fill = false).fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
+            Modifier.weight(1f, fill = false).fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = Spacing.xl, vertical = Spacing.m),
+            verticalArrangement = Arrangement.spacedBy(Spacing.l),
         ) {
             when (wizard.step) {
-                WizardStep.AMOUNT -> AmountStep(form, problems) { wizard = EntryWizard.update(wizard, it) }
-                WizardStep.NAME -> NameStep(form, isExpense, names, problems, onNext = ::goNext) { wizard = EntryWizard.update(wizard, it) }
+                WizardStep.AMOUNT -> AmountStep(
+                    form, problems,
+                    recent = if (isExpense) ui.recentExpenseAmounts else ui.recentIncomeAmounts,
+                ) { wizard = EntryWizard.update(wizard, it) }
+                WizardStep.NAME -> {
+                    val suggestion = remember(form.description, kind, ui.history, ui.rules) { Suggestions.sameAsLast(form.description, kind, ui.history, ui.rules) }
+                    NameStep(form, isExpense, names, problems, suggestion = suggestion, onSuggestion = ::applySuggestion, onNext = ::goNext) { wizard = EntryWizard.update(wizard, it) }
+                }
                 WizardStep.WHEN -> WhenStep(form, isExpense, ui.today, problems) { wizard = EntryWizard.update(wizard, it) }
                 WizardStep.BELOW_ZERO -> BelowZeroStep(dip, accentFill, onAddAnyway = { wizard = EntryWizard.next(wizard); haptics.tick() }, onChange = { wizard = EntryWizard.change(wizard); haptics.reject() }, onCancel = { onDismiss() })
                 WizardStep.REVIEW -> ReviewStep(form, defaultText, accentFill, ui, entry(), resultingBalance)
@@ -318,7 +341,7 @@ fun EntryComposer(
 
         if (wizard.step != WizardStep.BELOW_ZERO) {
             // Back and Next / Add: white bold text on the kind color.
-            Row(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(Modifier.fillMaxWidth().padding(horizontal = Spacing.xl, vertical = Spacing.m), horizontalArrangement = Arrangement.spacedBy(Spacing.m)) {
                 AppButton(
                     stringResource(if (EntryWizard.back(wizard) == null) R.string.action_cancel else R.string.wizard_back),
                     onClick = ::goBack,
@@ -379,7 +402,13 @@ private fun ProblemList(problems: List<FormProblem>) {
 }
 
 @Composable
-internal fun AmountStep(form: EntryFormState, problems: List<FormProblem>, change: ((EntryFormState) -> EntryFormState) -> Unit) {
+internal fun AmountStep(
+    form: EntryFormState,
+    problems: List<FormProblem>,
+    /** Up to three recent amounts of this type; empty hides the chips. */
+    recent: List<Long> = emptyList(),
+    change: ((EntryFormState) -> EntryFormState) -> Unit,
+) {
     val colors = MaterialTheme.cashflow
     val haptics = rememberHaptics()
     StepTitle(stringResource(R.string.wizard_amount_title))
@@ -395,9 +424,19 @@ internal fun AmountStep(form: EntryFormState, problems: List<FormProblem>, chang
             },
             maxLines = 1,
         )
-        Text(" " + Money.CURRENCY, style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(bottom = 10.dp))
+        Text(" " + Money.CURRENCY, style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(bottom = Spacing.m))
     }
     ProblemList(problems)
+    if (recent.isNotEmpty()) {
+        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(Spacing.s, Alignment.CenterHorizontally)) {
+            for (amount in recent) {
+                SuggestionChip(
+                    onClick = { change { it.copy(amountText = Money.formatInput(amount)) }; haptics.tick() },
+                    label = { Text(Money.formatDisplay(amount), style = MaterialTheme.typography.labelMedium, maxLines = 1) },
+                )
+            }
+        }
+    }
     Keypad(
         modifier = Modifier.fullBleed(24.dp),
         onKey = { key -> change { it.copy(amountText = AmountInput.press(it.amountText, key)) }; haptics.tick() },
@@ -417,6 +456,8 @@ internal fun NameStep(
     isExpense: Boolean,
     frequent: List<String>,
     problems: List<FormProblem>,
+    suggestion: Suggestion? = null,
+    onSuggestion: (Suggestion) -> Unit = {},
     onNext: () -> Unit,
     change: ((EntryFormState) -> EntryFormState) -> Unit,
 ) {
@@ -430,7 +471,7 @@ internal fun NameStep(
     StepTitle(stringResource(R.string.wizard_name_title))
     if (frequent.isNotEmpty()) {
         // Small chips in one row (it scrolls sideways if they ever do not fit), never stacked bricks.
-        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(Spacing.s)) {
             for (name in frequent) {
                 SuggestionChip(
                     onClick = {
@@ -455,6 +496,16 @@ internal fun NameStep(
         fieldModifier = Modifier.focusRequester(focus),
     )
     ProblemList(problems)
+    if (suggestion != null) {
+        // ONE tappable line: "Same as last time: 75 TND, every week"
+        com.cashflow.app.ui.components.AppCard(Modifier.fillMaxWidth(), onClick = { keyboard?.hide(); focusManager.clearFocus(); onSuggestion(suggestion) }) {
+            Text(
+                Suggestions.line(suggestion),
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp).padding(Spacing.l),
+            )
+        }
+    }
 }
 
 /** Now / Later / Repeating on one screen; Later and Repeating open their fields right below. */
@@ -472,7 +523,7 @@ internal fun WhenStep(
     val haptics = rememberHaptics()
     if (showTimings) {
         StepTitle(stringResource(R.string.wizard_when_title))
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(Spacing.s), verticalArrangement = Arrangement.spacedBy(Spacing.s)) {
             form.timings.forEach { t ->
                 FilterChip(
                     selected = form.timing == t,
@@ -485,13 +536,10 @@ internal fun WhenStep(
         }
     }
     when (form.timing) {
-        Timing.NOW -> Text(
-            form.nowDate?.let { date ->
-                stringResource(if (isExpense) R.string.now_hint_past_expense else R.string.now_hint_past_income, AppDates.format(date))
-            } ?: stringResource(if (isExpense) R.string.now_hint_expense else R.string.now_hint_income),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+        // "Now" needs no explanation; a past day just names the day.
+        Timing.NOW -> form.nowDate?.let { date ->
+            Text(AppDates.format(date), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
         Timing.LATER -> {
             CompactDateField(stringResource(R.string.wizard_date_label), form.laterDate, earliest = today) { picked -> change { it.copy(laterDate = picked) } }
             ProblemList(problems)
@@ -564,7 +612,7 @@ internal fun WhenStep(
 @Composable
 private fun CompactDateField(label: String, date: LocalDate, earliest: LocalDate?, onPick: (LocalDate) -> Unit) {
     var open by remember { mutableStateOf(false) }
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(Spacing.s)) {
         Text(label, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
         OutlinedButton(onClick = { open = true }, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) {
             Text(AppDates.format(date), style = MaterialTheme.typography.titleMedium)
@@ -577,9 +625,9 @@ private fun CompactDateField(label: String, date: LocalDate, earliest: LocalDate
 @Composable
 private fun OptionalDateField(label: String, date: LocalDate?, earliest: LocalDate, onPick: (LocalDate) -> Unit, onClear: () -> Unit) {
     var open by remember { mutableStateOf(false) }
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(Spacing.s)) {
         Text(label, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s), verticalAlignment = Alignment.CenterVertically) {
             OutlinedButton(onClick = { open = true }, modifier = Modifier.weight(1f).heightIn(min = 56.dp)) {
                 Text(date?.let(AppDates::format) ?: stringResource(R.string.wizard_never), style = MaterialTheme.typography.titleMedium)
             }
@@ -595,7 +643,7 @@ private fun OptionalDateField(label: String, date: LocalDate?, earliest: LocalDa
 private fun OccurrencePreview(form: EntryFormState) {
     val dates = remember(form) { EntryWizard.occurrencePreview(form) }
     if (dates.isEmpty()) return
-    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
         Text(stringResource(R.string.wizard_next_dates), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
         for (date in dates) Text(AppDates.format(date), style = MaterialTheme.typography.bodyMedium)
     }
@@ -607,12 +655,12 @@ private fun BelowZeroStep(dip: RedDip?, accentFill: androidx.compose.ui.graphics
     val colors = MaterialTheme.cashflow
     StepTitle(stringResource(R.string.dip_title))
     val resources = androidx.compose.ui.platform.LocalContext.current.resources
-    LazyColumn(Modifier.fillMaxWidth().heightIn(max = 320.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    LazyColumn(Modifier.fillMaxWidth().heightIn(max = 320.dp), verticalArrangement = Arrangement.spacedBy(Spacing.s)) {
         items(dip?.days.orEmpty(), key = { it.date.toEpochDay() }) { day ->
             val date = AppDates.format(day.date)
             val balance = Money.formatDisplay(day.closing, withCurrency = false)
             Row(
-                Modifier.fillMaxWidth().clip(MaterialTheme.shapes.small).background(colors.dayNegativeFill).padding(horizontal = 14.dp, vertical = 10.dp)
+                Modifier.fillMaxWidth().clip(MaterialTheme.shapes.small).background(colors.dayNegativeFill).padding(horizontal = Spacing.m, vertical = Spacing.m)
                     .semantics(mergeDescendants = true) { contentDescription = resources.getString(R.string.dip_row_description, date, balance) },
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
@@ -647,7 +695,7 @@ private fun ReviewStep(
     StepTitle(stringResource(R.string.wizard_review_title))
     val balance by produceState<ResultingBalance?>(null, entry) { value = entry?.let { resultingBalance(it) } }
     Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = accentFill, contentColor = colors.buttonLabel)) {
-        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Column(Modifier.padding(Spacing.l), verticalArrangement = Arrangement.spacedBy(Spacing.m)) {
             Text(Money.formatSigned(form.kind, amount), style = MaterialTheme.typography.displaySmall, fontWeight = FontWeight.Bold)
             Text(form.description.trim().ifEmpty { defaultText }, style = MaterialTheme.typography.titleLarge)
             Text(timingLine(form), style = MaterialTheme.typography.bodyLarge)
@@ -708,9 +756,9 @@ private fun WeekdayCircle(dow: DayOfWeek, selected: Boolean, onClick: () -> Unit
         contentAlignment = Alignment.Center,
     ) {
         Box(
-            Modifier.size(38.dp).clip(CircleShape)
+            Modifier.size(38.dp).clip(MaterialTheme.shapes.small)
                 .background(if (selected) colors.primary else Color.Transparent)
-                .border(1.dp, if (selected) colors.primary else colors.outline, CircleShape),
+                .border(1.dp, if (selected) colors.primary else colors.outline, MaterialTheme.shapes.small),
             contentAlignment = Alignment.Center,
         ) {
             Text(

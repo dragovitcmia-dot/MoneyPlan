@@ -33,7 +33,7 @@ import androidx.compose.ui.unit.sp
 import com.cashflow.app.R
 import com.cashflow.app.ui.theme.cashflow
 
-private val KeyShape = RoundedCornerShape(14.dp)
+private val KeyShape = RoundedCornerShape(com.cashflow.app.ui.theme.Tokens.CARD_CORNER_DP.dp)
 
 private val DigitStyle = TextStyle(fontSize = 26.sp, fontWeight = FontWeight.Normal, fontFeatureSettings = "tnum")
 

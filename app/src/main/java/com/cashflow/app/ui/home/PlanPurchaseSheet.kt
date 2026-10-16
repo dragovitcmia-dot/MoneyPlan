@@ -1,6 +1,7 @@
 package com.cashflow.app.ui.home
 
 import androidx.activity.compose.BackHandler
+import com.cashflow.app.ui.theme.Spacing
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -166,8 +167,8 @@ fun PlanPurchaseSheet(
         BackHandler(enabled = !asking) { requestClose() }
         Column(Modifier.fillMaxWidth().heightIn(max = maxSheetHeight)) {
             Box(
-                Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp).clip(MaterialTheme.shapes.large)
-                    .background(colors.expenseFill).padding(vertical = 10.dp),
+                Modifier.fillMaxWidth().padding(horizontal = Spacing.xl, vertical = Spacing.s).clip(MaterialTheme.shapes.large)
+                    .background(colors.expenseFill).padding(vertical = Spacing.m),
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
@@ -178,11 +179,11 @@ fun PlanPurchaseSheet(
                 )
             }
             val (position, total) = PurchaseWizard.progress(state)
-            Column(Modifier.padding(horizontal = 24.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Column(Modifier.padding(horizontal = Spacing.xl), verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
                 LinearProgressIndicator(
                     progress = { position.toFloat() / total },
                     modifier = Modifier.fillMaxWidth(),
-                    color = colors.expenseFill,
+                    color = MaterialTheme.colorScheme.primary,
                     trackColor = MaterialTheme.colorScheme.surfaceVariant,
                     drawStopIndicator = {},
                 )
@@ -208,17 +209,17 @@ fun PlanPurchaseSheet(
                 if (changed.description != form.description) state = PurchaseWizard.editName(state, changed.description)
             }
             Column(
-                Modifier.weight(1f, fill = false).fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp, vertical = 12.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp),
+                Modifier.weight(1f, fill = false).fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = Spacing.xl, vertical = Spacing.m),
+                verticalArrangement = Arrangement.spacedBy(Spacing.l),
             ) {
                 when (state.step) {
-                    PurchaseStep.PRICE -> AmountStep(form, problems, edit)
+                    PurchaseStep.PRICE -> AmountStep(form, problems, change = edit)
                     PurchaseStep.NAME -> NameStep(form, true, ui.expenseNames, problems, onNext = ::goNext, change = edit)
                     PurchaseStep.RESULT -> ResultStep(baseline, result, option, onSelect = { state = PurchaseWizard.select(state, it); haptics.tick() })
                 }
             }
 
-            Row(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(Modifier.fillMaxWidth().padding(horizontal = Spacing.xl, vertical = Spacing.m), horizontalArrangement = Arrangement.spacedBy(Spacing.m)) {
                 AppButton(
                     stringResource(if (PurchaseWizard.back(state) == null) R.string.action_cancel else R.string.wizard_back),
                     onClick = ::goBack,
@@ -285,7 +286,7 @@ private fun ResultStep(baseline: PlanBaseline?, result: PurchaseResult?, option:
         return
     }
     // The choices: Pay all, 2, 3 ... (only the ones that exist). The default is the earliest start.
-    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(Spacing.s)) {
         for (o in result.options) {
             val desc = if (o.parts == 1) stringResource(R.string.plan_chip_desc_all) else stringResource(R.string.plan_chip_desc_parts, o.parts)
             FilterChip(
@@ -315,7 +316,7 @@ private fun CalendarStrip(cells: List<StripCell>, option: PurchaseOption) {
     LazyRow(
         state = listState,
         modifier = Modifier.fillMaxWidth().semantics { contentDescription = desc },
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
     ) {
         items(cells, key = { it.date.toEpochDay() }) { cell -> StripCellView(cell) }
     }
@@ -331,13 +332,13 @@ private fun StripCellView(cell: StripCell) {
         Modifier.width(68.dp).height(96.dp).clip(shape)
             .background(if (cell.negative) colors.dayNegativeFill else scheme.surface)
             .then(if (purchase) Modifier.border(BorderStroke(2.dp, colors.expenseFill), shape) else Modifier)
-            .padding(vertical = 6.dp),
+            .padding(vertical = Spacing.s),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         // day number: faint, today at full contrast on an accent square
         Box(Modifier.height(22.dp), contentAlignment = Alignment.Center) {
             if (cell.isToday) {
-                Box(Modifier.clip(RoundedCornerShape(4.dp)).background(scheme.primary).padding(horizontal = 4.dp), contentAlignment = Alignment.Center) {
+                Box(Modifier.clip(RoundedCornerShape(4.dp)).background(scheme.primary).padding(horizontal = Spacing.xs), contentAlignment = Alignment.Center) {
                     Text(cell.label, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = scheme.onPrimary, maxLines = 1)
                 }
             } else {

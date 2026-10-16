@@ -1,6 +1,7 @@
 package com.cashflow.app.ui.settings
 
 import android.app.Activity
+import com.cashflow.app.ui.theme.Spacing
 import android.content.Intent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -210,11 +211,11 @@ private fun whenOf(manifest: Manifest, zone: ZoneId): String =
 @Composable
 private fun SnapshotRow(info: SnapshotInfo, zone: ZoneId, enabled: Boolean, onRestore: () -> Unit) {
     Row(Modifier.fillMaxWidth().heightIn(min = 56.dp), verticalAlignment = Alignment.CenterVertically) {
-        Column(Modifier.weight(1f).padding(vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Column(Modifier.weight(1f).padding(vertical = Spacing.s), verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
             Text(SnapshotLabel.time(info, zone), style = MaterialTheme.typography.titleSmall)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s), verticalAlignment = Alignment.CenterVertically) {
                 Surface(shape = MaterialTheme.shapes.extraSmall, color = MaterialTheme.colorScheme.secondaryContainer, contentColor = MaterialTheme.colorScheme.onSecondaryContainer) {
-                    Text(SnapshotLabel.tag(info), style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
+                    Text(SnapshotLabel.tag(info), style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(horizontal = Spacing.s, vertical = Spacing.xs))
                 }
                 Text(SnapshotLabel.size(info), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
