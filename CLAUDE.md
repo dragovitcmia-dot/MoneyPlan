@@ -7,4 +7,5 @@ GitHub Actions (`.github/workflows/build.yml`).
 **Read `docs/RELEASE_RULES.md` before doing any release work.** In short: shipping rule (unit tests, build, launch check and
 geometry gate must pass), the permanent-history invariant, the geometry gate for tap targets, no database schema change without a
 real migration and a Before-update snapshot, and every release adds or updates Cashflow Lab scenarios for exactly what it changes
-and lists them in the final report.
+and lists them in the final report. A Lab scenario never asks for typing, creating, editing or deleting (it navigates itself and asks 2 to 4
+yes/no questions per screen); the phone test of every release is "open Lab, Run all checks, mark each scenario".

@@ -251,7 +251,7 @@ fun CalendarScreen(
     // ---- day sheet and what it opens --------------------------------------------------------
     val openDate = sheetDay
     // ONE sheet at a time: while an item (or its Change form) is open, the day list is not shown; dismissing the item shows it again.
-    if (openDate != null && sheets.item == null) {
+    if (openDate != null && sheets.item == null && composerKind == null) {
         val summary = months.values.firstNotNullOfOrNull { it.day(openDate) }
         DaySheet(
             date = openDate,

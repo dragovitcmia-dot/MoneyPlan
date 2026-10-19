@@ -18,6 +18,7 @@ STRINGS_XML = os.path.join(os.path.dirname(__file__), "..", "app", "src", "main"
 MIN_NAV_HEIGHT_DP = 48
 MIN_NAV_WIDTH_SHARE = 0.20
 MIN_BUTTON_HEIGHT_DP = 40
+MIN_SETTINGS_ROW_DP = 56
 SCREEN_W = 1080
 
 
@@ -289,6 +290,88 @@ def check_upcoming(W, H, dp, nav_top):
     return problems
 
 
+def check_settings(W, H, dp, nav_top):
+    """Settings is a list of uniform rows: the Backups row, "Remind me at" and "Check for updates" are clickable rows at least 56 dp
+    tall, the auto-accept switch is at least 48 dp, and the Backups row opens a full screen with a back arrow of at least 48 dp."""
+    problems = []
+    nodes, hits = wait_for(S["nav_settings"])
+    tap(clickable_of(max(hits, key=lambda n: n.b[3])))
+    time.sleep(1)
+    for _ in range(6):  # back to the top of the tab (it keeps its scroll position)
+        sh(f"input swipe {W // 2} {int(H * 0.3)} {W // 2} {int(H * 0.8)} 250")
+        time.sleep(0.3)
+    wanted = [("Backups", S["settings_backups_title"]), ("Remind me at", S["remind_label"]), ("Check for updates", S["check_updates"])]
+    lines = []
+    rows = {}
+    for name, label in wanted:
+        found = None
+        for _ in range(14):
+            nodes = dump()
+            hit = [n for n in nodes if (n.text == label or n.desc == label) and n.b[3] < nav_top]
+            if hit:
+                found = clickable_of(hit[0])
+                break
+            sh(f"input swipe {W // 2} {int(H * 0.75)} {W // 2} {int(H * 0.35)} 300")
+            time.sleep(0.5)
+        if found is None:
+            problems.append(f"Settings row {name!r} was not found")
+            continue
+        rows[name] = found
+        inside = inside_screen(found, W, nav_top)
+        lines.append(f"{name}: {found.w / dp:.0f} x {found.h / dp:.0f} dp clickable={found.clickable} {'ok' if inside else 'OUTSIDE'}")
+        if not found.clickable:
+            problems.append(f"Settings row {name!r} is not clickable")
+        if found.h / dp < MIN_SETTINGS_ROW_DP:
+            problems.append(f"Settings row {name!r} is {found.h / dp:.0f} dp tall, needs >= {MIN_SETTINGS_ROW_DP}")
+        if not inside:
+            problems.append(f"Settings row {name!r} is not inside the screen above the bar: {found.b}")
+    # the switch row: the switch itself is the control
+    for _ in range(6):
+        sh(f"input swipe {W // 2} {int(H * 0.3)} {W // 2} {int(H * 0.8)} 250")
+        time.sleep(0.3)
+    nodes = dump()
+    switches = [n for n in nodes if n.desc == S["auto_income_title"]]
+    if not switches:
+        problems.append("the 'Accept my income automatically' switch was not found")
+    else:
+        sw = clickable_of(switches[0])
+        lines.append(f"Auto-accept switch: {sw.w / dp:.0f} x {sw.h / dp:.0f} dp")
+        if sw.h / dp < MIN_NAV_HEIGHT_DP or sw.w / dp < MIN_NAV_HEIGHT_DP:
+            problems.append(f"the auto-accept switch is {sw.w / dp:.0f} x {sw.h / dp:.0f} dp, needs >= {MIN_NAV_HEIGHT_DP}")
+    print("SETTINGS ROWS:", "; ".join(lines))
+    notice("Geometry: Settings rows", "; ".join(lines))
+    # the Backups row opens its own screen
+    backups = rows.get("Backups")
+    if backups is not None:
+        for _ in range(14):
+            nodes = dump()
+            hit = [n for n in nodes if n.text == S["settings_backups_title"] and n.b[3] < nav_top]
+            if hit:
+                backups = clickable_of(hit[0])
+                break
+            sh(f"input swipe {W // 2} {int(H * 0.75)} {W // 2} {int(H * 0.35)} 300")
+            time.sleep(0.5)
+        tap(backups)
+        nodes, now_hits = wait_for(S["backup_now"], timeout=15)
+        time.sleep(0.5)
+        nodes = dump()
+        back = [n for n in nodes if n.desc == S["settings_back"]]
+        if not back:
+            problems.append("the Backups screen has no back arrow")
+        else:
+            b = clickable_of(back[0])
+            msg = f"Backups back arrow: {b.w / dp:.0f} x {b.h / dp:.0f} dp; Back up now: {clickable_of(now_hits[0]).h / dp:.0f} dp tall"
+            print("BACKUPS SCREEN:", msg)
+            notice("Geometry: Backups screen", msg)
+            if b.h / dp < MIN_NAV_HEIGHT_DP or b.w / dp < MIN_NAV_HEIGHT_DP:
+                problems.append(f"the Backups back arrow is {b.w / dp:.0f} x {b.h / dp:.0f} dp, needs >= {MIN_NAV_HEIGHT_DP}")
+            tap(b)
+            nodes, ok = wait_until(lambda nodes: any(n.text == S["settings_backups_title"] for n in nodes) or None, timeout=10)
+            if not ok:
+                problems.append("the back arrow did not return from the Backups screen to Settings")
+    return problems
+
+
 def main():
     global SCREEN_W
     W, H, dpi = display()
@@ -413,6 +496,8 @@ def main():
     time.sleep(1.5)
     # 3. Upcoming: the three filter chips (>= 48 dp, inside the screen) and, with Repeating selected, the series rows
     problems += check_upcoming(W, H, dp, nav_top)
+    # 4. Settings: uniform rows (>= 56 dp) and the Backups screen
+    problems += check_settings(W, H, dp, nav_top)
 
     if problems:
         for p in problems:

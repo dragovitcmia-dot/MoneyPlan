@@ -295,6 +295,7 @@ fun EntryComposer(
     ) {
         BackHandler(enabled = !discard.asking) { requestClose() }
         Column(Modifier.fillMaxWidth().heightIn(max = maxSheetHeight)) {
+        com.cashflow.app.lab.LabHooks.Panel() // Lab build only (a no-op elsewhere): the check panel, in the sheet, never over its content
         // Header: a band in the kind color with white bold text, like the big button on Home.
         Box(
             Modifier.fillMaxWidth().padding(horizontal = Spacing.xl, vertical = Spacing.s).clip(MaterialTheme.shapes.large).background(accentFill).padding(vertical = Spacing.m),

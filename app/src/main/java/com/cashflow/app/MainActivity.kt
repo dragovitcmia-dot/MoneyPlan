@@ -244,6 +244,7 @@ class MainActivity : ComponentActivity() {
                                 onSelect = { index ->
                                     if (index != tab || showCenter) haptics.tick() // light tick on every tab change
                                     if (index != tab) backupsOpen = false
+                                    com.cashflow.app.lab.LabHooks.onTabSelected()
                                     NavLogic.selectTab(NavState(tab, showCenter), index).let { tab = it.tab; showCenter = it.centerOpen }
                                 },
                             )

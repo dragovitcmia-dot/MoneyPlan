@@ -168,6 +168,7 @@ fun PlanPurchaseSheet(
     ) {
         BackHandler(enabled = !asking) { requestClose() }
         Column(Modifier.fillMaxWidth().heightIn(max = maxSheetHeight)) {
+        com.cashflow.app.lab.LabHooks.Panel() // Lab build only (a no-op elsewhere): the check panel, in the sheet, never over its content
             Box(
                 Modifier.fillMaxWidth().padding(horizontal = Spacing.xl, vertical = Spacing.s).clip(MaterialTheme.shapes.large)
                     .background(colors.expenseFill).padding(vertical = Spacing.m),

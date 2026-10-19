@@ -38,12 +38,22 @@ the assertion. A new control gets an assertion in the same release.
 No change to the main database schema without a real Room migration, a bumped `AppDatabase.SCHEMA_VERSION`, an exported schema
 and the automatic "Before update" snapshot (made before Room opens). Never edit an existing schema version.
 
-## 5. Cashflow Lab: every release updates its scenarios
+## 5. Cashflow Lab: every release updates its scenarios, and a check never asks for effort
 Cashflow Lab (`com.cashflow.app.lab`) is a second installable app built from the same code with completely separate data. Its
 scenario catalogue is `app/src/debug/java/com/cashflow/app/debug/lab/LabScenarios.kt` (pure seed builders, JVM tests in
 `LabScenariosTest`). **Every release must add or update Lab scenarios for exactly what it changes** (each scenario: id, title,
-one line, a checklist of 3 to 6 "Do X, expect Y" bullets, a pure seed builder, an optional clock), keep the tests that prove the
-facts in the checklist, and **list the scenarios added or changed in the final report**.
+one line, its steps, a pure seed builder, an optional clock), keep the tests that prove the facts in the questions, and **list the
+scenarios added or changed in the final report**.
+
+**Zero-effort rule.** A Lab scenario never asks the person to type, create, edit or delete anything. It seeds its data relative to the
+Lab clock (system notifications off), navigates itself to the exact screen, sheet or picker to inspect (a `UiTarget`: a day list, an item
+sheet, a Move date picker, the add wizard on its Name step, the purchase result, the Backups screen, ...) and shows the compact check
+panel with 2 to 4 yes/no questions per screen and two buttons, "Looks right" and "Problem". A scenario that needs a different clock moves
+it by itself (`clockShiftDays`). The panel sits in the layout above the navigation bar (and inside sheets), never over content, and its
+buttons are at least 48 dp tall (the geometry gate measures them). The Lab home has "Run all checks" at the top and the scenario list;
+the Results screen shows a tick or a cross per scenario and is stored only in the Lab's own storage.
+
+**The phone test of every release is: open Lab, Run all checks, mark each scenario.**
 
 Lab rules: all lab-only code lives in `app/src/lab/java`; every other build type gets no-op stand-ins from `app/src/labStub/java`,
 so the real app contains no lab code (CI checks the real APK's dex for lab-only strings). The real app must behave exactly as before.

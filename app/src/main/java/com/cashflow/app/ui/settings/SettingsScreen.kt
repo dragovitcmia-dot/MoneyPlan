@@ -261,6 +261,7 @@ internal fun DatePickerDialogFor(
                 )
             }
             DatePicker(state = state)
+            com.cashflow.app.lab.LabHooks.Panel() // Lab build only: the check panel, inside the dialog
         }
     }
 }

@@ -16,6 +16,17 @@ object LabHooks {
     @Composable
     fun Tag() = Unit
 
+    /** The Lab's check panel (above the navigation bar, and at the bottom of sheets and full-screen dialogs): nothing outside the Lab. */
+    @Composable
+    fun Panel() = Unit
+
+    /** The Lab's home and results screens over the tab content: nothing outside the Lab. */
+    @Suppress("UNUSED_PARAMETER")
+    @Composable
+    fun Overlay(onOpenSettings: () -> Unit) = Unit
+
+    fun onTabSelected() = Unit
+
     @Suppress("UNUSED_PARAMETER")
     @Composable
     fun Card(repository: LedgerRepository, onDataChanged: () -> Unit) = Unit

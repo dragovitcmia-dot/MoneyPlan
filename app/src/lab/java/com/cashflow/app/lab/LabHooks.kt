@@ -1,6 +1,7 @@
 package com.cashflow.app.lab
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -29,6 +30,7 @@ object LabHooks {
         Box(
             Modifier
                 .clip(RoundedCornerShape(6.dp))
+                .clickable { LabState.showHome() }
                 .background(Color(0xFFFFB300))
                 .padding(horizontal = 8.dp, vertical = 2.dp)
                 .semantics { contentDescription = "Lab build" },
@@ -39,4 +41,15 @@ object LabHooks {
 
     @Composable
     fun Card(repository: LedgerRepository, onDataChanged: () -> Unit) = LabCard(repository, onDataChanged)
+
+    /** The check panel of the running scenario (nothing while no check runs). */
+    @Composable
+    fun Panel() = LabPanel()
+
+    /** The Lab home (Run all checks, the scenario list) and the Results screen, over the tab content. */
+    @Composable
+    fun Overlay(onOpenSettings: () -> Unit) = LabOverlays(onOpenSettings)
+
+    /** A tap on a bottom tab leaves the Lab home / Results. */
+    fun onTabSelected() = LabState.hideOverlay()
 }

@@ -56,6 +56,7 @@ fun DaySheet(
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
+        com.cashflow.app.lab.LabHooks.Panel() // Lab build only: the check panel
         Column(
             Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = Spacing.xl).padding(bottom = Spacing.l).navigationBarsPadding(),
             verticalArrangement = Arrangement.spacedBy(Spacing.l),

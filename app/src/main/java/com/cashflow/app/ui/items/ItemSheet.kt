@@ -70,18 +70,28 @@ class ItemSheetState {
         autoMove = move
     }
 
+    /** The series edit form replaces the item sheet too (one sheet at a time). */
+    var editingSeries by mutableStateOf(false)
+        private set
+
     fun change() {
         if (item != null) changing = true
     }
 
-    /** Back from "Change" to the item sheet. */
+    fun editSeries() {
+        if (item != null) editingSeries = true
+    }
+
+    /** Back from "Change" or the series form to the item sheet. */
     fun backToItem() {
         changing = false
+        editingSeries = false
     }
 
     fun close() {
         item = null
         changing = false
+        editingSeries = false
         autoMove = false
     }
 }
@@ -96,10 +106,18 @@ fun ItemSheets(state: ItemSheetState, home: HomeViewModel, actions: ItemActions,
     val rules by home.rules.collectAsStateWithLifecycle()
     val series by home.series.collectAsStateWithLifecycle()
     val rule = tx.recurringRuleId?.let { id -> rules.firstOrNull { it.id == id } }
-    if (state.changing) {
+    if (state.editingSeries && rule != null) {
+        SeriesEditSheet(
+            rule = rule,
+            today = today,
+            askAmount = rule.id in series.askAmountRuleIds,
+            onSave = { edited, ask -> state.close(); actions.saveSeries(edited, ask) },
+            onDismiss = state::backToItem,
+        )
+    } else if (state.changing) {
         ItemEditSheet(tx = tx, actions = actions, today = today, onDismiss = state::backToItem, onDone = state::close)
     } else {
-        ItemSheet(tx, rule, series, actions, today, onDismiss = state::close, onChange = state::change, startMoving = state.autoMove)
+        ItemSheet(tx, rule, series, actions, today, onDismiss = state::close, onChange = state::change, onEditSeries = state::editSeries, startMoving = state.autoMove)
     }
 }
 
@@ -118,6 +136,7 @@ fun ItemSheet(
     today: LocalDate,
     onDismiss: () -> Unit,
     onChange: () -> Unit,
+    onEditSeries: () -> Unit,
     startMoving: Boolean = false,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -132,6 +151,7 @@ fun ItemSheet(
     }
 
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
+        com.cashflow.app.lab.LabHooks.Panel() // Lab build only: the check panel
         Column(
             Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = Spacing.l).padding(bottom = Spacing.l).navigationBarsPadding(),
             verticalArrangement = Arrangement.spacedBy(Spacing.s),
@@ -179,7 +199,7 @@ fun ItemSheet(
                         )
                     }
                     if (allowed.series && rule != null) {
-                        SeriesActions(rule, today, actions, seriesContext, onClose = { after -> close(after) }, asMenu = true)
+                        SeriesActions(rule, today, actions, seriesContext, onClose = { after -> close(after) }, asMenu = true, onEditSeries = onEditSeries)
                     }
                 }
             }

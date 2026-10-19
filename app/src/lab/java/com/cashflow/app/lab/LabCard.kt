@@ -35,8 +35,6 @@ import com.cashflow.app.CashflowApp
 import com.cashflow.app.R
 import com.cashflow.app.backup.BackupCheck
 import com.cashflow.app.data.LedgerRepository
-import com.cashflow.app.debug.lab.LabScenario
-import com.cashflow.app.debug.lab.LabScenarios
 import com.cashflow.app.engine.AppClock
 import com.cashflow.app.engine.AppDates
 import com.cashflow.app.ui.components.AppButton
@@ -58,9 +56,7 @@ internal fun LabCard(@Suppress("UNUSED_PARAMETER") repository: LedgerRepository,
     val app = context.applicationContext as CashflowApp
     val scope = rememberCoroutineScope()
     val offset by LabState.offset.collectAsStateWithLifecycle()
-    val last by LabState.lastScenario.collectAsStateWithLifecycle()
     var notificationsOn by remember { mutableStateOf(LabState.notificationsOn) }
-    var checklist by remember { mutableStateOf<LabScenario?>(null) }
     var confirmReset by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf<String?>(null) }
@@ -158,37 +154,14 @@ internal fun LabCard(@Suppress("UNUSED_PARAMETER") repository: LedgerRepository,
             )
         }
 
-        // ---- scenarios
+        // ---- the checks (the scenarios themselves live on the Lab home)
         HorizontalDivider()
-        Text("Scenarios", style = MaterialTheme.typography.titleMedium)
-        Text(
-            "Load wipes the Lab data only and seeds exactly that scenario, then shows its checklist.",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        AppButton(
+            "Open Lab checks",
+            onClick = { LabState.showHome() },
+            modifier = Modifier.fillMaxWidth(),
+            enabled = !busy,
         )
-        for (scenario in LabScenarios.all) {
-            Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text(
-                    scenario.title + if (scenario.id == last) "  (loaded)" else "",
-                    style = MaterialTheme.typography.titleSmall,
-                )
-                Text(scenario.description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    AppButton(
-                        "Load",
-                        onClick = { launchBusy { LabApply.load(app, scenario); checklist = scenario } },
-                        modifier = Modifier.weight(1f),
-                        enabled = !busy,
-                    )
-                    AppButton(
-                        "Checklist",
-                        onClick = { checklist = scenario },
-                        modifier = Modifier.weight(1f),
-                        style = AppButtonStyle.Outlined,
-                    )
-                }
-            }
-        }
 
         // ---- data
         HorizontalDivider()
@@ -229,19 +202,6 @@ internal fun LabCard(@Suppress("UNUSED_PARAMETER") repository: LedgerRepository,
         )
     }
 
-    checklist?.let { scenario ->
-        AlertDialog(
-            onDismissRequest = { checklist = null },
-            title = { Text(scenario.title) },
-            text = {
-                Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text(scenario.description, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    scenario.checklist.forEachIndexed { index, item -> Text("${index + 1}. $item", style = MaterialTheme.typography.bodyMedium) }
-                }
-            },
-            confirmButton = { TextButton(onClick = { checklist = null }, modifier = Modifier.heightIn(min = 48.dp)) { Text("Close") } },
-        )
-    }
     if (confirmReset) {
         AlertDialog(
             onDismissRequest = { confirmReset = false },

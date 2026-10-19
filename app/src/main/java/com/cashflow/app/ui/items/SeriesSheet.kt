@@ -217,6 +217,8 @@ internal fun SeriesActions(
     showExtend: Boolean = true,
     /** One outlined "Repeating payment" row that opens a menu (the item sheet), instead of a row of buttons. */
     asMenu: Boolean = false,
+    /** The item sheet shows the series form INSTEAD of itself (one sheet at a time): it handles "Edit series" here. */
+    onEditSeries: (() -> Unit)? = null,
 ) {
     var menuOpen by remember(rule.id) { mutableStateOf(false) }
     var editing by remember(rule.id) { mutableStateOf(false) }
@@ -236,7 +238,7 @@ internal fun SeriesActions(
             androidx.compose.material3.DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
                 androidx.compose.material3.DropdownMenuItem(
                     text = { Text(stringResource(R.string.series_edit_action), style = MaterialTheme.typography.titleSmall) },
-                    onClick = { menuOpen = false; editing = true },
+                    onClick = { menuOpen = false; if (onEditSeries != null) onEditSeries() else editing = true },
                     modifier = Modifier.heightIn(min = 48.dp),
                 )
                 androidx.compose.material3.DropdownMenuItem(
