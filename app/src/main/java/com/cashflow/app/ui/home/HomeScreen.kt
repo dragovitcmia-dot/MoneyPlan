@@ -156,19 +156,30 @@ private fun HomeContent(
     var prefill by remember { mutableStateOf<Pair<String, String>?>(null) }
     val sheets = com.cashflow.app.ui.items.rememberItemSheetState()
     var startAtName by remember { mutableStateOf(false) }
+    // Every request builds its sheet from scratch (a Lab check can open the same sheet twice in a row with different contents).
+    var requestSerial by remember { mutableStateOf(0) }
     var purchaseStart by remember { mutableStateOf(com.cashflow.app.engine.PurchaseState()) }
     LaunchedEffect(request) {
         when (request) {
             is com.cashflow.app.engine.UiTarget.Wizard -> {
+                requestSerial++
                 prefill = request.amountText to request.name
                 startAtName = request.atName
                 composerKind = request.kind.name
             }
             is com.cashflow.app.engine.UiTarget.Purchase -> {
+                requestSerial++
                 purchaseStart = com.cashflow.app.engine.PurchaseState(
                     priceText = request.priceText, name = request.name, step = com.cashflow.app.engine.PurchaseStep.RESULT, selectedParts = request.parts,
                 )
                 planOpen = true
+            }
+            com.cashflow.app.engine.UiTarget.Home -> {
+                composerKind = null
+                planOpen = false
+                prefill = null
+                startAtName = false
+                purchaseStart = com.cashflow.app.engine.PurchaseState()
             }
             else -> Unit
         }
@@ -241,6 +252,7 @@ private fun HomeContent(
     }
 
     composerKind?.let { name ->
+      androidx.compose.runtime.key(requestSerial) {
         EntryComposer(
             kind = TxKind.valueOf(name),
             ui = ui,
@@ -253,9 +265,11 @@ private fun HomeContent(
             prefillName = prefill?.second.orEmpty(),
             startAtName = startAtName,
         )
+      }
     }
 
     if (planOpen) {
+      androidx.compose.runtime.key(requestSerial) {
         PlanPurchaseSheet(
             ui = ui,
             loadBaseline = viewModel::purchaseBaseline,
@@ -269,6 +283,7 @@ private fun HomeContent(
             onDismiss = { planOpen = false; purchaseStart = com.cashflow.app.engine.PurchaseState() },
             initial = purchaseStart,
         )
+      }
     }
 
     com.cashflow.app.ui.items.ItemSheets(sheets, viewModel, actions, ui.today)

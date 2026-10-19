@@ -54,6 +54,7 @@ import kotlinx.coroutines.launch
 internal fun LabPanel() {
     val session by LabState.session.collectAsStateWithLifecycle()
     val expanded by LabState.panelExpanded.collectAsStateWithLifecycle()
+    val busy by LabState.busy.collectAsStateWithLifecycle()
     val app = LocalContext.current.applicationContext as CashflowApp
     val scope = rememberCoroutineScope()
     val s = session ?: return
@@ -87,7 +88,9 @@ internal fun LabPanel() {
                     Icon(Icons.Filled.Close, contentDescription = "Stop the checks", modifier = Modifier.size(24.dp))
                 }
             }
-            if (expanded) {
+            if (busy) {
+                Text("Preparing the data and the screen…", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(bottom = Spacing.m))
+            } else if (expanded) {
                 Column(
                     Modifier.fillMaxWidth().heightIn(max = 220.dp).verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(Spacing.xs),
@@ -95,8 +98,8 @@ internal fun LabPanel() {
                     for (check in step.checks) Text("• $check", style = MaterialTheme.typography.bodyMedium)
                 }
                 Row(Modifier.fillMaxWidth().padding(vertical = Spacing.s), horizontalArrangement = Arrangement.spacedBy(Spacing.s)) {
-                    AppButton("Problem", onClick = { scope.launch { LabRunner.mark(app, false) } }, modifier = Modifier.weight(1f), style = AppButtonStyle.Outlined)
-                    AppButton("Looks right", onClick = { scope.launch { LabRunner.mark(app, true) } }, modifier = Modifier.weight(1f))
+                    AppButton("Problem", onClick = { LabRunner.markAsync(app, false) }, modifier = Modifier.weight(1f), style = AppButtonStyle.Outlined)
+                    AppButton("Looks right", onClick = { LabRunner.markAsync(app, true) }, modifier = Modifier.weight(1f))
                 }
             }
         }
@@ -124,17 +127,17 @@ private fun LabHome(onOpenSettings: () -> Unit) {
     val ids = LabScenarios.all.map { it.id }
     Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         Column(
-            Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(top = 72.dp, start = Spacing.l, end = Spacing.l, bottom = 88.dp),
+            Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(top = 104.dp, start = Spacing.l, end = Spacing.l, bottom = 88.dp),
             verticalArrangement = Arrangement.spacedBy(Spacing.m),
         ) {
             Text("Cashflow Lab", style = MaterialTheme.typography.headlineMedium)
-            AppButton("Run all checks", onClick = { scope.launch { LabRunner.begin(app, ids) } }, modifier = Modifier.fillMaxWidth())
+            AppButton("Run all checks", onClick = { LabRunner.beginAsync(app, ids) }, modifier = Modifier.fillMaxWidth())
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Spacing.s)) {
                 AppButton("Results", onClick = { LabState.showResults() }, modifier = Modifier.weight(1f), style = AppButtonStyle.Outlined)
                 AppButton("Tools", onClick = { LabState.hideOverlay(); onOpenSettings() }, modifier = Modifier.weight(1f), style = AppButtonStyle.Outlined)
             }
             Text(results.summary(ids), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            for (scenario in LabScenarios.all) ScenarioRow(scenario, results.mark(scenario.id)) { scope.launch { LabRunner.begin(app, listOf(scenario.id)) } }
+            for (scenario in LabScenarios.all) ScenarioRow(scenario, results.mark(scenario.id)) { LabRunner.beginAsync(app, listOf(scenario.id)) }
         }
     }
 }
@@ -180,7 +183,7 @@ private fun LabResultsScreen() {
     val ids = LabScenarios.all.map { it.id }
     Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         Column(
-            Modifier.fillMaxSize().padding(top = 72.dp, start = Spacing.l, end = Spacing.l, bottom = 88.dp),
+            Modifier.fillMaxSize().padding(top = 104.dp, start = Spacing.l, end = Spacing.l, bottom = 88.dp),
             verticalArrangement = Arrangement.spacedBy(Spacing.s),
         ) {
             Text("Results", style = MaterialTheme.typography.headlineMedium)
@@ -198,7 +201,31 @@ private fun LabResultsScreen() {
                 AppButton("Lab home", onClick = { LabState.showHome() }, modifier = Modifier.weight(1f), style = AppButtonStyle.Outlined)
                 AppButton("Clear results", onClick = { LabState.clearResults() }, modifier = Modifier.weight(1f), style = AppButtonStyle.Outlined)
             }
-            AppButton("Run all checks", onClick = { scope.launch { LabRunner.begin(app, ids) } }, modifier = Modifier.fillMaxWidth())
+            AppButton("Run all checks", onClick = { LabRunner.beginAsync(app, ids) }, modifier = Modifier.fillMaxWidth())
         }
+    }
+}
+
+/**
+ * The same panel for the Move date picker: the picker is a dialog window of its own, so the panel gets a small non-modal window at the TOP
+ * of the screen, created after the picker so it is on top; touches outside the panel go to the picker.
+ */
+@Composable
+internal fun LabPickerPanel() {
+    val session by LabState.session.collectAsStateWithLifecycle()
+    if (session == null) return
+    androidx.compose.ui.window.Dialog(
+        onDismissRequest = {},
+        properties = androidx.compose.ui.window.DialogProperties(dismissOnBackPress = false, dismissOnClickOutside = false, usePlatformDefaultWidth = false),
+    ) {
+        val window = (androidx.compose.ui.platform.LocalView.current.parent as? androidx.compose.ui.window.DialogWindowProvider)?.window
+        androidx.compose.runtime.SideEffect {
+            window?.let {
+                it.setGravity(android.view.Gravity.TOP)
+                it.clearFlags(android.view.WindowManager.LayoutParams.FLAG_DIM_BEHIND)
+                it.addFlags(android.view.WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or android.view.WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE)
+            }
+        }
+        LabPanel()
     }
 }

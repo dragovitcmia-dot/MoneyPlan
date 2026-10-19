@@ -40,45 +40,40 @@ fun DebugSection(repository: LedgerRepository, onDataChanged: () -> Unit) {
     val app = context.applicationContext as CashflowApp
     var confirmClear by remember { mutableStateOf(false) }
 
-    SectionCard {
-        Text(stringResource(R.string.developer_title), style = MaterialTheme.typography.titleLarge)
-        Text(
-            stringResource(R.string.developer_note),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        AppButton(
+    // Developer tools as uniform Settings rows (title, one-line subtitle, chevron), like every other group.
+    com.cashflow.app.ui.settings.SettingsGroup(stringResource(R.string.developer_title)) {
+        com.cashflow.app.ui.settings.ChevronRow(
             stringResource(R.string.debug_load_sample),
+            stringResource(R.string.debug_load_sample_sub),
             onClick = {
                 scope.launch {
                     repository.loadReferenceScenario(com.cashflow.app.engine.AppClock.today())
                     onDataChanged()
                 }
             },
-            modifier = Modifier.fillMaxWidth(),
         )
-        AppButton(
+        com.cashflow.app.ui.settings.RowDivider()
+        com.cashflow.app.ui.settings.ChevronRow(
             stringResource(R.string.debug_send_test),
+            stringResource(R.string.debug_send_test_sub),
             onClick = { scope.launch { app.reminderRunner.sendTest() } },
-            modifier = Modifier.fillMaxWidth(),
-            style = AppButtonStyle.Outlined,
         )
-        AppButton(
+        com.cashflow.app.ui.settings.RowDivider()
+        com.cashflow.app.ui.settings.ChevronRow(
             stringResource(R.string.debug_run_check),
+            stringResource(R.string.debug_run_check_sub),
             onClick = {
                 scope.launch {
                     val done = app.reminderRunner.run()
                     Toast.makeText(context, context.getString(R.string.debug_check_done, done.size), Toast.LENGTH_SHORT).show()
                 }
             },
-            modifier = Modifier.fillMaxWidth(),
-            style = AppButtonStyle.Outlined,
         )
-        AppButton(
+        com.cashflow.app.ui.settings.RowDivider()
+        com.cashflow.app.ui.settings.ChevronRow(
             stringResource(R.string.debug_clear_all),
+            stringResource(R.string.debug_clear_all_sub),
             onClick = { confirmClear = true },
-            modifier = Modifier.fillMaxWidth(),
-            style = AppButtonStyle.Outlined,
         )
     }
 

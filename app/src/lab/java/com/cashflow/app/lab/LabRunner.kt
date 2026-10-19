@@ -7,12 +7,27 @@ import com.cashflow.app.debug.lab.LabSession
 import com.cashflow.app.engine.AppClock
 import com.cashflow.app.engine.UiTarget
 import com.cashflow.app.ui.UiTargets
+import kotlinx.coroutines.launch
 
 /**
  * Runs the checks: loads a scenario's data, sends the app to the screen of each step by itself, and moves on when the person marks it.
  * Nothing here asks anyone to type, create, edit or delete. The pure rules (which step or scenario comes next) are in LabFlow.
  */
 object LabRunner {
+    /**
+     * The runner outlives every screen: a mark that is in the middle of loading the next scenario must not be cancelled when the sheet
+     * that holds the button leaves the screen (the button's own scope would be).
+     */
+    private val scope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.Main.immediate)
+
+    fun beginAsync(app: CashflowApp, ids: List<String>) {
+        scope.launch { begin(app, ids) }
+    }
+
+    fun markAsync(app: CashflowApp, ok: Boolean) {
+        scope.launch { mark(app, ok) }
+    }
+
     /** "Run all checks" ([ids] = every scenario) or one scenario. */
     suspend fun begin(app: CashflowApp, ids: List<String>) {
         val session = LabFlow.start(ids) ?: return
@@ -46,6 +61,16 @@ object LabRunner {
     }
 
     private suspend fun enter(app: CashflowApp, session: LabSession, load: Boolean) {
+        LabState.setBusy(true)
+        try {
+            enterNow(app, session, load)
+        } finally {
+            kotlinx.coroutines.delay(600) // the screen needs a moment to build what the target opens
+            LabState.setBusy(false)
+        }
+    }
+
+    private suspend fun enterNow(app: CashflowApp, session: LabSession, load: Boolean) {
         val scenario = LabScenarios.byId(session.scenarioId) ?: return
         if (load) LabApply.load(app, scenario)
         val step = scenario.steps[session.step]

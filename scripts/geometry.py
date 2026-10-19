@@ -366,7 +366,7 @@ def check_settings(W, H, dp, nav_top):
             if b.h / dp < MIN_NAV_HEIGHT_DP or b.w / dp < MIN_NAV_HEIGHT_DP:
                 problems.append(f"the Backups back arrow is {b.w / dp:.0f} x {b.h / dp:.0f} dp, needs >= {MIN_NAV_HEIGHT_DP}")
             tap(b)
-            nodes, ok = wait_until(lambda nodes: any(n.text == S["settings_backups_title"] for n in nodes) or None, timeout=10)
+            nodes, ok = wait_until(lambda nodes: any(n.text == S["settings_data_title"] for n in nodes) or None, timeout=10)  # the Settings group header, not the Backups screen title
             if not ok:
                 problems.append("the back arrow did not return from the Backups screen to Settings")
     return problems

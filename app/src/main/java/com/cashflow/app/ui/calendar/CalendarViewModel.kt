@@ -44,6 +44,14 @@ class CalendarViewModel(private val snapshots: LedgerSnapshots, clock: () -> Loc
     private val _itemRequest = MutableStateFlow<ItemRequest?>(null)
     val itemRequest: StateFlow<ItemRequest?> = _itemRequest
 
+    /** Bumped when something new is shown by itself (a Lab check): the screen closes whatever item sheet it had open. */
+    private val _sheetReset = MutableStateFlow(0)
+    val sheetReset: StateFlow<Int> = _sheetReset
+
+    fun resetSheets() {
+        _sheetReset.value = _sheetReset.value + 1
+    }
+
     fun requestItem(request: ItemRequest?) {
         _itemRequest.value = request
     }

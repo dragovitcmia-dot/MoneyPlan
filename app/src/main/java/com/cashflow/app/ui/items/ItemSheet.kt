@@ -181,6 +181,8 @@ fun ItemSheet(
                         )
                     }
                     if (allowed.change || allowed.moveDate) {
+                        // two equal buttons on ONE line at every font size ("Move date" never wraps)
+                        com.cashflow.app.ui.theme.CappedFontScale {
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Spacing.s)) {
                             if (allowed.change) {
                                 AppButton(stringResource(R.string.item_change), onClick = onChange, modifier = Modifier.weight(1f), style = AppButtonStyle.Outlined)
@@ -188,6 +190,7 @@ fun ItemSheet(
                             if (allowed.moveDate) {
                                 AppButton(stringResource(R.string.item_move_date), onClick = { moving = true }, modifier = Modifier.weight(1f), style = AppButtonStyle.Outlined)
                             }
+                        }
                         }
                     }
                     if (allowed.markWaiting) {

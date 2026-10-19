@@ -46,6 +46,10 @@ object LabHooks {
     @Composable
     fun Panel() = LabPanel()
 
+    /** The panel for the Move date picker (a dialog of its own): a small non-modal window at the top of the screen. */
+    @Composable
+    fun PickerPanel() = LabPickerPanel()
+
     /** The Lab home (Run all checks, the scenario list) and the Results screen, over the tab content. */
     @Composable
     fun Overlay(onOpenSettings: () -> Unit) = LabOverlays(onOpenSettings)

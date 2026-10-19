@@ -81,10 +81,13 @@ def walk(name, count):
     nodes = wait_for_text(LOOKS_RIGHT, timeout=30)
     problems += check_panel_buttons(nodes, name)
     for i in range(count):
-        time.sleep(2.0)  # the Lab seeds, navigates and opens the sheet by itself
+        # The panel shows "Preparing the data and the screen" (no buttons) while the Lab seeds, navigates and opens the sheet by itself.
+        nodes = wait_for_text(LOOKS_RIGHT, timeout=40)
+        time.sleep(1.5)  # the sheet or picker has finished opening
         smoke.screenshot(f"{name}-lab-check-{i + 1:02d}")
         nodes = wait_for_text(LOOKS_RIGHT, timeout=20)
         tap_box(max(node_boxes(nodes, LOOKS_RIGHT), key=lambda b: b[3]))
+        time.sleep(1.0)  # the panel switches to "Preparing" right after the tap
     return problems
 
 

@@ -148,8 +148,12 @@ fun CalendarScreen(
 
     val sheetDay by calendar.openDay.collectAsStateWithLifecycle()
     val itemRequest by calendar.itemRequest.collectAsStateWithLifecycle()
+    val sheetReset by calendar.sheetReset.collectAsStateWithLifecycle()
     var composerKind by rememberSaveable { mutableStateOf<String?>(null) }
     val sheets = com.cashflow.app.ui.items.rememberItemSheetState()
+
+    // Something new is shown by itself (a Lab check): any item sheet left open from the previous check closes first.
+    LaunchedEffect(sheetReset) { sheets.close() }
 
     // The month can also change from outside (a Lab check, a link): the pager follows the view model.
     LaunchedEffect(visibleMonth) {

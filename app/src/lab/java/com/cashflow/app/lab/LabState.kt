@@ -37,6 +37,11 @@ object LabState {
     val session: StateFlow<LabSession?> = _session
     fun setSession(session: LabSession?) { _session.value = session }
 
+    /** True while a check's data is being prepared (seeding, moving the clock): the panel shows "Preparing" instead of its questions. */
+    private val _busy = MutableStateFlow(false)
+    val busy: StateFlow<Boolean> = _busy
+    fun setBusy(busy: Boolean) { _busy.value = busy }
+
     /** The check panel's expanded state (shared by the copies of the panel in the main window and in sheets). */
     private val _panelExpanded = MutableStateFlow(true)
     val panelExpanded: StateFlow<Boolean> = _panelExpanded

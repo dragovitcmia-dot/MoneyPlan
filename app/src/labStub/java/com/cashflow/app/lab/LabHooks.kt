@@ -20,6 +20,9 @@ object LabHooks {
     @Composable
     fun Panel() = Unit
 
+    @Composable
+    fun PickerPanel() = Unit
+
     /** The Lab's home and results screens over the tab content: nothing outside the Lab. */
     @Suppress("UNUSED_PARAMETER")
     @Composable

@@ -294,6 +294,10 @@
     <string name="debug_title">Debug</string>
     <string name="debug_load_sample">Load sample data</string>
     <string name="debug_clear_all">Clear all data</string>
+    <string name="debug_load_sample_sub">Replaces your data with the reference sheet</string>
+    <string name="debug_send_test_sub">A notification and a bell entry</string>
+    <string name="debug_run_check_sub">Posts what is due now</string>
+    <string name="debug_clear_all_sub">Erases everything on this phone</string>
     <string name="clear_title">Erase everything?</string>
     <string name="clear_body">Erases all entries, repeating items and settings. This cannot be undone.</string>
     <string name="clear_confirm">Erase everything</string>
@@ -312,7 +316,7 @@
     <string name="channel_payments">Payments</string>
     <string name="channel_heads_up">Heads-up</string>
     <string name="notif_card_title">Notifications</string>
-    <string name="notif_master_title">Notifications</string>
+    <string name="notif_master_title">Reminders</string>
     <string name="notif_master_helper">Quiet from 22:00 to 08:00</string>
     <string name="notif_headsup_title">Heads-up</string>
     <string name="notif_headsup_helper">A week and a day before</string>

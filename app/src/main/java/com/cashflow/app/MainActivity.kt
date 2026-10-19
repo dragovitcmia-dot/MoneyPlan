@@ -176,8 +176,12 @@ class MainActivity : ComponentActivity() {
                     backupsOpen = false
                     calendar.openDayList(null)
                     calendar.requestItem(null)
+                    calendar.resetSheets()
                     when (val t = pending.target) {
-                        com.cashflow.app.engine.UiTarget.Home -> tab = 0
+                        com.cashflow.app.engine.UiTarget.Home -> {
+                            tab = 0
+                            homeRequest = t // Home closes the wizard or purchase sheet it may still have open
+                        }
                         is com.cashflow.app.engine.UiTarget.CalendarDay -> {
                             tab = 1
                             calendar.showMonth(YearMonth.from(t.date))
