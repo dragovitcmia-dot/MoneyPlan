@@ -36,27 +36,34 @@ def node_boxes(nodes, text):
     return [b for t, d, b in nodes if t.strip() == text or d.strip() == text]
 
 
-def check_panel_buttons(nodes, name):
-    """Gate: both panel buttons are on screen, inside it and at least 48 dp tall (1 dp = density / 160 px)."""
-    w, h = smoke.screen_size(nodes)
-    dpi = int(os.environ.get("LAB_DENSITY", "320"))
+def check_panel_buttons():
+    """Gate: both panel buttons are on screen, inside it and at least 48 dp tall. The CLICKABLE button is measured (not its label)."""
+    import geometry  # measured the same way as the real app's gate (clickable ancestor of the label)
+    W, H, dpi = geometry.display()
+    geometry.SCREEN_W = W
     dp = dpi / 160.0
+    nodes = geometry.dump()
     problems = []
     lines = []
     for label in (LOOKS_RIGHT, PROBLEM):
-        boxes = node_boxes(nodes, label)
-        if not boxes:
+        hits = [n for n in nodes if n.text == label or n.desc == label]
+        if not hits:
             problems.append(f"the panel button {label!r} was not found")
             continue
-        b = max(boxes, key=lambda x: x[3])
-        hd, wd = (b[3] - b[1]) / dp, (b[2] - b[0]) / dp
-        inside = b[0] >= 0 and b[2] <= w and b[1] >= 0 and b[3] <= h
-        lines.append(f"{label}: {wd:.0f} x {hd:.0f} dp {'ok' if inside else 'OUTSIDE'}")
+        btn = geometry.clickable_of(max(hits, key=lambda n: n.b[3]))
+        hd, wd = btn.h / dp, btn.w / dp
+        inside = btn.b[0] >= 0 and btn.b[2] <= W and btn.b[1] >= 0 and btn.b[3] <= H
+        lines.append(f"{label}: {wd:.0f} x {hd:.0f} dp clickable={btn.clickable} {'ok' if inside else 'OUTSIDE'}")
+        if not btn.clickable:
+            problems.append(f"the panel button {label!r} is not clickable")
         if hd < MIN_DP:
             problems.append(f"the panel button {label!r} is {hd:.0f} dp tall, needs >= {MIN_DP}")
+        if wd < MIN_DP:
+            problems.append(f"the panel button {label!r} is {wd:.0f} dp wide, needs >= {MIN_DP}")
         if not inside:
-            problems.append(f"the panel button {label!r} is not inside the screen: {b}")
+            problems.append(f"the panel button {label!r} is not inside the screen: {btn.b}")
     msg = "; ".join(lines)
+    print("LAB PANEL BUTTONS:", msg, flush=True)
     print(f"::notice title=Geometry: Lab panel buttons::{msg}", flush=True)
     return problems
 
@@ -73,22 +80,32 @@ def wait_for_text(text, timeout=20):
 
 
 def walk(name, count):
-    """Run all checks, then mark 'Looks right' `count` times, photographing each screen the Lab opened by itself."""
-    problems = []
+    """Run all checks, then mark 'Looks right' `count` times, photographing each screen the Lab opened by itself.
+    Returns the gating problems of the panel buttons (measured on the first panel, before anything else can go wrong)."""
     nodes = wait_for_text("Run all checks", timeout=20)
     smoke.screenshot(f"{name}-lab-home")
     tap_box(max(node_boxes(nodes, "Run all checks"), key=lambda b: b[3]))
-    nodes = wait_for_text(LOOKS_RIGHT, timeout=30)
-    problems += check_panel_buttons(nodes, name)
+    wait_for_text(LOOKS_RIGHT, timeout=40)
+    gate = check_panel_buttons()
+    if gate:
+        return gate
     for i in range(count):
         # The panel shows "Preparing the data and the screen" (no buttons) while the Lab seeds, navigates and opens the sheet by itself.
-        nodes = wait_for_text(LOOKS_RIGHT, timeout=40)
-        time.sleep(1.5)  # the sheet or picker has finished opening
-        smoke.screenshot(f"{name}-lab-check-{i + 1:02d}")
+        try:
+            wait_for_text(LOOKS_RIGHT, timeout=40)
+            time.sleep(1.5)  # the sheet or picker has finished opening
+            smoke.screenshot(f"{name}-lab-check-{i + 1:02d}")
+        except NotFound:
+            # The Move date picker is a dialog of its own: its check panel is a small window at the top of the screen that the
+            # accessibility dump does not list. Photograph it, close the picker with Back and answer on the item sheet below.
+            smoke.screenshot(f"{name}-lab-check-{i + 1:02d}-picker")
+            smoke.sh("input keyevent 4")
+            time.sleep(1.0)
+            wait_for_text(LOOKS_RIGHT, timeout=20)
         nodes = wait_for_text(LOOKS_RIGHT, timeout=20)
         tap_box(max(node_boxes(nodes, LOOKS_RIGHT), key=lambda b: b[3]))
         time.sleep(1.0)  # the panel switches to "Preparing" right after the tap
-    return problems
+    return []
 
 
 def finish(name):
@@ -125,7 +142,10 @@ def main():
             sys.exit(3)
         print("LAB tag is shown")
         try:
-            problems += walk(name, count)
+            gate = walk(name, count)
+            problems += gate
+            if gate:
+                smoke.screenshot(f"{name}-lab-GATE-FAILED")
         except NotFound as e:
             smoke.screenshot(f"{name}-lab-walk-FAILED")
             print("  lab walk:", e)
