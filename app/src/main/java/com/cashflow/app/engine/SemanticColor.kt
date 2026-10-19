@@ -30,8 +30,9 @@ object SemanticColor {
     /** The repeat arrow next to a series item's name. */
     fun ofRepeatIcon(kind: TxKind): ColorToken = ofKind(kind)
 
-    /** A confirmation of an accepted item (check, "Accepted"): by the item's kind. */
-    fun ofConfirmation(kind: TxKind): ColorToken = ofKind(kind)
+    /** The Accept check mark on a pending card: neutral for expenses and income alike (green stays for money coming in). */
+    @Suppress("UNUSED_PARAMETER")
+    fun ofConfirmation(kind: TxKind): ColorToken = ColorToken.NEUTRAL
 
     /** Controls that are not money (selection, switch, slider, focus, link, selected nav bar, progress, primary buttons). */
     val accent: ColorToken = ColorToken.NEUTRAL

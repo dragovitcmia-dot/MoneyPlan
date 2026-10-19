@@ -100,9 +100,9 @@ class LabScenariosTest {
         // far rows are listed and tappable: Car repair (+45 days) and Bonus (+90 days)
         assertEquals(setOf("Car repair", "Bonus"), all.filter { it.daysAway >= 45 && !it.repeating }.map { it.tx.description }.toSet())
         assertTrue(all.filter { it.waiting }.map { it.tx.description }.containsAll(listOf("Pharmacy", "Lunch")))
-        // the daily income is the pinned row, not listed one by one
-        assertEquals(tnd(20), Upcoming.build(engine, seed.rules, UpcomingType.ALL, DayOfWeek.MONDAY).dailyIncome)
-        assertNull(Upcoming.build(engine, seed.rules, UpcomingType.EXPENSES, DayOfWeek.MONDAY).dailyIncome)
+        // the daily income is a normal repeating item: only its next occurrence is listed (v0.10.1), no pinned summary row
+        val dailyRows = all.filter { it.tx.description == "Daily income" && !it.waiting }
+        assertEquals(1, dailyRows.size)
         // the series view: six series, filtered by the tab
         fun series(type: UpcomingType) = SeriesList.build(seed.rules, engine.transactions, SeriesContext(), t, type).map { it.rule.description }.toSet()
         assertEquals(setOf("Gym", "Phone", "Rent", "Salary", "Freelance", "Daily income"), series(UpcomingType.ALL))

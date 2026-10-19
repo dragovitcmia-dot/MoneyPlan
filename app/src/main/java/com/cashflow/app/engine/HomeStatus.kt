@@ -36,3 +36,14 @@ object HomeStatusLine {
     /** The day a tap on the line opens in the Calendar: only the shortage line is tappable. */
     fun tapDay(status: HomeStatus): LocalDate? = (status as? HomeStatus.Short)?.day
 }
+
+/**
+ * What was spent today: the accepted (CONFIRMED) expenses dated today, a "Now" expense included. Home shows it as the "Today" line
+ * (only when something was spent) and it opens that day's list on the Calendar, which counts the same rows in the day's expense line.
+ */
+object SpentToday {
+    fun of(engine: BalanceEngine): Long =
+        engine.transactions.filter {
+            it.date == engine.today && it.date >= engine.settings.balanceStartDate && it.kind == TxKind.EXPENSE && it.status == TxStatus.CONFIRMED
+        }.sumOf { it.amount }
+}

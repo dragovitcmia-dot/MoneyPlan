@@ -202,36 +202,33 @@ class SeriesFeaturesTest {
 
     // ---- what each item offers -----------------------------------------------------------------------------------
 
-    @Test fun a_due_waiting_item_can_be_answered_postponed_and_edited() {
-        val a = ItemActionMap.forItem(TxStatus.PENDING, today, today, belongsToSeries = false)
-        assertTrue(a.accept && a.reject && a.postpone && a.editItem)
-        assertFalse(a.markWaiting)
-        assertFalse(a.seriesEdit || a.seriesExtend || a.seriesEnd || a.seriesDelete)
+    private fun item(date: java.time.LocalDate, status: TxStatus = TxStatus.PENDING, series: Boolean = false) =
+        tx(date, 5, status = status, id = 1).copy(recurringRuleId = if (series) 7L else null)
+
+    @Test fun a_due_waiting_item_can_be_accepted_changed_and_moved() {
+        val a = ItemRules.actionsFor(item(today), today)
+        assertTrue(a.accept && a.change && a.moveDate)
+        assertFalse(a.markWaiting || a.series || a.history)
     }
 
-    @Test fun a_future_item_cannot_be_answered_yet_but_can_be_postponed() {
-        val a = ItemActionMap.forItem(TxStatus.PENDING, today.plusDays(3), today, belongsToSeries = false)
-        assertFalse(a.accept || a.reject)
-        assertTrue(a.postpone && a.editItem)
+    @Test fun a_future_item_cannot_be_accepted_yet_but_can_be_changed_and_moved() {
+        val a = ItemRules.actionsFor(item(today.plusDays(3)), today)
+        assertFalse(a.accept)
+        assertTrue(a.change && a.moveDate)
     }
 
-    @Test fun an_accepted_item_shows_details_and_can_go_back_to_waiting() {
-        val a = ItemActionMap.forItem(TxStatus.CONFIRMED, today, today, belongsToSeries = false)
-        assertFalse(a.accept || a.reject || a.postpone)
-        assertTrue(a.markWaiting && a.editItem)
-    }
-
-    @Test fun every_item_of_a_series_offers_all_four_series_actions_whatever_its_status() {
-        for (status in TxStatus.entries) for (offset in listOf(-5L, 0L, 5L)) {
-            val a = ItemActionMap.forItem(status, today.plusDays(offset), today, belongsToSeries = true)
-            assertTrue("$status $offset", a.seriesEdit && a.seriesExtend && a.seriesEnd && a.seriesDelete)
+    @Test fun an_accepted_item_is_history_with_no_action_at_all() {
+        for (offset in listOf(-5L, 0L, 5L)) {
+            val a = ItemRules.actionsFor(item(today.plusDays(offset), TxStatus.CONFIRMED, series = true), today)
+            assertTrue(a.history)
+            assertTrue(a.none)
         }
     }
 
-    @Test fun items_outside_a_series_never_offer_series_actions() {
-        for (status in TxStatus.entries) {
-            val a = ItemActionMap.forItem(status, today, today, belongsToSeries = false)
-            assertFalse(a.seriesEdit || a.seriesExtend || a.seriesEnd || a.seriesDelete)
+    @Test fun every_waiting_item_of_a_series_offers_the_series_menu_and_one_time_items_never() {
+        for (offset in listOf(-5L, 0L, 5L)) {
+            assertTrue(ItemRules.actionsFor(item(today.plusDays(offset), series = true), today).series)
+            assertFalse(ItemRules.actionsFor(item(today.plusDays(offset), series = false), today).series)
         }
     }
 

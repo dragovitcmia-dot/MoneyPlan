@@ -130,37 +130,63 @@ class UpcomingTest {
         assertFalse(build(listOf(tx(d(2026, 10, 20), 5, id = 1))).groups.single().rows.single().repeating)
     }
 
-    // ---- daily income ---------------------------------------------------------------------
+    // ---- no special treatment for daily series (v0.10.1) ---------------------------------------
 
     private val daily = incomeSource(RecurrencePattern.Daily, d(2026, 10, 2), amount = 30, id = 2)
 
-    @Test fun daily_income_is_one_pinned_row_and_future_occurrences_are_not_listed() {
+    @Test fun a_daily_series_is_a_normal_repeating_item_with_only_its_next_occurrence_in_the_future() {
         val rows = RuleMaintenance.materialize(daily, emptyList(), today).filter { it.date <= d(2026, 12, 31) }
         val m = build(rows, listOf(daily))
-        assertEquals(tnd(30), m.dailyIncome)
-        // Only the occurrences that are waiting for an answer (today or earlier) are listed.
         val listed = m.groups.flatMap { it.rows }
-        assertTrue(listed.all { it.waiting })
-        assertTrue(listed.isNotEmpty())
-        assertEquals(setOf(UpcomingGroupKey.Waiting), m.groups.map { it.key }.toSet())
+        assertTrue(listed.all { it.repeating })
+        val future = listed.filter { !it.waiting }
+        assertEquals(1, future.size)
+        assertEquals(today.plusDays(1), future.single().tx.date) // exactly the next occurrence (tomorrow)
+        assertEquals(setOf(UpcomingGroupKey.Waiting, UpcomingGroupKey.Tomorrow), m.groups.map { it.key }.toSet())
+        // the waiting ones (today and earlier) are all kept: they wait for an answer
+        assertEquals(rows.count { it.date <= today }, listed.count { it.waiting })
     }
 
-    @Test fun pinned_daily_income_follows_enabled_flag_and_filter() {
-        val rows = emptyList<Transaction>()
-        assertNull(build(rows, listOf(daily.copy(enabled = false))).dailyIncome)
-        assertNull(build(rows, listOf(daily), type = UpcomingType.EXPENSES).dailyIncome)
-        assertEquals(tnd(30), build(rows, listOf(daily), type = UpcomingType.INCOME).dailyIncome)
-        assertNull(build(rows, listOf(incomeSource(RecurrencePattern.Weekly(DayOfWeek.MONDAY), start))).dailyIncome)
+    @Test fun the_collapse_rule_applies_to_everything_that_repeats_more_often_than_weekly() {
+        assertTrue(RecurrencePattern.Daily.repeatsMoreOftenThanWeekly())
+        assertTrue(RecurrencePattern.EveryNDays(2, today).repeatsMoreOftenThanWeekly())
+        assertTrue(RecurrencePattern.EveryNDays(6, today).repeatsMoreOftenThanWeekly())
+        assertTrue(RecurrencePattern.WeeklyDays(setOf(DayOfWeek.MONDAY, DayOfWeek.THURSDAY)).repeatsMoreOftenThanWeekly())
+        assertFalse(RecurrencePattern.EveryNDays(7, today).repeatsMoreOftenThanWeekly())
+        assertFalse(RecurrencePattern.EveryNDays(14, today).repeatsMoreOftenThanWeekly())
+        assertFalse(RecurrencePattern.Weekly(DayOfWeek.SUNDAY).repeatsMoreOftenThanWeekly())
+        assertFalse(RecurrencePattern.MonthFirst.repeatsMoreOftenThanWeekly())
+        assertFalse(RecurrencePattern.DayOfMonth(5).repeatsMoreOftenThanWeekly())
+        assertFalse(RecurrencePattern.Yearly(3, 1).repeatsMoreOftenThanWeekly())
     }
 
-    @Test fun two_daily_sources_are_summed() {
-        val second = daily.copy(id = 9, amount = tnd(5))
-        assertEquals(tnd(35), build(emptyList(), listOf(daily, second)).dailyIncome)
+    @Test fun collapseFrequent_keeps_waiting_rows_the_next_future_row_and_every_row_of_slower_series() {
+        val every3 = rule(RecurrencePattern.EveryNDays(3, today), today, id = 5)
+        val weekly = rule(RecurrencePattern.Weekly(DayOfWeek.SUNDAY), today, id = 6)
+        val rows = listOf(
+            every3.occurrenceFor(today.minusDays(3)).copy(id = 1), every3.occurrenceFor(today).copy(id = 2),
+            every3.occurrenceFor(today.plusDays(3)).copy(id = 3), every3.occurrenceFor(today.plusDays(6)).copy(id = 4),
+            weekly.occurrenceFor(today.plusDays(1)).copy(id = 5), weekly.occurrenceFor(today.plusDays(8)).copy(id = 6),
+            tx(today.plusDays(2), 5, id = 7), tx(today.plusDays(4), 5, id = 8),
+        )
+        val kept = Upcoming.collapseFrequent(rows, listOf(every3, weekly), today).map { it.id }
+        assertEquals(listOf(1L, 2L, 3L, 5L, 6L, 7L, 8L), kept)
+    }
+
+    @Test fun a_weekly_expense_and_a_daily_income_sit_in_one_normal_list() {
+        val sunday = rule(RecurrencePattern.Weekly(DayOfWeek.SUNDAY), today, id = 4)
+        val rows = RuleMaintenance.materialize(daily, emptyList(), today).filter { it.date <= d(2026, 11, 30) } +
+            RuleMaintenance.materialize(sunday, emptyList(), today).filter { it.date <= d(2026, 11, 30) }
+        val m = build(rows, listOf(daily, sunday))
+        val future = m.groups.flatMap { it.rows }.filter { !it.waiting }
+        assertEquals(1, future.count { it.tx.recurringRuleId == 2L }) // the daily income: next occurrence only
+        assertTrue(future.count { it.tx.recurringRuleId == 4L } > 3) // the weekly expense: every Sunday stays listed
+        assertTrue(future.all { it.repeating })
     }
 
     @Test fun empty_means_nothing_to_show() {
         assertTrue(build(emptyList()).isEmpty)
-        assertFalse(build(emptyList(), listOf(daily)).isEmpty)
+        assertTrue(build(emptyList(), listOf(daily)).isEmpty) // a series with no waiting rows adds nothing: no special card
     }
 
     @Test fun the_horizon_constant_is_120() = assertEquals(120L, Upcoming.HORIZON_DAYS)

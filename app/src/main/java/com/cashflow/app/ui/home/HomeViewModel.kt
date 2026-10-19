@@ -49,6 +49,8 @@ data class HomeUiState(
     val toConfirm: List<Transaction>,
     /** The one quiet line under the balance. */
     val status: com.cashflow.app.engine.HomeStatus,
+    /** Accepted expenses dated today (0 = nothing spent: the "Today" line is hidden). */
+    val spentToday: Long = 0,
     /** Everything entered so far, for the wizard's smart defaults (same as last time, recent amounts). */
     val history: List<Transaction> = emptyList(),
     val rules: List<RecurringRule> = emptyList(),
@@ -87,6 +89,7 @@ class HomeViewModel(
             available = e.available(),
             toConfirm = e.toConfirm(),
             status = com.cashflow.app.engine.HomeStatusLine.of(e),
+            spentToday = com.cashflow.app.engine.SpentToday.of(e),
             history = transactions,
             rules = rules,
             recentExpenseAmounts = com.cashflow.app.engine.Suggestions.recentAmounts(TxKind.EXPENSE, transactions, rules, day),

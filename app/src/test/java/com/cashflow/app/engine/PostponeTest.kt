@@ -19,7 +19,7 @@ class PostponeTest {
 
     @Test fun postponing_a_single_item_changes_only_its_date() {
         val item = tx(d(2026, 10, 12), 30, id = 1, description = "Rent")
-        val moved = Postpone.apply(item, d(2026, 10, 15))!!
+        val moved = Postpone.apply(item, d(2026, 10, 15), today)!!
         assertEquals(d(2026, 10, 15), moved.date)
         assertEquals(item.copy(date = d(2026, 10, 15)), moved)
         assertEquals(TxStatus.PENDING, moved.status)
@@ -30,7 +30,7 @@ class PostponeTest {
         assertEquals(tnd(70), before.forecast(d(2026, 10, 12), d(2026, 10, 12)).single().closing)
         assertEquals(tnd(100), before.available())
 
-        val rows = listOf(Postpone.apply(tx(d(2026, 10, 12), 30, id = 1), d(2026, 10, 15))!!)
+        val rows = listOf(Postpone.apply(tx(d(2026, 10, 12), 30, id = 1), d(2026, 10, 15), today)!!)
         val after = engine(rows)
         val days = after.forecast(d(2026, 10, 11), d(2026, 10, 16)).associate { it.date to it.closing }
         assertEquals(tnd(100), days[d(2026, 10, 12)])
@@ -41,7 +41,7 @@ class PostponeTest {
     }
 
     @Test fun calendar_cells_follow_the_postponed_item() {
-        val rows = listOf(Postpone.apply(tx(d(2026, 10, 12), 30, id = 1), d(2026, 10, 15))!!)
+        val rows = listOf(Postpone.apply(tx(d(2026, 10, 12), 30, id = 1), d(2026, 10, 15), today)!!)
         val m = CalendarSummaries.month(engine(rows), emptyList(), YearMonth.of(2026, 10), DayOfWeek.MONDAY)
         val old = m.day(d(2026, 10, 12))!!
         val new = m.day(d(2026, 10, 15))!!
@@ -59,7 +59,7 @@ class PostponeTest {
         assertEquals(listOf(overdue), before.toConfirm())
         assertEquals(tnd(60), before.forecast(today, today).single().closing) // overdue expenses are due today
 
-        val moved = Postpone.apply(overdue, d(2026, 10, 13))!!
+        val moved = Postpone.apply(overdue, d(2026, 10, 13), today)!!
         val after = engine(listOf(moved))
         assertTrue(after.toConfirm().isEmpty())
         assertEquals(tnd(100), after.forecast(today, today).single().closing)
@@ -71,19 +71,22 @@ class PostponeTest {
 
     // ---- edge cases -----------------------------------------------------------------------------
 
-    @Test fun the_same_day_or_an_earlier_day_is_refused() {
+    @Test fun a_day_before_today_or_the_items_own_day_is_refused_but_today_is_allowed() {
         val item = tx(d(2026, 10, 12), 30, id = 1)
-        assertNull(Postpone.apply(item, d(2026, 10, 12)))
-        assertNull(Postpone.apply(item, d(2026, 10, 11)))
-        assertNull(Postpone.apply(item, d(2026, 9, 1)))
-        assertNotNull(Postpone.apply(item, d(2026, 10, 13)))
+        assertNull(Postpone.apply(item, d(2026, 10, 12), today)) // the same day: nothing to move
+        assertNull(Postpone.apply(item, d(2026, 10, 9), today)) // yesterday
+        assertNull(Postpone.apply(item, d(2026, 9, 1), today))
+        assertNotNull(Postpone.apply(item, d(2026, 10, 13), today))
+        // v0.10.1: today (and every day from today on) is allowed even though it is EARLIER than the item's own date
+        assertEquals(d(2026, 10, 10), Postpone.apply(item, d(2026, 10, 10), today)!!.date)
+        assertEquals(d(2026, 10, 11), Postpone.apply(item, d(2026, 10, 11), today)!!.date)
     }
 
     @Test fun only_waiting_items_can_be_postponed() {
         for (status in listOf(TxStatus.CONFIRMED, TxStatus.SKIPPED)) {
             val item = tx(d(2026, 10, 8), 30, status = status, id = 1)
             assertFalse(Postpone.canPostpone(item))
-            assertNull(Postpone.apply(item, d(2026, 10, 20)))
+            assertNull(Postpone.apply(item, d(2026, 10, 20), today))
             assertNull(Postpone.suggestedDate(item, null, today))
         }
     }
@@ -119,7 +122,7 @@ class PostponeTest {
         assertEquals(d(2026, 10, 21), Postpone.suggestedDate(planned, RecurrencePattern.Daily, today)) // always later than the item
         assertEquals(d(2026, 10, 27), Postpone.suggestedDate(planned, null, today))
         for (p in listOf<RecurrencePattern?>(null, RecurrencePattern.Daily, RecurrencePattern.MonthLast)) {
-            assertTrue(Postpone.isValidDate(planned, Postpone.suggestedDate(planned, p, today)!!))
+            assertTrue(Postpone.isValidDate(planned, Postpone.suggestedDate(planned, p, today)!!, today))
         }
     }
 
@@ -127,8 +130,8 @@ class PostponeTest {
         assertNull(Postpone.suggestedDate(tx(d(2026, 10, 8), 5, status = TxStatus.CONFIRMED, id = 1), null, today))
     }
 
-    @Test fun the_picker_starts_the_day_after_the_item() {
-        assertEquals(d(2026, 10, 13), Postpone.earliestDate(tx(d(2026, 10, 12), 5, id = 1)))
+    @Test fun the_picker_starts_today_whatever_the_items_date() {
+        assertEquals(today, Postpone.earliestDate(today))
     }
 
     // ---- one occurrence of a series -------------------------------------------------------------
@@ -140,7 +143,7 @@ class PostponeTest {
 
     @Test fun postponing_one_occurrence_moves_only_that_row_and_keeps_its_occurrence_date() {
         val rows = occurrences()
-        val moved = Postpone.apply(rows[0], d(2026, 10, 14))!!
+        val moved = Postpone.apply(rows[0], d(2026, 10, 14), today)!!
         assertEquals(d(2026, 10, 14), moved.date)
         assertEquals(d(2026, 10, 11), moved.occurrenceDate) // the uniqueness key is unchanged
         assertEquals(7L, moved.recurringRuleId)
@@ -152,18 +155,18 @@ class PostponeTest {
 
     @Test fun a_postponed_occurrence_is_not_generated_again() {
         val rows = occurrences()
-        val after = listOf(Postpone.apply(rows[0], d(2026, 10, 14))!!, rows[1], rows[2])
+        val after = listOf(Postpone.apply(rows[0], d(2026, 10, 14), today)!!, rows[1], rows[2])
         val generated = RuleMaintenance.materialize(sundays, after, today)
         assertTrue(generated.none { it.occurrenceDate == d(2026, 10, 11) }) // no duplicate of the moved one
         assertTrue(generated.none { it.occurrenceDate == d(2026, 10, 18) || it.occurrenceDate == d(2026, 10, 25) })
         // the same holds even when the occurrence is postponed into a later occurrence's day
-        val onto = listOf(Postpone.apply(rows[0], d(2026, 10, 18))!!, rows[1], rows[2])
+        val onto = listOf(Postpone.apply(rows[0], d(2026, 10, 18), today)!!, rows[1], rows[2])
         assertTrue(RuleMaintenance.materialize(sundays, onto, today).none { it.occurrenceDate == d(2026, 10, 11) })
     }
 
     @Test fun postponing_an_occurrence_updates_the_forecast_and_leaves_the_other_days_alone() {
         val rows = occurrences()
-        val after = listOf(Postpone.apply(rows[0], d(2026, 10, 14))!!, rows[1], rows[2])
+        val after = listOf(Postpone.apply(rows[0], d(2026, 10, 14), today)!!, rows[1], rows[2])
         val days = engine(after).forecast(d(2026, 10, 10), d(2026, 10, 26)).associate { it.date to it.closing }
         assertEquals(tnd(100), days[d(2026, 10, 11)])
         assertEquals(tnd(100), days[d(2026, 10, 13)])
