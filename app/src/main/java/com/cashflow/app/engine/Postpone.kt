@@ -6,7 +6,7 @@ import java.time.LocalDate
 enum class PostponeChoice { TOMORROW, IN_3_DAYS, IN_1_WEEK, NEXT_WEEK }
 
 /**
- * Pure rules for "Postpone": moving ONE waiting item to a later day. Only the item's effective [Transaction.date]
+ * Pure rules for "Move date": moving ONE waiting item to today or any later day. Only the item's effective [Transaction.date]
  * changes. Its [Transaction.occurrenceDate] and rule link stay as they are, so a postponed occurrence of a
  * repeating payment is still recognised as already generated (it is never created again) and the other
  * occurrences of the series are not touched.
@@ -21,8 +21,8 @@ object Postpone {
     /** Only a waiting (PENDING) item can be postponed. */
     fun canPostpone(tx: Transaction): Boolean = tx.status == TxStatus.PENDING
 
-    /** A new date must lie after the item's current date: that is what "postpone" means. */
-    fun isValidDate(tx: Transaction, newDate: LocalDate): Boolean = canPostpone(tx) && newDate.isAfter(tx.date)
+    /** A new date is today or later (and not the item's own day): see [ItemRules.canMoveTo]. */
+    fun isValidDate(tx: Transaction, newDate: LocalDate, today: LocalDate): Boolean = ItemRules.canMoveTo(tx, newDate, today)
 
     /**
      * The single suggestion for an item, from its nature: a daily payment moves to tomorrow, a weekly or every-2-weeks
@@ -45,12 +45,11 @@ object Postpone {
         return dateFor(suggestionFor(pattern), maxOf(today, tx.date))
     }
 
-    /** The earliest date the picker should offer: the day after the item's current date. */
-    fun earliestDate(tx: Transaction): LocalDate = tx.date.plusDays(1)
+    /** The earliest date the picker offers: today. */
+    fun earliestDate(today: LocalDate): LocalDate = ItemRules.earliestDate(today)
 
-    /** The postponed copy of [tx], or null when the move is not allowed (not waiting, or not a later day). */
-    fun apply(tx: Transaction, newDate: LocalDate): Transaction? =
-        if (isValidDate(tx, newDate)) tx.copy(date = newDate) else null
+    /** The moved copy of [tx], or null when the move is not allowed (not waiting, before today, or the same day). */
+    fun apply(tx: Transaction, newDate: LocalDate, today: LocalDate): Transaction? = ItemRules.applyMove(tx, newDate, today)
 }
 
 /**

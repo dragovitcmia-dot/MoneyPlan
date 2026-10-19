@@ -1,7 +1,10 @@
 package com.cashflow.app.engine
 
 import com.cashflow.app.debug.ReferenceScenario
+import com.cashflow.app.debug.lab.LabFlow
+import com.cashflow.app.debug.lab.LabResults
 import com.cashflow.app.debug.lab.LabScenario
+import com.cashflow.app.debug.lab.LabSession
 import com.cashflow.app.debug.lab.LabScenarios
 import com.cashflow.app.debug.lab.LabSeed
 import org.junit.Assert.assertEquals
@@ -14,7 +17,7 @@ import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.LocalDateTime
 
-/** The Lab catalogue: every scenario seeds consistent data and the facts its checklist promises are true. */
+/** The Lab catalogue: every scenario seeds consistent data and the facts its questions promise are true. */
 class LabScenariosTest {
     private val real = LocalDate.of(2026, 10, 15)
 
@@ -38,8 +41,11 @@ class LabScenariosTest {
         for (s in LabScenarios.all) {
             assertTrue(s.id, s.title.isNotBlank())
             assertFalse(s.id, s.description.contains('\n'))
-            assertTrue("${s.id}: ${s.checklist.size} bullets", s.checklist.size in 3..6)
-            assertTrue(s.id, s.checklist.all { it.isNotBlank() && !it.contains('\n') })
+            assertTrue("${s.id}: has screens", s.steps.isNotEmpty())
+            for ((i, step) in s.steps.withIndex()) {
+                assertTrue("${s.id} step $i: ${step.checks.size} questions", step.checks.size in 2..4)
+                assertTrue("${s.id} step $i", step.checks.all { it.isNotBlank() && !it.contains('\n') && it.endsWith("?") })
+            }
         }
         assertTrue(listOf("reference", "empty", "upcoming-tabs", "purchase-far").all { it in ids })
         assertNull(LabScenarios.byId("nope"))
@@ -100,9 +106,9 @@ class LabScenariosTest {
         // far rows are listed and tappable: Car repair (+45 days) and Bonus (+90 days)
         assertEquals(setOf("Car repair", "Bonus"), all.filter { it.daysAway >= 45 && !it.repeating }.map { it.tx.description }.toSet())
         assertTrue(all.filter { it.waiting }.map { it.tx.description }.containsAll(listOf("Pharmacy", "Lunch")))
-        // the daily income is the pinned row, not listed one by one
-        assertEquals(tnd(20), Upcoming.build(engine, seed.rules, UpcomingType.ALL, DayOfWeek.MONDAY).dailyIncome)
-        assertNull(Upcoming.build(engine, seed.rules, UpcomingType.EXPENSES, DayOfWeek.MONDAY).dailyIncome)
+        // the daily income is a normal repeating item: only its next occurrence is listed (v0.10.1), no pinned summary row
+        val dailyRows = all.filter { it.tx.description == "Daily income" && !it.waiting }
+        assertEquals(1, dailyRows.size)
         // the series view: six series, filtered by the tab
         fun series(type: UpcomingType) = SeriesList.build(seed.rules, engine.transactions, SeriesContext(), t, type).map { it.rule.description }.toSet()
         assertEquals(setOf("Gym", "Phone", "Rent", "Salary", "Freelance", "Daily income"), series(UpcomingType.ALL))
@@ -212,26 +218,25 @@ class LabScenariosV10Test {
         return BalanceEngine(seed.settings, rows(seed, s.today(real)).filter { !it.date.isBefore(seed.settings.balanceStartDate) }, today) to seed
     }
 
-    @Test fun the_last_payment_scenario_ends_in_three_days_and_the_reminder_waits_for_noon() {
+    @Test fun the_last_payment_scenario_ends_tomorrow_and_the_reminder_waits_for_noon() {
         val s = scenario("last-payment-tomorrow")
         assertEquals(LocalDateTime.of(2026, 10, 12, 11, 55), s.clock)
         val seed = s.build(real)
         val rule = seed.rules.single()
-        assertEquals(d(2026, 10, 15), rule.endDate)
+        assertEquals(d(2026, 10, 13), rule.endDate)
         val items = rows(seed, d(2026, 10, 12))
-        assertEquals(d(2026, 10, 15), SeriesLast.lastDate(rule, items))
-        assertEquals(4, items.size)
+        assertEquals(d(2026, 10, 13), SeriesLast.lastDate(rule, items))
+        assertEquals(2, items.size)
         val zone = java.time.ZoneId.of("Africa/Tunis")
         fun at(time: String, day: LocalDate = d(2026, 10, 12)) = day.atTime(java.time.LocalTime.parse(time)).atZone(zone).toInstant()
         fun last(time: String, day: LocalDate = d(2026, 10, 12)) = Notifications.reconcile(at(time, day), zone, NotificationSettings(), items, seed.rules, emptyList(), emptySet())
             .filter { it.type == NotificationType.LAST_PAYMENT }
         assertTrue(last("11:55").isEmpty())
         val fired = last("12:05").single()
-        assertEquals("Trial subscription −5 TND ends 15 OCT. Extend?", fired.body)
+        assertEquals("Trial subscription −5 TND ends 13 OCT. Extend?", fired.body)
         assertEquals(1L, fired.ruleId)
-        // two days later (the time machine +2 d) the last payment is tomorrow and the reminder still stands
-        assertEquals(1, last("12:05", d(2026, 10, 14)).size)
-        assertTrue(last("12:05", d(2026, 10, 16)).isEmpty()) // after the last day it is too late
+        // after the last day it is too late
+        assertTrue(last("12:05", d(2026, 10, 15)).isEmpty())
     }
 
     @Test fun the_overdue_scenario_has_five_waiting_cards_and_340_available() {
@@ -274,5 +279,185 @@ class LabScenariosV10Test {
         assertNull(line("Salary"))
         assertNull(line("Yoga"))
         assertEquals("Same as last time: 80 TND", line("refund", TxKind.INCOME))
+    }
+}
+
+/** The v0.10.1 scenarios: zero-effort (they navigate themselves) and the hand-worked facts their questions promise. */
+class LabScenariosV101Test {
+    private val real = LocalDate.of(2026, 10, 15)
+    private fun scenario(id: String) = LabScenarios.byId(id)!!
+    private val t = LabScenarios.BASE_DAY
+
+    private fun rows(s: LabSeed, today: LocalDate): List<Transaction> {
+        var next = 1L
+        val seeded = s.transactions.map { it.copy(id = next++) }
+        val generated = s.rules.filter { RuleMaintenance.isActive(it) }.flatMap { rule ->
+            RuleMaintenance.materialize(rule, seeded.filter { it.recurringRuleId == rule.id }, today)
+        }.map { it.copy(id = next++) }
+        return seeded + generated
+    }
+
+    private fun engine(id: String, day: LocalDate = t): Pair<BalanceEngine, LabSeed> {
+        val seed = scenario(id).build(real)
+        return BalanceEngine(seed.settings, rows(seed, day).filter { !it.date.isBefore(seed.settings.balanceStartDate) }, day) to seed
+    }
+
+    private fun tx(id: String, name: String, date: LocalDate): Transaction =
+        engine(id).first.transactions.first { it.description == name && it.date == date }
+
+    @Test fun every_scenario_navigates_itself_and_never_asks_for_typing_creating_editing_or_deleting() {
+        for (s in LabScenarios.all) {
+            val targets = s.targets(s.today(real))
+            assertEquals(s.id, s.steps.size, targets.size)
+            for (step in s.steps) for (q in step.checks) {
+                val low = q.lowercase()
+                for (word in listOf("type in", "tap ", "enter ", "create ", "add an ", "delete ", "swipe", "press ")) assertFalse("${s.id}: '$q'", low.contains(word))
+            }
+        }
+        assertTrue(listOf("item-sheets", "date-picker", "upcoming-daily", "spent-today", "backups-row").all { LabScenarios.byId(it) != null })
+    }
+
+    @Test fun item_sheets_open_the_four_kinds_of_item_with_the_actions_each_allows() {
+        val id = "item-sheets"
+        val s = scenario(id)
+        val targets = s.targets(t)
+        assertEquals(
+            listOf(
+                UiTarget.CalendarDay(t.plusDays(5), "Dentist"), UiTarget.CalendarDay(t, "Lunch"),
+                UiTarget.CalendarDay(t.plusDays(4), "Gym"), UiTarget.CalendarDay(t.minusDays(6), "Groceries"),
+            ),
+            targets,
+        )
+        val dentist = ItemRules.actionsFor(tx(id, "Dentist", t.plusDays(5)), t)
+        assertTrue(dentist.change && dentist.moveDate && !dentist.accept && !dentist.series && !dentist.history)
+        val lunch = ItemRules.actionsFor(tx(id, "Lunch", t), t)
+        assertTrue(lunch.accept && lunch.change && lunch.moveDate)
+        val gym = tx(id, "Gym", t.plusDays(4)) // Friday 16 OCT
+        assertEquals(DayOfWeek.FRIDAY, gym.date.dayOfWeek)
+        assertNotNull(gym.recurringRuleId)
+        val gymActions = ItemRules.actionsFor(gym, t)
+        assertTrue(gymActions.series && !gymActions.accept)
+        val groceries = ItemRules.actionsFor(tx(id, "Groceries", t.minusDays(6)), t)
+        assertTrue(groceries.history && groceries.none)
+        // the one plain meta lines the questions describe
+        assertEquals("SAT 17 OCT 2026 · Waiting", ItemRules.meta(tx(id, "Dentist", t.plusDays(5)), null))
+        val rule = scenario(id).build(real).rules.single()
+        assertTrue(ItemRules.meta(gym, rule).endsWith("Every Fri"))
+    }
+
+    @Test fun the_date_picker_scenario_preselects_the_suggested_days() {
+        val id = "date-picker"
+        val phone = tx(id, "Phone bill", t.plusDays(2))
+        // the picker opens on the suggested day (a one-time item: a week from the later of today and its date)
+        assertEquals(LocalDate.of(2026, 10, 21), Postpone.suggestedDate(phone, null, t))
+        assertTrue(ItemRules.canMoveTo(phone, t, t)) // today is selectable although the item is two days ahead
+        assertFalse(ItemRules.canMoveTo(phone, t.minusDays(1), t))
+        assertNull(ItemRules.pickerCaption(phone))
+        val rule = scenario(id).build(real).rules.single()
+        val gym = tx(id, "Gym", t.plusDays(4))
+        assertEquals(LocalDate.of(2026, 10, 19), Postpone.suggestedDate(gym, rule.pattern, t))
+        assertEquals("Only this day moves", ItemRules.pickerCaption(gym))
+        assertEquals(
+            listOf(UiTarget.CalendarDay(t.plusDays(2), "Phone bill", move = true), UiTarget.CalendarDay(t.plusDays(4), "Gym", move = true)),
+            scenario(id).targets(t),
+        )
+    }
+
+    @Test fun the_upcoming_scenario_has_a_daily_income_once_and_every_sunday_with_no_special_card() {
+        val (engine, seed) = engine("upcoming-daily")
+        val model = Upcoming.build(engine, seed.rules, UpcomingType.ALL, DayOfWeek.MONDAY)
+        val rows = model.groups.flatMap { it.rows }
+        val daily = rows.filter { it.tx.description == "Daily income" }
+        assertEquals(1, daily.size)
+        assertEquals(t.plusDays(1), daily.single().tx.date)
+        assertTrue(daily.single().repeating)
+        val dailyRule = seed.rules.first { it.description == "Daily income" }
+        assertEquals("Every day", SeriesText.schedule(dailyRule.pattern))
+        assertEquals("TUE 13 OCT 2026 · in 1 day · Every day", ItemRules.rowSubtitle(daily.single().tx.date, "in 1 day", dailyRule))
+        val sundays = rows.filter { it.tx.description == "Sunday expense" }
+        assertTrue(sundays.size >= 10)
+        assertTrue(sundays.all { it.tx.date.dayOfWeek == DayOfWeek.SUNDAY && it.repeating })
+        assertEquals(UpcomingGroupKey.Tomorrow, model.groups.first { g -> g.rows.any { it.tx.description == "Daily income" } }.key)
+    }
+
+    @Test fun the_spent_today_scenario_adds_up_by_hand() {
+        val (engine, seed) = engine("spent-today")
+        // 500 - 12 - 8 - 30 = 450 available; spent today = 12 + 8 = 20 (Taxi was yesterday)
+        assertEquals(tnd(450), engine.available())
+        assertEquals(tnd(20), SpentToday.of(engine))
+        assertTrue(seed.transactions.all { it.status == TxStatus.CONFIRMED && !it.isPlanned })
+        val day = CalendarSummaries.month(engine, seed.rules, java.time.YearMonth.of(2026, 10), DayOfWeek.MONDAY).day(t)!!
+        assertEquals(tnd(20), day.expenses)
+        assertEquals(setOf("Coffee", "Snack"), day.items.map { it.tx.description }.toSet())
+        assertEquals(tnd(450), day.closing)
+        assertEquals(listOf(UiTarget.CalendarDay(t), UiTarget.Home), scenario("spent-today").targets(t))
+    }
+
+    @Test fun the_backups_scenario_seeds_seven_backups_on_seven_days_ending_now() {
+        val seed = scenario("backups-row").build(real)
+        assertEquals(7, seed.backups.size)
+        assertEquals((0..6).toSet(), seed.backups.map { it.daysAgo }.toSet()) // one per day: nothing is consolidated away
+        assertEquals(0, seed.backups.maxBy { it.daysAgo * -1 }.daysAgo) // the newest is "now"
+        assertEquals(listOf(UiTarget.Settings, UiTarget.Backups), scenario("backups-row").targets(t))
+        assertEquals(2, scenario("backup-restore").build(real).backups.size)
+    }
+
+    @Test fun home_states_moves_the_clock_by_itself_for_the_shortage() {
+        val s = scenario("home-states")
+        assertEquals(listOf(0, 30), s.steps.map { it.clockShiftDays })
+        assertTrue(s.steps.all { it.target(t) == UiTarget.Home })
+    }
+
+    @Test fun the_smart_suggestion_scenario_opens_the_wizard_for_each_name() {
+        val targets = scenario("smart-suggestions").targets(t)
+        assertEquals(UiTarget.Wizard(TxKind.EXPENSE, "", "", atName = false), targets.first())
+        assertEquals(UiTarget.Wizard(TxKind.EXPENSE, "75", "Gym"), targets[1])
+        assertTrue(targets.drop(1).all { (it as UiTarget.Wizard).atName && it.amountText.isNotEmpty() })
+    }
+
+    @Test fun the_purchase_scenarios_open_the_result_by_themselves() {
+        assertEquals(UiTarget.Purchase("1200", "Laptop", parts = 2), scenario("purchase-far").targets(t)[1])
+        assertEquals(UiTarget.Purchase("700", "Sofa", parts = 6), scenario("purchase-instalments").targets(t)[1])
+    }
+}
+
+class LabFlowTest {
+    @Test fun looks_right_walks_through_the_steps_then_the_next_scenario() {
+        var session = LabFlow.start(listOf("a", "b"))!!
+        val first = LabFlow.mark(session, ok = true, stepCount = 2)
+        assertEquals(LabSession(listOf("a", "b"), index = 0, step = 1), first.session)
+        assertNull(first.finishedId)
+        session = first.session!!
+        val second = LabFlow.mark(session, ok = true, stepCount = 2)
+        assertEquals("a", second.finishedId)
+        assertEquals(true, second.verdict)
+        assertEquals(LabSession(listOf("a", "b"), index = 1), second.session)
+        val last = LabFlow.mark(second.session!!, ok = true, stepCount = 1)
+        assertEquals("b", last.finishedId)
+        assertNull(last.session) // the run is over: the Results screen follows
+    }
+
+    @Test fun a_problem_marks_the_scenario_and_goes_straight_on() {
+        val session = LabSession(listOf("a", "b", "c"), index = 0, step = 1)
+        val marked = LabFlow.mark(session, ok = false, stepCount = 3)
+        assertEquals("a", marked.finishedId)
+        assertEquals(false, marked.verdict)
+        assertEquals(LabSession(listOf("a", "b", "c"), index = 1), marked.session)
+    }
+
+    @Test fun an_empty_queue_has_no_session() = assertNull(LabFlow.start(emptyList()))
+
+    @Test fun results_round_trip_and_summarise_at_a_glance() {
+        val ids = listOf("a", "b", "c", "d")
+        val results = LabResults().with("a", true).with("b", false).with("c", true)
+        assertEquals(results, LabResults.decode(results.encode()))
+        assertEquals("2 right, 1 problem, 1 not run", results.summary(ids))
+        assertEquals(true, results.mark("a"))
+        assertEquals(false, results.mark("b"))
+        assertNull(results.mark("d"))
+        assertEquals(results.with("b", true).mark("b"), true) // a new mark replaces the old one
+        assertEquals(LabResults(), LabResults.decode(null))
+        assertEquals(LabResults(), LabResults.decode("garbage;x=2;=1"))
+        assertEquals("0 right, 0 problems, 4 not run", LabResults().summary(ids))
     }
 }

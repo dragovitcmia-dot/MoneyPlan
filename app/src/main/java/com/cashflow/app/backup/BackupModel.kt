@@ -54,3 +54,11 @@ object SnapshotLabel {
 
     fun size(info: SnapshotInfo) = "${sizeKb(info.sizeBytes)} KB"
 }
+
+/** The one-line summary of the Backups row in Settings: "Last backup 19 OCT 2026, 16:24 · 7 saved" (newest first), or "No backups yet". */
+object BackupSummary {
+    fun line(snapshots: List<SnapshotInfo>, zone: ZoneId): String {
+        val newest = snapshots.maxByOrNull { it.createdAtMillis } ?: return "No backups yet"
+        return "Last backup ${SnapshotLabel.time(newest, zone)} · ${snapshots.size} saved"
+    }
+}

@@ -34,6 +34,33 @@ class CalendarViewModel(private val snapshots: LedgerSnapshots, clock: () -> Loc
 
     val selected: StateFlow<LocalDate?> = _selected
 
+    /** The day whose list (day sheet) is open: set by a tap on a cell, or from outside (the Home "Today" line, a Lab check). */
+    private val _openDay = MutableStateFlow<LocalDate?>(null)
+    val openDay: StateFlow<LocalDate?> = _openDay
+
+    /** An item to open by name on [date] (and its Move date picker): set by a Lab check, taken by the Calendar screen once the day is known. */
+    class ItemRequest(val date: LocalDate, val name: String, val move: Boolean)
+
+    private val _itemRequest = MutableStateFlow<ItemRequest?>(null)
+    val itemRequest: StateFlow<ItemRequest?> = _itemRequest
+
+    /** Bumped when something new is shown by itself (a Lab check): the screen closes whatever item sheet it had open. */
+    private val _sheetReset = MutableStateFlow(0)
+    val sheetReset: StateFlow<Int> = _sheetReset
+
+    fun resetSheets() {
+        _sheetReset.value = _sheetReset.value + 1
+    }
+
+    fun requestItem(request: ItemRequest?) {
+        _itemRequest.value = request
+    }
+
+    fun openDayList(date: LocalDate?) {
+        _openDay.value = date
+        if (date != null) _selected.value = date
+    }
+
     val today: StateFlow<LocalDate> = snapshots.today
 
     /** First day (today or later) that closes below zero; null when none does. */

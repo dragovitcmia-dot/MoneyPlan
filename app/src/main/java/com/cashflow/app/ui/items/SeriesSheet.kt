@@ -215,23 +215,61 @@ internal fun SeriesActions(
     series: SeriesContext,
     onClose: (() -> Unit) -> Unit,
     showExtend: Boolean = true,
+    /** One outlined "Repeating payment" row that opens a menu (the item sheet), instead of a row of buttons. */
+    asMenu: Boolean = false,
+    /** The item sheet shows the series form INSTEAD of itself (one sheet at a time): it handles "Edit series" here. */
+    onEditSeries: (() -> Unit)? = null,
 ) {
+    var menuOpen by remember(rule.id) { mutableStateOf(false) }
     var editing by remember(rule.id) { mutableStateOf(false) }
     var extending by remember(rule.id) { mutableStateOf(false) }
     var ending by remember(rule.id) { mutableStateOf(false) }
     var deleting by remember(rule.id) { mutableStateOf(false) }
     val label = rule.description.ifBlank { stringResource(if (rule.kind == TxKind.INCOME) R.string.item_income else R.string.item_expense) }
 
-    FlowRow(horizontalArrangement = Arrangement.spacedBy(Spacing.s), verticalArrangement = Arrangement.spacedBy(Spacing.s)) {
-        AppButton(stringResource(R.string.series_edit_action), onClick = { editing = true }, style = AppButtonStyle.Tonal)
-        if (showExtend) AppButton(stringResource(R.string.series_extend_action), onClick = { extending = true }, style = AppButtonStyle.Tonal)
-        AppButton(stringResource(R.string.series_end), onClick = { ending = true }, style = AppButtonStyle.Outlined)
-        AppButton(
-            stringResource(R.string.series_delete),
-            onClick = { deleting = true },
-            style = AppButtonStyle.Outlined,
-            contentColor = MaterialTheme.colorScheme.error,
-        )
+    if (asMenu) {
+        androidx.compose.foundation.layout.Box(Modifier.fillMaxWidth()) {
+            AppButton(
+                stringResource(R.string.series_menu_title),
+                onClick = { menuOpen = true },
+                modifier = Modifier.fillMaxWidth(),
+                style = AppButtonStyle.Outlined,
+            )
+            androidx.compose.material3.DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                androidx.compose.material3.DropdownMenuItem(
+                    text = { Text(stringResource(R.string.series_edit_action), style = MaterialTheme.typography.titleSmall) },
+                    onClick = { menuOpen = false; if (onEditSeries != null) onEditSeries() else editing = true },
+                    modifier = Modifier.heightIn(min = 48.dp),
+                )
+                androidx.compose.material3.DropdownMenuItem(
+                    text = { Text(stringResource(R.string.series_extend_action), style = MaterialTheme.typography.titleSmall) },
+                    onClick = { menuOpen = false; extending = true },
+                    modifier = Modifier.heightIn(min = 48.dp),
+                )
+                androidx.compose.material3.DropdownMenuItem(
+                    text = { Text(stringResource(R.string.series_end), style = MaterialTheme.typography.titleSmall) },
+                    onClick = { menuOpen = false; ending = true },
+                    modifier = Modifier.heightIn(min = 48.dp),
+                )
+                androidx.compose.material3.DropdownMenuItem(
+                    text = { Text(stringResource(R.string.series_delete), style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.error) },
+                    onClick = { menuOpen = false; deleting = true },
+                    modifier = Modifier.heightIn(min = 48.dp),
+                )
+            }
+        }
+    } else {
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(Spacing.s), verticalArrangement = Arrangement.spacedBy(Spacing.s)) {
+            AppButton(stringResource(R.string.series_edit_action), onClick = { editing = true }, style = AppButtonStyle.Tonal)
+            if (showExtend) AppButton(stringResource(R.string.series_extend_action), onClick = { extending = true }, style = AppButtonStyle.Tonal)
+            AppButton(stringResource(R.string.series_end), onClick = { ending = true }, style = AppButtonStyle.Outlined)
+            AppButton(
+                stringResource(R.string.series_delete),
+                onClick = { deleting = true },
+                style = AppButtonStyle.Outlined,
+                contentColor = MaterialTheme.colorScheme.error,
+            )
+        }
     }
 
     if (editing) {

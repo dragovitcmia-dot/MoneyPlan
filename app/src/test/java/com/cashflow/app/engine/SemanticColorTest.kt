@@ -11,8 +11,13 @@ class SemanticColorTest {
         assertEquals(ColorToken.EXPENSE, SemanticColor.ofKind(TxKind.EXPENSE))
         assertEquals(ColorToken.INCOME, SemanticColor.ofRepeatIcon(TxKind.INCOME))
         assertEquals(ColorToken.EXPENSE, SemanticColor.ofRepeatIcon(TxKind.EXPENSE))
-        assertEquals(ColorToken.INCOME, SemanticColor.ofConfirmation(TxKind.INCOME))
-        assertEquals(ColorToken.EXPENSE, SemanticColor.ofConfirmation(TxKind.EXPENSE))
+    }
+
+    @Test fun the_accept_check_is_neutral_for_expenses_and_income_alike() {
+        assertEquals(ColorToken.NEUTRAL, SemanticColor.ofConfirmation(TxKind.INCOME))
+        assertEquals(ColorToken.NEUTRAL, SemanticColor.ofConfirmation(TxKind.EXPENSE))
+        // green stays for money coming in: the item's own amount and icon still follow its kind
+        assertEquals(ColorToken.INCOME, SemanticColor.ofKind(TxKind.INCOME))
     }
 
     @Test fun a_signed_change_is_green_in_red_out() {

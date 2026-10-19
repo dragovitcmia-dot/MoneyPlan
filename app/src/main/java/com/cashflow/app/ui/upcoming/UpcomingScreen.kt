@@ -86,8 +86,6 @@ import com.cashflow.app.ui.theme.Spacing
 import com.cashflow.app.ui.components.NameWithRepeat
 import com.cashflow.app.ui.components.quantityString
 import com.cashflow.app.ui.home.HomeViewModel
-import com.cashflow.app.ui.items.ItemEditSheet
-import com.cashflow.app.ui.items.ItemDetails
 import com.cashflow.app.ui.items.RejectConfirmDialog
 import com.cashflow.app.ui.items.WaitingCard
 import com.cashflow.app.ui.items.rememberItemActions
@@ -120,17 +118,16 @@ fun UpcomingScreen(
 
     val haptics = rememberHaptics()
     val actions = rememberItemActions(home, snackbar)
-    var editing by remember { mutableStateOf<Transaction?>(null) }
+    val sheets = com.cashflow.app.ui.items.rememberItemSheetState()
     // "Add one" on the empty series list opens the add wizard on Repeating (an income when the Income tab is selected).
     var adding by remember { mutableStateOf<TxKind?>(null) }
     val homeState by home.state.collectAsStateWithLifecycle()
-    var changing by remember { mutableStateOf<Transaction?>(null) }
     var deleting by remember { mutableStateOf<UpcomingRow?>(null) }
     val rules by home.rules.collectAsStateWithLifecycle()
     val current = model
     LaunchedEffect(openItemId, current) {
         if (openItemId != null && current != null) {
-            current.groups.flatMap { it.rows }.firstOrNull { it.tx.id == openItemId }?.let { editing = it.tx }
+            current.groups.flatMap { it.rows }.firstOrNull { it.tx.id == openItemId }?.let { sheets.open(it.tx) }
             onOpenItemHandled()
         }
     }
@@ -182,18 +179,6 @@ fun UpcomingScreen(
                 SeriesRowCard(row, onClick = { openSeries = row.rule.id }, modifier = Modifier.animateItem(fadeInSpec = Motion.standard(), placementSpec = Motion.standard(), fadeOutSpec = Motion.fast()))
             }
         } else if (current != null) {
-            current.dailyIncome?.let { total ->
-                item(key = "daily", contentType = "daily") {
-                    DailyIncomeRow(total) {
-                        // Every row opens something: the series of a single daily income, or the Repeating list when there are several.
-                        when (val tap = Upcoming.tapForDaily(current)) {
-                            is UpcomingTap.OpenSeries -> openSeries = tap.ruleId
-                            UpcomingTap.ShowRepeating -> upcoming.showSeries()
-                            else -> Unit
-                        }
-                    }
-                }
-            }
             if (current.groups.isEmpty()) {
                 item(key = "empty", contentType = "empty") { NothingComing() }
             }
@@ -210,13 +195,13 @@ fun UpcomingScreen(
                             onConfirm = { fromSwipe ->
                                 if (fromSwipe) home.onSwipeCompleted()
                                 // A series that asks for the amount each time opens the amount sheet instead of accepting.
-                                if (actions.asksAmount(row.tx, seriesCtx)) editing = row.tx else actions.confirm(row.tx)
+                                if (actions.asksAmount(row.tx, seriesCtx)) sheets.open(row.tx) else actions.confirm(row.tx)
                             },
                             onSkip = { fromSwipe ->
                                 if (fromSwipe) home.onSwipeCompleted()
                                 actions.requestReject(row.tx)
                             },
-                            onOpen = { editing = row.tx },
+                            onOpen = { sheets.open(row.tx) },
                             modifier = Modifier.animateItem(fadeInSpec = Motion.standard(), placementSpec = Motion.standard(), fadeOutSpec = Motion.fast()),
                             footer = if (row.shortBy != null || row.last) ({ RowTags(row) }) else null,
                         )
@@ -225,26 +210,14 @@ fun UpcomingScreen(
                             haptics = haptics,
                             onDelete = { deleting = row },
                             modifier = Modifier.animateItem(fadeInSpec = Motion.standard(), placementSpec = Motion.standard(), fadeOutSpec = Motion.fast()),
-                        ) { UpcomingCard(row, onClick = { editing = row.tx }) }
+                        ) { UpcomingCard(row, rules.firstOrNull { it.id == row.tx.recurringRuleId }, onClick = { sheets.open(row.tx) }) }
                     }
                 }
             }
         }
     }
 
-    editing?.let { tx ->
-        ItemDetails(
-            tx = tx,
-            home = home,
-            actions = actions,
-            today = today,
-            onDismiss = { editing = null },
-            onEdit = { changing = tx },
-        )
-    }
-    changing?.let { tx ->
-        ItemEditSheet(tx = tx, actions = actions, onDismiss = { changing = null }, today = today)
-    }
+    com.cashflow.app.ui.items.ItemSheets(sheets, home, actions, today)
     RejectConfirmDialog(actions)
     adding?.let { kind ->
         val ui = homeState
@@ -343,7 +316,7 @@ private fun groupTitle(key: UpcomingGroupKey): String = when (key) {
 }
 
 @Composable
-private fun UpcomingCard(row: UpcomingRow, onClick: () -> Unit, modifier: Modifier = Modifier) {
+private fun UpcomingCard(row: UpcomingRow, rule: com.cashflow.app.engine.RecurringRule?, onClick: () -> Unit, modifier: Modifier = Modifier) {
     val tx = row.tx
     val income = tx.kind == TxKind.INCOME
     AppListRow(
@@ -351,7 +324,7 @@ private fun UpcomingCard(row: UpcomingRow, onClick: () -> Unit, modifier: Modifi
         kind = tx.kind,
         repeating = tx.recurringRuleId != null,
         amountText = Money.formatSigned(tx.kind, tx.amount),
-        caption = AppDates.withWeekday(tx.date) + " \u00B7 " + quantityString(R.plurals.in_days, row.daysAway, row.daysAway),
+        caption = com.cashflow.app.engine.ItemRules.rowSubtitle(tx.date, quantityString(R.plurals.in_days, row.daysAway, row.daysAway), rule),
         onClick = onClick,
         modifier = modifier,
         footer = if (row.shortBy != null || row.last) ({ RowTags(row) }) else null,
@@ -373,31 +346,6 @@ private fun RowTags(row: UpcomingRow) {
                     stringResource(R.string.short_by_tag, Money.formatDisplay(short, withCurrency = false)),
                     style = MaterialTheme.typography.labelMedium,
                     modifier = Modifier.padding(horizontal = Spacing.m, vertical = Spacing.s),
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun DailyIncomeRow(total: Long, onClick: () -> Unit) {
-    AppCard(Modifier.fillMaxWidth(), onClick = onClick) {
-        Row(
-            Modifier.fillMaxWidth().heightIn(min = 56.dp).padding(Spacing.l),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(Spacing.m),
-        ) {
-            Icon(Icons.Filled.Refresh, contentDescription = null, tint = MaterialTheme.cashflow.positive)
-            Column(Modifier.weight(1f)) {
-                Text(
-                    stringResource(R.string.daily_income_row, Money.formatDisplay(total, withCurrency = false)),
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.cashflow.positive,
-                )
-                Text(
-                    stringResource(R.string.daily_income_row_hint),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         }

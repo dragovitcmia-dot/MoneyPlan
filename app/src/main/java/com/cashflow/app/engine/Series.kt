@@ -177,42 +177,6 @@ object PaidAverage {
     }
 }
 
-/** What can be done with an item, by its status and whether it belongs to a series. */
-data class ItemActionSet(
-    val accept: Boolean,
-    val reject: Boolean,
-    val postpone: Boolean,
-    val editItem: Boolean,
-    val markWaiting: Boolean,
-    val seriesEdit: Boolean,
-    val seriesExtend: Boolean,
-    val seriesEnd: Boolean,
-    val seriesDelete: Boolean,
-)
-
-object ItemActionMap {
-    /**
-     * Every item opens its details. Accept, reject and postpone belong to waiting items (accept and reject once they
-     * are due); an answered item can be put back to waiting; the series actions are there for ANY item of a series,
-     * whatever its status, because they only affect today and later.
-     */
-    fun forItem(status: TxStatus, date: LocalDate, today: LocalDate, belongsToSeries: Boolean): ItemActionSet {
-        val pending = status == TxStatus.PENDING
-        val due = pending && !date.isAfter(today)
-        return ItemActionSet(
-            accept = due,
-            reject = due,
-            postpone = pending,
-            editItem = true,
-            markWaiting = !pending,
-            seriesEdit = belongsToSeries,
-            seriesExtend = belongsToSeries,
-            seriesEnd = belongsToSeries,
-            seriesDelete = belongsToSeries,
-        )
-    }
-}
-
 /** The series Edit form: the wizard's own form (When controls) prefilled from the series, and back. */
 object SeriesForm {
     fun formFor(rule: RecurringRule, today: LocalDate): EntryFormState {

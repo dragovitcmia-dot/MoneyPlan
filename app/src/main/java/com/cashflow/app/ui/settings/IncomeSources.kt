@@ -40,25 +40,15 @@ internal fun scheduleSummary(p: RecurrencePattern): String = when (p) {
     is RecurrencePattern.Yearly -> stringResource(R.string.sched_yearly, AppDates.formatShort(java.time.LocalDate.of(2000, p.month, minOf(p.day, java.time.YearMonth.of(2000, p.month).lengthOfMonth())), java.time.LocalDate.of(2000, 1, 1)))
 }
 
-/**
- * The "Income" card: one switch, "Accept my income automatically" (at the reminder time set in the Notifications card).
- * Repeating income is created on Home and managed from the details of one of its items.
- */
+/** The "Income" group: one row with a switch, "Accept my income automatically" (at the reminder time set under Notifications). */
 @Composable
 internal fun IncomeCard(viewModel: SettingsViewModel, settings: AppSettings) {
-    val haptics = com.cashflow.app.ui.rememberHaptics()
-    SectionCard {
-        Text(stringResource(R.string.income_card_title), style = MaterialTheme.typography.titleLarge)
-        Row(Modifier.fillMaxWidth().heightIn(min = 56.dp), verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f).padding(end = Spacing.m), verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
-                Text(stringResource(R.string.auto_income_title), style = MaterialTheme.typography.titleMedium)
-            }
-            val autoTitle = stringResource(R.string.auto_income_title)
-            Switch(
-                modifier = Modifier.semantics { contentDescription = autoTitle },
-                checked = settings.autoAcceptIncome,
-                onCheckedChange = { on -> haptics.tick(); viewModel.update { it.copy(autoAcceptIncome = on) } },
-            )
-        }
+    SettingsGroup(stringResource(R.string.income_card_title)) {
+        SwitchRow(
+            title = stringResource(R.string.auto_income_title),
+            subtitle = stringResource(R.string.auto_income_sub),
+            checked = settings.autoAcceptIncome,
+            onChange = { on -> viewModel.update { it.copy(autoAcceptIncome = on) } },
+        )
     }
 }

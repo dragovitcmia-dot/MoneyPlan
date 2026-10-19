@@ -112,10 +112,15 @@ private class Ledger(var today: LocalDate, val start: LocalDate) {
         if (ItemEdits.canAnswer(row, today) && !row.date.isBefore(today)) rows.replaceAll { if (it.id == id) it.copy(status = TxStatus.CONFIRMED) else it }
     }
 
+    /** Overdue waiting rows the user moved to today or later in the current step: they are answered by that move, no longer history. */
+    val userMoved = mutableSetOf<Long>()
+
     fun postpone(id: Long, to: LocalDate) {
         val row = rows.firstOrNull { it.id == id } ?: return
-        if (row.date.isBefore(today)) return
-        Postpone.apply(row, to)?.let { moved -> rows.replaceAll { if (it.id == id) moved else it } }
+        Postpone.apply(row, to, today)?.let { moved ->
+            if (row.date.isBefore(today)) userMoved += id
+            rows.replaceAll { if (it.id == id) moved else it }
+        }
     }
 
     fun history(): List<Transaction> = rows.filter { HistoryGuard.isHistory(it, today) }
@@ -167,6 +172,7 @@ class HistoryInvariantTest {
             val deleted = ArrayDeque<Triple<RecurringRule, DeleteSeriesPlan, List<Transaction>>>()
 
             repeat(10) { step ->
+                l.userMoved.clear()
                 val before = l.history().map { it.id to l.key(it) }
                 val pastBefore = l.pastBalances()
                 val todayBefore = l.today
@@ -194,6 +200,7 @@ class HistoryInvariantTest {
                 }
                 if (l.today == todayBefore) {
                     for ((id, key) in before) {
+                        if (id in l.userMoved) continue // an overdue waiting row the user moved to today or later (v0.10.1)
                         val now = l.rows.firstOrNull { it.id == id }
                         assertNotNull("$label: history row $id vanished", now)
                         assertEquals("$label: history row $id changed", key, l.key(now!!))
@@ -201,7 +208,7 @@ class HistoryInvariantTest {
                     assertEquals("$label: past balances changed", pastBefore, l.pastBalances())
                 } else {
                     // after the day moved on only rows that were history BEFORE must still be there unchanged
-                    for ((id, key) in before) assertEquals("$label: history row $id changed", key, l.rows.first { it.id == id }.let(l::key))
+                    for ((id, key) in before) if (id !in l.userMoved) assertEquals("$label: history row $id changed", key, l.rows.first { it.id == id }.let(l::key))
                 }
             }
         }
@@ -344,8 +351,15 @@ class HistoryInvariantTest {
         l.reject(future.id)
         l.postpone(future.id, today.plusDays(9))
         assertEquals(past, pastKeys(l))
-        l.rows.filter { it.date.isBefore(today) }.forEach { l.postpone(it.id, today.plusDays(30)); l.reject(it.id) }
-        assertEquals(past, pastKeys(l))
+        // answered rows (accepted or rejected) in the past never move; an overdue WAITING row can only move to today or later
+        val answered = l.rows.filter { it.date.isBefore(today) && it.status != TxStatus.PENDING }
+        answered.forEach { l.postpone(it.id, today.plusDays(30)); l.reject(it.id) }
+        assertEquals(past.filter { (id, _) -> id in answered.map { it.id } }, pastKeys(l).filter { (id, _) -> id in answered.map { it.id } })
+        val overdue = l.rows.first { it.date.isBefore(today) && it.status == TxStatus.PENDING }
+        l.postpone(overdue.id, today.minusDays(1)) // yesterday is refused
+        assertEquals(overdue.date, l.rows.first { it.id == overdue.id }.date)
+        l.postpone(overdue.id, today) // today is allowed
+        assertEquals(today, l.rows.first { it.id == overdue.id }.date)
     }
 
     @Test fun the_history_guard_filters_a_deletion_that_would_touch_history() {
@@ -525,24 +539,15 @@ class HistoryInvariantTest {
         val listed = model.groups.flatMap { it.rows }
         assertTrue(listed.isNotEmpty())
         for (row in listed) assertEquals(UpcomingTap.OpenDetails(row.tx.id), Upcoming.tapFor(row))
-        // the far-future occurrence of a series is listed and tappable, a future daily income is summarized in the pinned row
+        // the far-future occurrence of a series is listed and tappable; a daily series contributes only its NEXT occurrence (v0.10.1)
         assertTrue(listed.any { it.tx.id == 6L })
-        assertTrue(listed.none { it.tx.id in setOf(8L, 9L) })
-    }
-
-    @Test fun the_pinned_daily_income_row_is_tappable_too() {
-        val model = Upcoming.build(engineWith(daily.occurrenceFor(today).copy(id = 1)), listOf(daily), UpcomingType.ALL, DayOfWeek.MONDAY)
-        assertEquals(UpcomingTap.OpenSeries(2), Upcoming.tapForDaily(model))
-        val two = listOf(daily, incomeSource(RecurrencePattern.Daily, today, id = 4))
-        assertEquals(UpcomingTap.ShowRepeating, Upcoming.tapForDaily(Upcoming.build(engineWith(), two, UpcomingType.ALL, DayOfWeek.MONDAY)))
-        assertNull(Upcoming.tapForDaily(Upcoming.build(engineWith(), emptyList(), UpcomingType.ALL, DayOfWeek.MONDAY)))
-        assertNull(Upcoming.tapForDaily(Upcoming.build(engineWith(), two, UpcomingType.EXPENSES, DayOfWeek.MONDAY)))
-        assertNotNull(Upcoming.tapForDaily(Upcoming.build(engineWith(), two, UpcomingType.INCOME, DayOfWeek.MONDAY)))
+        assertTrue(listed.none { it.tx.id == 9L })
+        assertTrue(listed.any { it.tx.id == 8L })
     }
 
     @Test fun a_future_item_opens_details_with_accept_off_and_postpone_on() {
-        val a = ItemActionMap.forItem(TxStatus.PENDING, today.plusDays(40), today, belongsToSeries = true)
+        val a = ItemRules.actionsFor(tx(today.plusDays(40), 5, id = 1).copy(recurringRuleId = 3L), today)
         assertFalse(a.accept)
-        assertTrue(a.postpone && a.seriesEdit)
+        assertTrue(a.moveDate && a.series)
     }
 }

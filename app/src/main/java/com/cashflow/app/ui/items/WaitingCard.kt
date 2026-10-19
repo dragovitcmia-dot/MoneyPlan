@@ -90,7 +90,7 @@ fun WaitingCard(
         backgroundContent = {
             val direction = state.dismissDirection
             val color = when (direction) {
-                SwipeToDismissBoxValue.StartToEnd -> MaterialTheme.cashflow.incomeFill
+                SwipeToDismissBoxValue.StartToEnd -> MaterialTheme.colorScheme.primary // accept is neutral, never green
                 SwipeToDismissBoxValue.EndToStart -> MaterialTheme.cashflow.expenseFill
                 SwipeToDismissBoxValue.Settled -> Color.Transparent
             }
@@ -100,7 +100,7 @@ fun WaitingCard(
             ) {
                 when (direction) {
                     SwipeToDismissBoxValue.StartToEnd ->
-                        Icon(Icons.Filled.Check, contentDescription = acceptLabel, tint = MaterialTheme.cashflow.buttonLabel, modifier = Modifier.size(36.dp))
+                        Icon(Icons.Filled.Check, contentDescription = acceptLabel, tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(36.dp))
                     SwipeToDismissBoxValue.EndToStart ->
                         Icon(Icons.Filled.Close, contentDescription = rejectLabel, tint = MaterialTheme.cashflow.buttonLabel, modifier = Modifier.size(36.dp))
                     SwipeToDismissBoxValue.Settled -> Unit

@@ -47,7 +47,7 @@ class CalendarReferenceTest {
         assertTrue(all.none { it.hasIncome })
         // ...but it is listed in the day sheet.
         val oct12 = month(YearMonth.of(2026, 10)).day(d(2026, 10, 12))!!
-        assertTrue(oct12.items.any { it.dailyIncome && it.tx.amount == tnd(30) })
+        assertTrue(oct12.items.any { it.fromSeries && it.tx.kind == TxKind.INCOME && it.tx.amount == tnd(30) })
     }
 
     @Test fun the_banner_says_money_runs_short_on_nov_10() {
@@ -57,6 +57,6 @@ class CalendarReferenceTest {
     @Test fun sundays_show_the_75_expense() {
         val oct = month(YearMonth.of(2026, 10))
         assertEquals(tnd(75), oct.day(d(2026, 10, 18))!!.expenses)
-        assertFalse(oct.day(d(2026, 10, 18))!!.items.none { it.fromSeries && !it.dailyIncome })
+        assertFalse(oct.day(d(2026, 10, 18))!!.items.none { it.fromSeries && it.tx.kind == TxKind.EXPENSE })
     }
 }

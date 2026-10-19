@@ -422,7 +422,7 @@ def calendar_flow(name, today):
     # One item: change it.
     tap_text("Expense 11/10")
     time.sleep(1)
-    find(S["details_title"], scroll=False, timeout=8)
+    find(S["item_change"], scroll=False, timeout=8)
     screenshot(f"{name}-item-edit")
     swipe_up()
     screenshot(f"{name}-item-edit-bottom")
@@ -443,7 +443,7 @@ def calendar_flow(name, today):
     time.sleep(1.2)
     tap_text("Sunday expense")
     time.sleep(1)
-    find(S["details_title"], scroll=False, timeout=8)
+    find(S["item_change"], scroll=False, timeout=8)
     screenshot(f"{name}-item-edit-series")
     sh("input keyevent 4")
     time.sleep(1.2)
@@ -457,12 +457,12 @@ def upcoming_flow(name, today):
     tap_text(NAV_UPCOMING, scroll=False)
     time.sleep(1.5)
     screenshot(f"{name}-upcoming")
-    # A waiting item: its edit sheet has the red cross and the green check.
+    # A waiting item: the one item sheet has the Accept button, Change and Move date.
     tap_text("Sunday expense", scroll=False)
     time.sleep(1)
-    find(S["details_title"], scroll=False, timeout=8)
     find(S["action_accept"], scroll=True, timeout=15)
-    find(S["action_reject"], scroll=False, timeout=8)
+    find(S["item_change"], scroll=False, timeout=8)
+    find(S["item_move_date"], scroll=False, timeout=8)
     screenshot(f"{name}-item-edit-waiting")
     sh("input keyevent 4")
     time.sleep(1.2)
@@ -492,17 +492,24 @@ def settings_flow(name):
     screenshot(f"{name}-settings-notifications")  # the Notifications card
     swipe_up(0.75, 0.3)
     time.sleep(0.6)
-    screenshot(f"{name}-settings-backup")  # the Backup card
+    screenshot(f"{name}-settings-data")  # the collapsed Backups row
     try:
         try:
-            tap_text(S["backup_now"], scroll=False, timeout=4)
+            tap_text(S["settings_backups_title"], scroll=False, timeout=4)
         except NotFound:
-            swipe_down()  # the two swipes above can overshoot on a taller screen: look one screen back up
-            tap_text(S["backup_now"], scroll=True, timeout=10)
+            swipe_down()  # the swipes above can overshoot on a taller screen: look one screen back up
+            tap_text(S["settings_backups_title"], scroll=True, timeout=10)
+        find(S["backup_now"], scroll=False, timeout=10)
+        screenshot(f"{name}-backups-screen")  # its own screen with a back arrow
+        tap_text(S["backup_now"], scroll=False, timeout=6)
         time.sleep(3)
-        screenshot(f"{name}-settings-backup-after")  # a Manual snapshot is in the list
+        screenshot(f"{name}-backups-after")  # a Manual snapshot is in the list
+        sh("input keyevent 4")  # Back returns to Settings
+        time.sleep(1)
     except NotFound as e:
-        problems.append(f"{name}: Back up now: {e}")
+        problems.append(f"{name}: Backups screen: {e}")
+        recover_to_home()
+        tap_text(TEXT_SETTINGS, scroll=False)
     scroll_to_top(4)
     if name in SETTINGS_BOTTOM_CONFIGS:
         for _ in range(8):
@@ -842,7 +849,8 @@ def run_config(name, night, font, size, density):
             find(S["action_accept"], scroll=False, timeout=6)
         except NotFound:
             find(S["action_accept"], scroll=True, timeout=15)  # a short screen: the sheet scrolls
-        find(S["action_reject"], scroll=False, timeout=8)
+        find(S["item_change"], scroll=False, timeout=8)  # the one item sheet: Accept, then Change and Move date
+        find(S["item_move_date"], scroll=False, timeout=8)
         sh("input keyevent 4")
         time.sleep(1.2)
         extra += wizard_walk(name)

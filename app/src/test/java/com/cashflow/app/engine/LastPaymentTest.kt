@@ -188,12 +188,17 @@ class LastPaymentTest {
     }
 
     @Test fun the_last_payment_is_flagged_in_the_upcoming_rows_and_the_day_sheet() {
-        val items = rows(gym).filter { !it.date.isBefore(today) }
-        val engine = BalanceEngine(settings(d(2026, 10, 1), 1000), items, today)
-        val upcoming = Upcoming.build(engine, listOf(gym), UpcomingType.ALL, DayOfWeek.MONDAY)
-        val flagged = upcoming.groups.flatMap { it.rows }.filter { it.last }
+        // a weekly series (slower than weekly-or-more-often collapses nothing): its last payment is flagged in the Upcoming rows
+        val saturdays = rule(RecurrencePattern.Weekly(DayOfWeek.SATURDAY), d(2026, 10, 1), end = d(2026, 12, 5), id = 5, amount = 50).copy(description = "Gym")
+        val weeklyItems = rows(saturdays).filter { !it.date.isBefore(today) }
+        val weeklyEngine = BalanceEngine(settings(d(2026, 10, 1), 1000), weeklyItems, today)
+        val flagged = Upcoming.build(weeklyEngine, listOf(saturdays), UpcomingType.ALL, DayOfWeek.MONDAY).groups.flatMap { it.rows }.filter { it.last }
         assertEquals(1, flagged.size)
         assertEquals(d(2026, 12, 5), flagged.single().tx.date)
+        // a daily series lists only its next occurrence in Upcoming, but the day sheet still flags its last day
+        val items = rows(gym).filter { !it.date.isBefore(today) }
+        val engine = BalanceEngine(settings(d(2026, 10, 1), 1000), items, today)
+        assertTrue(Upcoming.build(engine, listOf(gym), UpcomingType.ALL, DayOfWeek.MONDAY).groups.flatMap { it.rows }.none { it.last })
         val month = CalendarSummaries.month(engine, listOf(gym), java.time.YearMonth.of(2026, 12), DayOfWeek.MONDAY)
         assertTrue(month.day(d(2026, 12, 5))!!.items.single().last)
         assertFalse(month.day(d(2026, 12, 4))!!.items.single().last)

@@ -35,4 +35,9 @@ fi
 echo "LAB LAUNCH OK: $PKG is running, no crash in logcat"
 
 # Gate: the Lab shows its LAB tag; the best-effort walk adds screenshots of the Lab card, Upcoming tabs and the purchase strip.
-timeout 900 python3 scripts/lab_smoke.py screens || { code=$?; echo "LAB SMOKE exit $code"; [ "$code" = "3" ] && exit 1; echo "(best effort: not a build failure)"; }
+# The bounded screenshot pass (dark normal, light normal, dark font scale 2.0): each run starts "Run all checks" and marks the first checks.
+for cfg in "dark-normal 1 1.0" "light-normal 0 1.0" "dark-font2 1 2.0"; do
+  set -- $cfg
+  echo "== lab screenshots: $1"
+  LAB_NAME="$1-lab" LAB_NIGHT="$2" LAB_FONT="$3" timeout 900 python3 scripts/lab_smoke.py screens || { code=$?; echo "LAB SMOKE ($1) exit $code"; [ "$code" = "3" ] && exit 1; echo "(best effort: not a build failure)"; }
+done

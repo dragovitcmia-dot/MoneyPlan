@@ -43,77 +43,52 @@ internal fun NotificationsCard(viewModel: SettingsViewModel, settings: AppSettin
     val permission = LocalNotificationPermission.current
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { permission?.refresh() }
 
-    SectionCard {
-        Text(stringResource(R.string.notif_card_title), style = MaterialTheme.typography.titleLarge)
+    SettingsGroup(stringResource(R.string.notif_card_title)) {
         SwitchRow(
             title = stringResource(R.string.notif_master_title),
-            helper = stringResource(R.string.notif_master_helper),
+            subtitle = stringResource(R.string.notif_master_helper),
             checked = toggles.enabled,
             onChange = { on ->
                 prefs.update { it.copy(enabled = on) }
                 if (on) permission?.request() // asked in context: right when the user turns reminders on
             },
         )
-        TimeField(
+        RowDivider()
+        TimeRow(
             label = stringResource(R.string.remind_label),
             value = settings.reminderTime,
             onPick = { t -> viewModel.update { it.copy(reminderTime = t) } },
         )
+        RowDivider()
         SwitchRow(
             title = stringResource(R.string.notif_headsup_title),
-            helper = stringResource(R.string.notif_headsup_helper),
+            subtitle = stringResource(R.string.notif_headsup_helper),
             checked = toggles.headsUp,
             enabled = toggles.enabled,
             onChange = { on -> prefs.update { it.copy(headsUp = on) } },
         )
+        RowDivider()
         SwitchRow(
             title = stringResource(R.string.notif_keep_title),
-            helper = stringResource(R.string.notif_keep_helper),
+            subtitle = stringResource(R.string.notif_keep_helper),
             checked = toggles.keepReminding,
             enabled = toggles.enabled,
             onChange = { on -> prefs.update { it.copy(keepReminding = on) } },
         )
+        RowDivider()
         SwitchRow(
             title = stringResource(R.string.notif_shortage_title),
-            helper = stringResource(R.string.notif_shortage_helper),
+            subtitle = stringResource(R.string.notif_shortage_helper),
             checked = toggles.shortageAlerts,
             enabled = toggles.enabled,
             onChange = { on -> prefs.update { it.copy(shortageAlerts = on) } },
         )
         val allowed = permission?.allowed ?: true
         if (!allowed) {
-            Text(
-                stringResource(R.string.notif_perm_blocked),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            RowDivider()
+            ChevronRow(stringResource(R.string.notif_perm_open), stringResource(R.string.notif_perm_blocked), onClick = { NotificationPermission.openNotificationSettings(context) })
         }
-        if (!allowed) {
-            OutlinedButton(
-                onClick = { NotificationPermission.openNotificationSettings(context) },
-                modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp),
-            ) { Text(stringResource(R.string.notif_perm_open)) }
-        }
-        OutlinedButton(
-            onClick = { NotificationPermission.openAppInfo(context) },
-            modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp),
-        ) { Text(stringResource(R.string.notif_battery_open)) }
-    }
-}
-
-@Composable
-private fun SwitchRow(title: String, helper: String, checked: Boolean, onChange: (Boolean) -> Unit, enabled: Boolean = true) {
-    val haptics = com.cashflow.app.ui.rememberHaptics()
-    Row(Modifier.fillMaxWidth().heightIn(min = 56.dp), verticalAlignment = Alignment.CenterVertically) {
-        Column(Modifier.weight(1f).padding(end = Spacing.m), verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
-            Text(title, style = MaterialTheme.typography.titleMedium)
-            Text(helper, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-        Switch(
-            modifier = Modifier.semantics { contentDescription = title },
-            checked = checked,
-            onCheckedChange = { on -> haptics.tick(); onChange(on) },
-            enabled = enabled,
-        )
+        RowDivider()
+        ChevronRow(stringResource(R.string.notif_battery_open), stringResource(R.string.notif_battery_sub), onClick = { NotificationPermission.openAppInfo(context) })
     }
 }

@@ -20,6 +20,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material3.Icon
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -37,42 +41,33 @@ internal fun AppUpdatesSection(manager: UpdateManager) {
     // Back from the "install unknown apps" screen: the update carries on by itself if it was allowed.
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { manager.onResumed() }
 
-    SectionCard {
-        Text(stringResource(R.string.updates_title), style = MaterialTheme.typography.titleLarge)
-        Text(stringResource(R.string.version_line, manager.installedVersionName), style = MaterialTheme.typography.bodyLarge)
-
-        when (val s = state) {
-            UpdateState.Idle -> Unit
-            UpdateState.Checking -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.m)) {
-                CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 3.dp)
-                Text(stringResource(R.string.checking), style = MaterialTheme.typography.bodyLarge)
-            }
-            UpdateState.UpToDate -> Text(stringResource(R.string.up_to_date), style = MaterialTheme.typography.bodyLarge)
-            is UpdateState.Downloading -> {
-                Text(stringResource(R.string.downloading_version, s.version), style = MaterialTheme.typography.bodyLarge)
-                if (s.progress == null) {
-                    LinearProgressIndicator(Modifier.fillMaxWidth())
-                } else {
-                    LinearProgressIndicator(progress = { s.progress }, modifier = Modifier.fillMaxWidth())
-                }
-            }
-            is UpdateState.Installing -> {
-                Text(stringResource(R.string.installing_version, s.version), style = MaterialTheme.typography.bodyLarge)
-                Text(stringResource(R.string.install_notice), style = MaterialTheme.typography.bodyLarge)
-                LinearProgressIndicator(Modifier.fillMaxWidth())
-            }
-            is UpdateState.NeedsInstallPermission -> Unit // the explanation dialog below
-            is UpdateState.WaitingForPermission -> Text(stringResource(R.string.waiting_permission), style = MaterialTheme.typography.bodyLarge)
-            is UpdateState.Error -> Text(s.message, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.error)
+    val busy = state is UpdateState.Checking || state is UpdateState.Downloading || state is UpdateState.Installing
+    val subtitle = when (val s = state) {
+        UpdateState.Idle -> stringResource(R.string.version_line, manager.installedVersionName)
+        UpdateState.Checking -> stringResource(R.string.checking)
+        UpdateState.UpToDate -> stringResource(R.string.version_line, manager.installedVersionName) + " \u00B7 " + stringResource(R.string.up_to_date)
+        is UpdateState.Downloading -> stringResource(R.string.downloading_version, s.version)
+        is UpdateState.Installing -> stringResource(R.string.installing_version, s.version)
+        is UpdateState.NeedsInstallPermission -> stringResource(R.string.version_line, manager.installedVersionName)
+        is UpdateState.WaitingForPermission -> stringResource(R.string.waiting_permission)
+        is UpdateState.Error -> s.message
+    }
+    SettingsGroup(stringResource(R.string.updates_title)) {
+        SettingsRow(
+            title = stringResource(R.string.check_updates),
+            subtitle = subtitle,
+            onClick = if (busy) null else manager::check,
+        ) {
+            if (state is UpdateState.Checking) CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 3.dp)
+            else Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(24.dp))
         }
-
-        AppButton(
-            stringResource(R.string.check_updates),
-            onClick = manager::check,
-            enabled = state !is UpdateState.Checking && state !is UpdateState.Downloading && state !is UpdateState.Installing,
-            modifier = Modifier.fillMaxWidth(),
-            style = AppButtonStyle.Outlined,
-        )
+        when (val s = state) {
+            is UpdateState.Downloading ->
+                if (s.progress == null) LinearProgressIndicator(Modifier.fillMaxWidth().padding(horizontal = Spacing.l, vertical = Spacing.s))
+                else LinearProgressIndicator(progress = { s.progress }, modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.l, vertical = Spacing.s))
+            is UpdateState.Installing -> LinearProgressIndicator(Modifier.fillMaxWidth().padding(horizontal = Spacing.l, vertical = Spacing.s))
+            else -> Unit
+        }
     }
 
     if (state is UpdateState.NeedsInstallPermission) {

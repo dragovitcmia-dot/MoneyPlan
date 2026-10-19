@@ -18,6 +18,8 @@ object LabApply {
         repo.insertTransactions(seed.transactions)
         repo.updateSettings(seed.settings, today) // also generates the rows of the series
         for (id in seed.askAmountRuleIds) repo.setAskAmount(id, true)
+        seedBackups(app, scenario, seed, today)
+        LabState.shiftDays = 0
         LabState.rememberScenario(scenario.id)
         app.snapshots.refreshDay()
     }
@@ -36,7 +38,28 @@ object LabApply {
         app.snapshots.refreshDay()
     }
 
+    /** The scenario's backups: each is a real snapshot of the seeded data, taken with the Lab clock set to its day (the newest at "now"). */
+    private suspend fun seedBackups(app: CashflowApp, scenario: LabScenario, seed: com.cashflow.app.debug.lab.LabSeed, today: java.time.LocalDate) {
+        if (seed.backups.isEmpty()) return
+        val zone = java.time.ZoneId.systemDefault()
+        val real = System.currentTimeMillis()
+        val realOffset = AppClock.offsetMillis
+        for (b in seed.backups.sortedByDescending { it.daysAgo }) {
+            if (b.daysAgo > 0) {
+                val at = java.time.LocalDateTime.of(today.minusDays(b.daysAgo.toLong()), java.time.LocalTime.of(b.hour, b.minute))
+                AppClock.offsetMillis = AppClock.offsetFor(at, zone, real)
+            } else {
+                AppClock.offsetMillis = realOffset // "now": after everything was seeded, so no automatic snapshot follows
+            }
+            app.backupManager.snapshot(b.type)
+        }
+        AppClock.offsetMillis = realOffset
+        app.backupManager.refresh()
+    }
+
     private suspend fun wipe(app: CashflowApp, today: java.time.LocalDate) {
+        java.io.File(app.filesDir, "backups").listFiles()?.forEach { it.delete() }
+        app.backupManager.refresh()
         app.repository.clearAll(today)
         app.notificationCenter.clear()
         app.notificationPrefs.savePostedKeys(emptySet())
