@@ -8,7 +8,12 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.AlertDialog
@@ -40,7 +45,6 @@ import com.cashflow.app.backup.SnapshotLabel
 import com.cashflow.app.backup.SnapshotType
 import com.cashflow.app.ui.components.AppButton
 import com.cashflow.app.ui.components.AppButtonStyle
-import com.cashflow.app.ui.components.SectionCard
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -52,11 +56,12 @@ import java.time.ZoneId
 private class RestoreTarget(val file: File, val whenText: String, val items: Long?, val imported: Boolean)
 
 /**
- * Settings > Backup: "Back up now", the snapshots (newest first, with their kind and size, each with Restore), and export or
- * import of one small .cfbackup file. A restore always saves the current state first and then restarts the app.
+ * Settings > Backups (its own full screen with a back arrow): "Back up now", the snapshots (newest first, with their kind and size,
+ * each with Restore, Show all), and export or import of one small .cfbackup file. A restore always saves the current state first
+ * and then restarts the app. Everything that used to be the Backup card, logic unchanged.
  */
 @Composable
-internal fun BackupCard() {
+internal fun BackupsScreen(contentPadding: androidx.compose.foundation.layout.PaddingValues, onBack: () -> Unit) {
     val context = LocalContext.current
     val app = context.applicationContext as CashflowApp
     val manager = app.backupManager
@@ -101,8 +106,19 @@ internal fun BackupCard() {
         }
     }
 
-    SectionCard {
-        Text(stringResource(R.string.backup_title), style = MaterialTheme.typography.titleLarge)
+    androidx.compose.foundation.layout.Column(
+        Modifier.fillMaxSize().padding(top = contentPadding.calculateTopPadding(), start = Spacing.s, end = Spacing.l),
+    ) {
+        Row(Modifier.fillMaxWidth().heightIn(min = 56.dp), verticalAlignment = Alignment.CenterVertically) {
+            androidx.compose.material3.IconButton(onClick = onBack, modifier = Modifier.size(48.dp)) {
+                androidx.compose.material3.Icon(androidx.compose.material.icons.Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.settings_back))
+            }
+            Text(stringResource(R.string.settings_backups_title), style = MaterialTheme.typography.headlineSmall, modifier = Modifier.weight(1f))
+        }
+        Column(
+            Modifier.fillMaxSize().verticalScroll(androidx.compose.foundation.rememberScrollState()).padding(start = Spacing.m, bottom = contentPadding.calculateBottomPadding() + Spacing.xl),
+            verticalArrangement = Arrangement.spacedBy(Spacing.m),
+        ) {
         AppButton(
             stringResource(R.string.backup_now),
             onClick = {
@@ -167,6 +183,7 @@ internal fun BackupCard() {
             modifier = Modifier.fillMaxWidth(),
             style = AppButtonStyle.Outlined,
         )
+        }
     }
 
     target?.let { t ->

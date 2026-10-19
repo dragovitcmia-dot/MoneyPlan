@@ -27,7 +27,7 @@ import androidx.compose.ui.unit.dp
 import com.cashflow.app.R
 import com.cashflow.app.ui.theme.cashflow
 
-/** Reject (red cross) and accept (green check): the same red and green as the EXPENSE and INCOME buttons. */
+/** Reject (red cross, the EXPENSE red) and accept (neutral check: accept is not money, so it is never green). */
 @Composable
 fun AnswerButtons(
     onReject: () -> Unit,
@@ -38,7 +38,7 @@ fun AnswerButtons(
 ) {
     Row(modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Spacing.xl, Alignment.CenterHorizontally)) {
         RoundIconButton(Icons.Filled.Close, stringResource(R.string.action_reject), MaterialTheme.cashflow.expenseFill, true, onReject, size)
-        RoundIconButton(Icons.Filled.Check, stringResource(R.string.action_accept), MaterialTheme.cashflow.incomeFill, acceptEnabled, onAccept, size)
+        RoundIconButton(Icons.Filled.Check, stringResource(R.string.action_accept), MaterialTheme.colorScheme.primary, acceptEnabled, onAccept, size, MaterialTheme.colorScheme.onPrimary)
     }
 }
 
@@ -50,6 +50,7 @@ private fun RoundIconButton(
     enabled: Boolean,
     onClick: () -> Unit,
     size: Dp,
+    content: androidx.compose.ui.graphics.Color = MaterialTheme.cashflow.buttonLabel,
 ) {
     val source = remember { MutableInteractionSource() }
     Surface(
@@ -58,7 +59,7 @@ private fun RoundIconButton(
         modifier = Modifier.size(size).pressScale(source),
         shape = MaterialTheme.shapes.medium, // no pills: only the EXPENSE / INCOME buttons are fully rounded
         color = if (enabled) fill else MaterialTheme.colorScheme.surfaceVariant,
-        contentColor = MaterialTheme.cashflow.buttonLabel,
+        contentColor = content,
         interactionSource = source,
     ) {
         Box(Modifier.size(size), contentAlignment = Alignment.Center) {
@@ -68,7 +69,7 @@ private fun RoundIconButton(
 }
 
 /**
- * The first-use swipe hint: a red cross with a left arrow, and a right arrow with a green check. No words;
+ * The first-use swipe hint: a red cross with a left arrow, and a right arrow with a neutral check. No words;
  * TalkBack users get Accept and Reject as actions instead, so the hint itself is hidden from them.
  */
 @Composable
@@ -81,7 +82,7 @@ fun SwipeHint(modifier: Modifier = Modifier) {
         }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.s)) {
             Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(24.dp))
-            Icon(Icons.Filled.Check, contentDescription = null, tint = colors.incomeFill, modifier = Modifier.size(28.dp))
+            Icon(Icons.Filled.Check, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(28.dp))
         }
     }
 }

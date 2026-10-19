@@ -123,6 +123,9 @@ class MainActivity : ComponentActivity() {
                 val settingsScroll = rememberScrollState()
                 var tab by rememberSaveable { mutableIntStateOf(0) }
                 var showCenter by rememberSaveable { mutableStateOf(false) }
+                var backupsOpen by rememberSaveable { mutableStateOf(false) }
+                // A place to show on Home by itself (the wizard on its Name step, the purchase result).
+                var homeRequest by remember { mutableStateOf<com.cashflow.app.engine.UiTarget?>(null) }
                 val snackbar = remember { SnackbarHostState() }
                 val unread by app.notificationCenter.unread.collectAsStateWithLifecycle(0)
 
@@ -165,6 +168,38 @@ class MainActivity : ComponentActivity() {
                         navRequest = null
                     }
                 }
+                // Anything that wants the app to show a place by itself (the Cashflow Lab's checks) posts it to UiTargets.
+                val pendingTarget by com.cashflow.app.ui.UiTargets.pending.collectAsStateWithLifecycle()
+                LaunchedEffect(pendingTarget) {
+                    val pending = pendingTarget ?: return@LaunchedEffect
+                    showCenter = false
+                    backupsOpen = false
+                    calendar.openDayList(null)
+                    calendar.requestItem(null)
+                    when (val t = pending.target) {
+                        com.cashflow.app.engine.UiTarget.Home -> tab = 0
+                        is com.cashflow.app.engine.UiTarget.CalendarDay -> {
+                            tab = 1
+                            calendar.showMonth(YearMonth.from(t.date))
+                            calendar.openDayList(t.date)
+                            if (t.item != null) calendar.requestItem(CalendarViewModel.ItemRequest(t.date, t.item, t.move))
+                        }
+                        is com.cashflow.app.engine.UiTarget.Upcoming -> {
+                            tab = 2
+                            upcoming.show(t.series)
+                        }
+                        is com.cashflow.app.engine.UiTarget.Wizard, is com.cashflow.app.engine.UiTarget.Purchase -> {
+                            tab = 0
+                            homeRequest = t
+                        }
+                        com.cashflow.app.engine.UiTarget.Settings -> tab = 3
+                        com.cashflow.app.engine.UiTarget.Backups -> {
+                            tab = 3
+                            backupsOpen = true
+                        }
+                    }
+                    com.cashflow.app.ui.UiTargets.consume(pending)
+                }
                 BackHandler(enabled = showCenter) { showCenter = NavLogic.closeCenter(NavState(tab, showCenter)).centerOpen }
 
                 // The hero odometer lives here, above the tabs, so switching tabs never touches it. The launch
@@ -193,6 +228,9 @@ class MainActivity : ComponentActivity() {
                         // Four labelled tabs. The labels follow the font size up to 1.3x and then shrink to fit,
                         // so "Calendar" and "Upcoming" never get cut off.
                         val density = LocalDensity.current
+                        androidx.compose.foundation.layout.Column {
+                        // Lab build only: the check panel sits right above the navigation bar (a no-op everywhere else).
+                        com.cashflow.app.lab.LabHooks.Panel()
                         CompositionLocalProvider(LocalDensity provides Density(density.density, minOf(density.fontScale, 1.3f))) {
                             BottomTabBar(
                                 tabs = listOf(
@@ -205,9 +243,11 @@ class MainActivity : ComponentActivity() {
                                 // Every tab always works: with the notification center open, a tap leaves it and shows that tab.
                                 onSelect = { index ->
                                     if (index != tab || showCenter) haptics.tick() // light tick on every tab change
+                                    if (index != tab) backupsOpen = false
                                     NavLogic.selectTab(NavState(tab, showCenter), index).let { tab = it.tab; showCenter = it.centerOpen }
                                 },
                             )
+                        }
                         }
                     },
                 ) { padding ->
@@ -215,15 +255,24 @@ class MainActivity : ComponentActivity() {
                     Box(Modifier.fillMaxSize()) {
                         Crossfade(targetState = tab, animationSpec = tween(120), label = "tabs") { selected ->
                             when (selected) {
-                                0 -> HomeScreen(home, odometer, snackbar, padding, homeList, onOpenDay = { day -> navigate(NotificationRoute.CALENDAR, day) })
+                                0 -> HomeScreen(
+                                    home, odometer, snackbar, padding, homeList,
+                                    onOpenDay = { day -> navigate(NotificationRoute.CALENDAR, day) },
+                                    // the "Today" line: the Calendar on that day with its list open
+                                    onOpenDayList = { day -> navigate(NotificationRoute.CALENDAR, day); calendar.openDayList(day) },
+                                    request = homeRequest,
+                                    onRequestHandled = { homeRequest = null },
+                                )
                                 1 -> CalendarScreen(calendar, home, settings, snackbar, padding)
                                 2 -> UpcomingScreen(upcoming, home, settings, snackbar, padding, upcomingList, openItemId = itemRequest, onOpenItemHandled = { itemRequest = null })
-                                else -> SettingsScreen(settings, app.repository, app.updateManager, padding, settingsScroll)
+                                else -> SettingsScreen(settings, app.repository, app.updateManager, padding, settingsScroll, backupsOpen, { backupsOpen = it })
                             }
                         }
                         seriesRequest?.let { id ->
                             com.cashflow.app.ui.items.SeriesFromNotification(id, home, snackbar, onDismiss = { seriesRequest = null })
                         }
+                        // Lab build only: its home and results screens cover the tab content (the bars stay); a no-op everywhere else.
+                        com.cashflow.app.lab.LabHooks.Overlay(onOpenSettings = { tab = 3 })
                         if (showCenter) {
                             // The notification center covers the tab content (the bars stay); Back or the arrow closes it.
                             Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {

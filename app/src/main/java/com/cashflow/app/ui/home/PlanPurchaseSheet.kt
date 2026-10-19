@@ -97,12 +97,14 @@ fun PlanPurchaseSheet(
     onPlanned: (String) -> Unit,
     onAddNormal: (PurchaseState) -> Unit,
     onDismiss: () -> Unit,
+    /** A Lab check opens the sheet straight on the result of a price. */
+    initial: PurchaseState = PurchaseState(),
 ) {
     val scope = rememberCoroutineScope()
     val haptics = rememberHaptics()
     val colors = MaterialTheme.cashflow
     val permission = LocalNotificationPermission.current
-    var state by remember { mutableStateOf(PurchaseState()) }
+    var state by remember { mutableStateOf(initial) }
     var asking by remember { mutableStateOf(false) }
     var saving by remember { mutableStateOf(false) }
     val baseline by produceState<PlanBaseline?>(null) { value = loadBaseline() }

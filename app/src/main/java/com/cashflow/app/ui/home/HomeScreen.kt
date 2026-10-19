@@ -81,6 +81,8 @@ import com.cashflow.app.R
 import com.cashflow.app.engine.HomeStatus
 import com.cashflow.app.engine.HomeStatusLine
 import com.cashflow.app.engine.Money
+import com.cashflow.app.ui.components.color
+import androidx.compose.ui.semantics.contentDescription
 import com.cashflow.app.engine.Transaction
 import com.cashflow.app.engine.TxKind
 import com.cashflow.app.ui.Haptics
@@ -95,8 +97,6 @@ import com.cashflow.app.ui.theme.Motion
 import androidx.compose.foundation.clickable
 import androidx.compose.ui.semantics.Role
 import com.cashflow.app.ui.components.KindButtons
-import com.cashflow.app.ui.items.ItemDetails
-import com.cashflow.app.ui.items.ItemEditSheet
 import com.cashflow.app.ui.items.RejectConfirmDialog
 import com.cashflow.app.ui.items.WaitingCard
 import com.cashflow.app.ui.items.rememberItemActions
@@ -118,6 +118,10 @@ fun HomeScreen(
     listState: LazyListState,
     /** The shortage line opens the Calendar on that day. */
     onOpenDay: (java.time.LocalDate) -> Unit = {},
+    onOpenDayList: (java.time.LocalDate) -> Unit = {},
+    /** A place to show by itself on this screen (the add wizard on its Name step, the purchase result); null when there is none. */
+    request: com.cashflow.app.engine.UiTarget? = null,
+    onRequestHandled: () -> Unit = {},
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { viewModel.refresh() }
@@ -126,7 +130,7 @@ fun HomeScreen(
     if (ui == null) {
         HomeSkeleton(contentPadding) // nothing numeric until the first data emission
     } else {
-        HomeContent(ui, viewModel, odometer, snackbarHost, contentPadding, listState, onOpenDay)
+        HomeContent(ui, viewModel, odometer, snackbarHost, contentPadding, listState, onOpenDay, onOpenDayList, request, onRequestHandled)
     }
 }
 
@@ -139,6 +143,9 @@ private fun HomeContent(
     padding: PaddingValues,
     listState: LazyListState,
     onOpenDay: (java.time.LocalDate) -> Unit,
+    onOpenDayList: (java.time.LocalDate) -> Unit,
+    request: com.cashflow.app.engine.UiTarget?,
+    onRequestHandled: () -> Unit,
 ) {
     val scope = rememberCoroutineScope()
     val haptics = rememberHaptics()
@@ -147,8 +154,26 @@ private fun HomeContent(
     var planOpen by rememberSaveable { mutableStateOf(false) }
     // "Add as a normal expense" from Plan a purchase: (price text, name) for the add wizard.
     var prefill by remember { mutableStateOf<Pair<String, String>?>(null) }
-    var editing by remember { mutableStateOf<Transaction?>(null) }
-    var changing by remember { mutableStateOf<Transaction?>(null) }
+    val sheets = com.cashflow.app.ui.items.rememberItemSheetState()
+    var startAtName by remember { mutableStateOf(false) }
+    var purchaseStart by remember { mutableStateOf(com.cashflow.app.engine.PurchaseState()) }
+    LaunchedEffect(request) {
+        when (request) {
+            is com.cashflow.app.engine.UiTarget.Wizard -> {
+                prefill = request.amountText to request.name
+                startAtName = request.atName
+                composerKind = request.kind.name
+            }
+            is com.cashflow.app.engine.UiTarget.Purchase -> {
+                purchaseStart = com.cashflow.app.engine.PurchaseState(
+                    priceText = request.priceText, name = request.name, step = com.cashflow.app.engine.PurchaseStep.RESULT, selectedParts = request.parts,
+                )
+                planOpen = true
+            }
+            else -> Unit
+        }
+        if (request != null) onRequestHandled()
+    }
 
     val actions = rememberItemActions(viewModel, snackbarHost)
     val seriesCtx by viewModel.series.collectAsStateWithLifecycle()
@@ -170,6 +195,10 @@ private fun HomeContent(
         item(key = "hero", contentType = "hero") { Hero(odometer = odometer) }
         // One quiet line: the next expense, or (when a negative day is coming) how short and before when; that one opens the Calendar.
         item(key = "status", contentType = "status") { StatusLine(ui.status, ui.today) { day -> haptics.tick(); onOpenDay(day) } }
+        // What was spent today (accepted expenses, a "Now" expense included); it opens that day's list. Hidden while nothing was spent.
+        if (ui.spentToday > 0) {
+            item(key = "today", contentType = "today") { TodayLine(ui.spentToday) { haptics.tick(); onOpenDayList(ui.today) } }
+        }
         item(key = "buttons", contentType = "buttons") {
             KindButtons(
                 onExpense = { composerKind = TxKind.EXPENSE.name },
@@ -196,13 +225,13 @@ private fun HomeContent(
                     onConfirm = { fromSwipe ->
                         if (fromSwipe) viewModel.onSwipeCompleted()
                         // A series that asks for the amount each time opens the amount sheet instead of accepting.
-                        if (actions.asksAmount(tx, seriesCtx)) editing = tx else confirm(tx)
+                        if (actions.asksAmount(tx, seriesCtx)) sheets.open(tx) else confirm(tx)
                     },
                     onSkip = { fromSwipe ->
                         if (fromSwipe) viewModel.onSwipeCompleted()
                         reject(tx)
                     },
-                    onOpen = { editing = tx },
+                    onOpen = { sheets.open(tx) },
                     modifier = Modifier.animateItem(
                         fadeInSpec = Motion.standard(), placementSpec = Motion.standard(), fadeOutSpec = Motion.fast(),
                     ),
@@ -219,9 +248,10 @@ private fun HomeContent(
             resultingBalance = viewModel::resultingBalance,
             onSave = viewModel::save,
             onSaved = { message -> actions.announce(message) },
-            onDismiss = { composerKind = null; prefill = null },
+            onDismiss = { composerKind = null; prefill = null; startAtName = false },
             prefillAmount = prefill?.first.orEmpty(),
             prefillName = prefill?.second.orEmpty(),
+            startAtName = startAtName,
         )
     }
 
@@ -236,23 +266,12 @@ private fun HomeContent(
                 planOpen = false
                 composerKind = TxKind.EXPENSE.name
             },
-            onDismiss = { planOpen = false },
+            onDismiss = { planOpen = false; purchaseStart = com.cashflow.app.engine.PurchaseState() },
+            initial = purchaseStart,
         )
     }
 
-    editing?.let { tx ->
-        ItemDetails(
-            tx = tx,
-            home = viewModel,
-            actions = actions,
-            today = ui.today,
-            onDismiss = { editing = null },
-            onEdit = { changing = tx },
-        )
-    }
-    changing?.let { tx ->
-        ItemEditSheet(tx = tx, actions = actions, onDismiss = { changing = null }, today = ui.today)
-    }
+    com.cashflow.app.ui.items.ItemSheets(sheets, viewModel, actions, ui.today)
     RejectConfirmDialog(actions)
 }
 
@@ -288,6 +307,27 @@ private fun StatusLine(status: HomeStatus, today: java.time.LocalDate, onOpenDay
         contentAlignment = Alignment.Center,
     ) {
         Text(text, style = MaterialTheme.typography.bodyLarge, color = color, textAlign = TextAlign.Center)
+    }
+}
+
+/** "Today  -75 TND": one quiet row, the amount in the money-out red; tapping it opens today's day list on the Calendar. */
+@Composable
+private fun TodayLine(spent: Long, onClick: () -> Unit) {
+    val amount = Money.formatSigned(TxKind.EXPENSE, spent)
+    val label = stringResource(R.string.home_today_label)
+    Row(
+        Modifier.fillMaxWidth().clip(MaterialTheme.shapes.small).clickable(role = Role.Button, onClick = onClick).heightIn(min = 48.dp)
+            .semantics(mergeDescendants = true) { contentDescription = "$label $amount" },
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(label, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(
+            amount,
+            style = MaterialTheme.typography.bodyLarge,
+            color = com.cashflow.app.engine.SemanticColor.ofKind(TxKind.EXPENSE).color(),
+            modifier = Modifier.padding(start = Spacing.m),
+        )
     }
 }
 

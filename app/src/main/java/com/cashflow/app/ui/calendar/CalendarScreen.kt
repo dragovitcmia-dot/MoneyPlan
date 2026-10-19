@@ -86,8 +86,6 @@ import com.cashflow.app.ui.components.AppButton
 import com.cashflow.app.ui.components.AppButtonStyle
 import com.cashflow.app.ui.home.EntryComposer
 import com.cashflow.app.ui.home.HomeViewModel
-import com.cashflow.app.ui.items.ItemEditSheet
-import com.cashflow.app.ui.items.ItemDetails
 import com.cashflow.app.ui.items.RejectConfirmDialog
 import com.cashflow.app.ui.items.rememberItemActions
 import com.cashflow.app.ui.rememberHaptics
@@ -148,10 +146,16 @@ fun CalendarScreen(
         }
     }
 
-    var sheetDate by rememberSaveable { mutableStateOf<String?>(null) }
+    val sheetDay by calendar.openDay.collectAsStateWithLifecycle()
+    val itemRequest by calendar.itemRequest.collectAsStateWithLifecycle()
     var composerKind by rememberSaveable { mutableStateOf<String?>(null) }
-    var editing by remember { mutableStateOf<Transaction?>(null) }
-    var changing by remember { mutableStateOf<Transaction?>(null) }
+    val sheets = com.cashflow.app.ui.items.rememberItemSheetState()
+
+    // The month can also change from outside (a Lab check, a link): the pager follows the view model.
+    LaunchedEffect(visibleMonth) {
+        val page = MonthPages.pageOf(visibleMonth)
+        if (pager.currentPage != page && !pager.isScrollInProgress) pager.scrollToPage(page)
+    }
 
     fun goToMonth(month: YearMonth) {
         scope.launch { pager.animateScrollToPage(MonthPages.pageOf(month)) }
@@ -235,7 +239,7 @@ fun CalendarScreen(
                             fontScale = density.fontScale,
                             onDayClick = { day ->
                                 select(day.date)
-                                sheetDate = day.date.toString()
+                                calendar.openDayList(day.date)
                             },
                         )
                     }
@@ -245,22 +249,36 @@ fun CalendarScreen(
     }
 
     // ---- day sheet and what it opens --------------------------------------------------------
-    val openDate = sheetDate?.let(LocalDate::parse)
-    if (openDate != null) {
+    val openDate = sheetDay
+    // ONE sheet at a time: while an item (or its Change form) is open, the day list is not shown; dismissing the item shows it again.
+    if (openDate != null && sheets.item == null) {
         val summary = months.values.firstNotNullOfOrNull { it.day(openDate) }
         DaySheet(
             date = openDate,
             summary = summary,
             today = today,
-            onDismiss = { sheetDate = null },
-            onOpenItem = { editing = it },
+            onDismiss = { calendar.openDayList(null) },
+            onOpenItem = { sheets.open(it) },
             onAdd = { kind -> composerKind = kind.name },
         )
     }
 
+    // An item asked for by name (Lab): once the day is known, its sheet replaces the day list.
+    val request = itemRequest
+    if (request != null) {
+        val day = months.values.firstNotNullOfOrNull { it.day(request.date) }
+        val wanted = day?.items?.firstOrNull { it.tx.description == request.name }
+        if (wanted != null) {
+            LaunchedEffect(request) {
+                sheets.open(wanted.tx, move = request.move)
+                calendar.requestItem(null)
+            }
+        }
+    }
+
     composerKind?.let { name ->
         val ui = homeUi
-        val day = sheetDate?.let(LocalDate::parse)
+        val day = sheetDay
         if (ui != null && day != null) {
             EntryComposer(
                 kind = TxKind.valueOf(name),
@@ -275,19 +293,7 @@ fun CalendarScreen(
         }
     }
 
-    editing?.let { tx ->
-        ItemDetails(
-            tx = tx,
-            home = home,
-            actions = actions,
-            today = today,
-            onDismiss = { editing = null },
-            onEdit = { changing = tx },
-        )
-    }
-    changing?.let { tx ->
-        ItemEditSheet(tx = tx, actions = actions, onDismiss = { changing = null }, today = today)
-    }
+    com.cashflow.app.ui.items.ItemSheets(sheets, home, actions, today)
     RejectConfirmDialog(actions)
 }
 

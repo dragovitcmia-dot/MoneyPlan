@@ -46,6 +46,11 @@ class UpcomingViewModel(private val snapshots: LedgerSnapshots, flags: StateFlow
         _view.value = _view.value.toggleSeries()
     }
 
+    /** Back to the plain occurrence list on the All tab, or on to the Repeating list (a Lab check or a link sets it by itself). */
+    fun show(series: Boolean) {
+        _view.value = UpcomingView(UpcomingType.ALL, series)
+    }
+
     fun showSeries() {
         _view.value = _view.value.withSeries(true)
     }

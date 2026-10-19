@@ -32,8 +32,6 @@ import com.cashflow.app.engine.ItemEdits
 import com.cashflow.app.engine.Money
 import com.cashflow.app.engine.Transaction
 import com.cashflow.app.engine.TxKind
-import com.cashflow.app.engine.TxStatus
-import com.cashflow.app.ui.components.AnswerButtons
 import com.cashflow.app.ui.components.AppButton
 import com.cashflow.app.ui.components.AppButtonStyle
 import com.cashflow.app.ui.components.LabeledTextField
@@ -53,6 +51,8 @@ fun ItemEditSheet(
     actions: ItemActions,
     onDismiss: () -> Unit,
     today: LocalDate,
+    /** After Save or Delete: the whole item flow closes (a plain dismiss only goes back to the item sheet). */
+    onDone: () -> Unit = onDismiss,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val scope = rememberCoroutineScope()
@@ -69,7 +69,7 @@ fun ItemEditSheet(
 
     fun close(after: () -> Unit) {
         after()
-        scope.launch { sheetState.hide() }.invokeOnCompletion { onDismiss() }
+        scope.launch { sheetState.hide() }.invokeOnCompletion { onDone() }
     }
 
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
@@ -79,14 +79,6 @@ fun ItemEditSheet(
         ) {
             Text(stringResource(R.string.item_edit_title), style = MaterialTheme.typography.headlineSmall)
             Text(label, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-
-            if (fromSeries) {
-                Text(
-                    stringResource(R.string.item_series_note),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
 
             LabeledTextField(
                 value = amountText,
@@ -105,29 +97,15 @@ fun ItemEditSheet(
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
             )
-            DateField(stringResource(R.string.item_date_label), date) { date = it }
+            // Today to forever, whatever the item's own date.
+            DateField(stringResource(R.string.item_date_label), date, earliest = com.cashflow.app.engine.ItemRules.earliestDate(today)) { date = it }
 
             AppButton(
                 stringResource(R.string.action_save),
                 onClick = { amount?.let { a -> close { actions.save(tx, a, description, date) } } },
-                enabled = amount != null,
+                enabled = amount != null && com.cashflow.app.engine.ItemRules.canSaveChange(tx, date, today),
                 modifier = Modifier.fillMaxWidth(),
             )
-            if (ItemEdits.canAnswer(tx, today)) {
-                // Red cross rejects (the edits are dropped), green check saves the edits and accepts.
-                AnswerButtons(
-                    onReject = { close { actions.requestReject(tx) } },
-                    onAccept = { amount?.let { a -> close { actions.done(tx, a, description, date) } } },
-                    acceptEnabled = amount != null,
-                )
-            } else if (tx.status != TxStatus.PENDING) {
-                AppButton(
-                    stringResource(R.string.action_mark_waiting),
-                    onClick = { close { actions.markWaiting(tx) } },
-                    modifier = Modifier.fillMaxWidth(),
-                    style = AppButtonStyle.Tonal,
-                )
-            }
             // Permanent history: an accepted item, or one dated before today, cannot be deleted.
             if (!com.cashflow.app.engine.HistoryGuard.isHistory(tx, today)) {
                 AppButton(

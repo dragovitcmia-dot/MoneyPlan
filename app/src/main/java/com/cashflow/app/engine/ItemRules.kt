@@ -72,6 +72,10 @@ object ItemRules {
         return parts.joinToString(" · ")
     }
 
+    /** The subtitle of a list row: "WED 14 OCT 2026 · in 3 days · Every day". A repeating item names its schedule, nothing else is special. */
+    fun rowSubtitle(date: LocalDate, relative: String, rule: RecurringRule?): String =
+        listOfNotNull(AppDates.withWeekday(date), relative, rule?.let { SeriesText.schedule(it.pattern) }).joinToString(" · ")
+
     /** The caption of the Move date picker: only for an item of a series. */
     fun pickerCaption(tx: Transaction): String? = if (tx.recurringRuleId != null) "Only this day moves" else null
 

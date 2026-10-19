@@ -176,6 +176,8 @@ fun EntryComposer(
     prefillName: String = "",
     /** "Add one" on an empty Repeating list: the wizard opens with Repeats already chosen on the When step. */
     startRepeating: Boolean = false,
+    /** Opened by a Lab check (or a link): the wizard starts on its Name step with the amount already filled in. */
+    startAtName: Boolean = false,
 ) {
     val scope = rememberCoroutineScope()
     val permission = LocalNotificationPermission.current
@@ -185,7 +187,9 @@ fun EntryComposer(
     val accentFill = if (isExpense) colors.expenseFill else colors.incomeFill
 
     val initial = remember {
-        EntryWizard.start(kind, ui.today, day, prefillAmount, prefillName).let { if (startRepeating) it.copy(form = it.form.copy(timing = Timing.REPEATS)) else it }
+        EntryWizard.start(kind, ui.today, day, prefillAmount, prefillName)
+            .let { if (startRepeating) it.copy(form = it.form.copy(timing = Timing.REPEATS)) else it }
+            .let { if (startAtName) it.copy(step = WizardStep.NAME) else it }
     }
     var wizard by remember { mutableStateOf(initial) }
     var discard by remember { mutableStateOf(DiscardState()) }

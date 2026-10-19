@@ -124,6 +124,9 @@ class LedgerRepository(private val db: AppDatabase, private val autoAccept: Auto
         today: LocalDate = com.cashflow.app.engine.AppClock.today(),
     ) {
         db.withTransaction {
+            // Permanent history: only a changeable row (waiting, or rejected from today on) is rewritten, and a changed date is today or later.
+            val stored = txDao.get(id)?.toDomain() ?: return@withTransaction
+            if (!com.cashflow.app.engine.ItemRules.canSaveChange(stored, date, today)) return@withTransaction
             txDao.updateItem(id, amount, description.trim(), date)
             // An item dated in the future cannot be accepted or rejected yet.
             if (status != null && !date.isAfter(today)) txDao.setStatus(id, status)
@@ -131,13 +134,13 @@ class LedgerRepository(private val db: AppDatabase, private val autoAccept: Auto
     }
 
     /**
-     * Moves one waiting item to a later day. Only the date changes; a generated occurrence keeps its
+     * Moves one waiting item to today or a later day (an overdue one too). Only the date changes; a generated occurrence keeps its
      * occurrenceDate, so it is not regenerated and the rest of its series is untouched. A move that is not
-     * allowed (not waiting, not a later day) does nothing; returns whether the row moved.
+     * allowed (not waiting, a day before today, the item's own day) does nothing; returns whether the row moved.
      */
-    suspend fun postpone(id: Long, newDate: LocalDate): Boolean = db.withTransaction {
+    suspend fun postpone(id: Long, newDate: LocalDate, today: LocalDate = com.cashflow.app.engine.AppClock.today()): Boolean = db.withTransaction {
         val tx = txDao.get(id)?.toDomain() ?: return@withTransaction false
-        val moved = Postpone.apply(tx, newDate) ?: return@withTransaction false
+        val moved = Postpone.apply(tx, newDate, today) ?: return@withTransaction false
         txDao.updateItem(id, moved.amount, moved.description, moved.date)
         true
     }

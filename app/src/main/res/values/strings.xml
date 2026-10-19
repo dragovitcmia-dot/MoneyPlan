@@ -116,9 +116,17 @@
     <!-- Change one item -->
     <string name="item_edit_title">Change this item</string>
     <string name="item_date_label">Date</string>
-    <string name="item_series_note">This day only</string>
     <string name="item_edit_series">Edit this repeating payment</string>
     <string name="action_mark_waiting">Mark as waiting</string>
+    <string name="item_change">Change</string>
+    <string name="item_move_date">Move date</string>
+    <string name="series_menu_title">Repeating payment</string>
+    <string name="home_today_label">Today</string>
+    <string name="settings_backups_title">Backups</string>
+    <string name="settings_back">Back</string>
+    <string name="settings_data_title">Data</string>
+    <string name="auto_income_sub">Added at the reminder time</string>
+    <string name="notif_battery_sub">Allow background use</string>
     <string name="item_saved">Changes saved</string>
     <string name="marked_waiting">%1$s is waiting for you again</string>
     <string name="item_delete_title">Delete “%1$s”?</string>
@@ -194,33 +202,12 @@
     <string name="reject_body">This is permanent. It will be removed from your plan.</string>
 
     <!-- Item details -->
-    <string name="details_title">Details</string>
-    <string name="detail_type">Type</string>
-    <string name="detail_amount">Amount</string>
-    <string name="detail_date">Date</string>
-    <string name="detail_status">Status</string>
-    <string name="detail_repeat">Repeats</string>
-    <string name="detail_one_time">Does not repeat</string>
-    <string name="detail_kind_expense">Expense</string>
-    <string name="detail_kind_income">Income</string>
-    <string name="detail_series_line">%1$s · until %2$s</string>
-    <string name="details_edit_item">Change this item</string>
-    <string name="details_future_note">Planned for a later day</string>
 
     <!-- Postpone -->
     <string name="action_postpone">Postpone</string>
-    <string name="postpone_title">Move it to a later day</string>
-    <string name="postpone_tomorrow">Tomorrow</string>
-    <string name="postpone_3_days">In 3 days</string>
-    <string name="postpone_next_week">Next week</string>
-    <string name="postpone_1_week">In 1 week</string>
-    <string name="postpone_suggestion">%1$s - %2$s</string>
-    <string name="postpone_pick">Pick a date</string>
     <string name="postponed_item">Moved %1$s to %2$s</string>
-    <string name="postpone_series_note">Only this day moves.</string>
 
     <!-- Repeating payment actions on an item -->
-    <string name="series_section_title">This repeating payment</string>
     <string name="series_edit_future">Edit this and future</string>
     <string name="series_edit_future_title">Change this and future</string>
     <string name="series_edit_future_body">Waiting items from today on change. Accepted and rejected ones stay.</string>
