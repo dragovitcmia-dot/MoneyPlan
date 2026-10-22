@@ -15,7 +15,7 @@ android {
         targetSdk = 35
         // CI run number so every build can install over the previous one; 1 for local builds.
         versionCode = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 1
-        versionName = "0.10.1"
+        versionName = "0.10.2"
 
         // Per-variant identity. The real app is the default; the "lab" build type overrides all of these (see below).
         buildConfigField("boolean", "IS_LAB", "false")
