@@ -352,7 +352,9 @@ fun EntryComposer(
         if (wizard.step != WizardStep.BELOW_ZERO) {
             // Back and Next / Add: white bold text on the kind color.
             val last = wizard.step == WizardStep.REVIEW
-            val stacked = androidx.compose.ui.platform.LocalDensity.current.fontScale > 1.3f // a very large font: the buttons sit one above the other
+            // A very large font: on the review (the long "Add expense" label) the buttons sit one above the other; on the other steps the short labels stay side by side
+            // at a capped size, which leaves room for the whole keypad.
+            val stacked = androidx.compose.ui.platform.LocalDensity.current.fontScale > 1.3f && last
             val backButton = @Composable { m: Modifier ->
                 AppButton(
                     stringResource(if (EntryWizard.back(wizard) == null) R.string.action_cancel else R.string.wizard_back),
@@ -384,9 +386,11 @@ fun EntryComposer(
                     backButton(Modifier.fillMaxWidth())
                 }
             } else {
-                Row(Modifier.fillMaxWidth().padding(horizontal = Spacing.xl, vertical = Spacing.m), horizontalArrangement = Arrangement.spacedBy(Spacing.m)) {
-                    backButton(Modifier.weight(1f))
-                    nextButton(Modifier.weight(1f))
+                com.cashflow.app.ui.theme.CappedFontScale {
+                    Row(Modifier.fillMaxWidth().padding(horizontal = Spacing.xl, vertical = Spacing.m), horizontalArrangement = Arrangement.spacedBy(Spacing.m)) {
+                        backButton(Modifier.weight(1f))
+                        nextButton(Modifier.weight(1f))
+                    }
                 }
             }
         }

@@ -74,6 +74,8 @@ object LabRunner {
         val scenario = LabScenarios.byId(session.scenarioId) ?: return
         if (load) LabApply.load(app, scenario)
         val step = scenario.steps[session.step]
+        // History is a long list the questions are about: it shows first and the questions are one tap away (the panel starts collapsed there).
+        LabState.setPanelExpanded(step.target(scenario.today(AppClock.today())) !is UiTarget.History)
         // The step may move the Lab clock (the time machine) by itself, relative to the scenario's own clock.
         val base = scenario.clock
         if (base != null && step.clockShiftDays != LabState.shiftDays) {

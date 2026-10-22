@@ -62,6 +62,8 @@ internal fun LabPanel() {
     val scenario = LabScenarios.byId(s.scenarioId) ?: return
     val step = scenario.steps.getOrNull(s.step) ?: return
 
+    // The panel keeps at most a 1.3x text size: at large fonts it must not eat the screen it is about.
+    com.cashflow.app.ui.theme.CappedFontScale {
     Surface(
         Modifier.fillMaxWidth().semantics { contentDescription = "Lab check panel" },
         color = MaterialTheme.colorScheme.surfaceContainerHigh,
@@ -74,7 +76,11 @@ internal fun LabPanel() {
                 horizontalArrangement = Arrangement.spacedBy(Spacing.s),
             ) {
                 Text(
-                    "Check ${s.index + 1} of ${s.total} · ${scenario.title}" + if (scenario.steps.size > 1) " · screen ${s.step + 1}/${scenario.steps.size}" else "",
+                    if (expanded) {
+                        "Check ${s.index + 1} of ${s.total} · ${scenario.title}" + if (scenario.steps.size > 1) " · screen ${s.step + 1}/${scenario.steps.size}" else ""
+                    } else {
+                        "Check ${s.index + 1} of ${s.total} · tap to see the questions"
+                    },
                     style = MaterialTheme.typography.labelLarge,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -91,12 +97,15 @@ internal fun LabPanel() {
             }
             if (busy) {
                 Text("Preparing the data and the screen…", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(bottom = Spacing.m))
-            } else if (expanded) {
-                Column(
-                    Modifier.fillMaxWidth().heightIn(max = 220.dp).verticalScroll(rememberScrollState()),
-                    verticalArrangement = Arrangement.spacedBy(Spacing.xs),
-                ) {
-                    for (check in step.checks) Text("• $check", style = MaterialTheme.typography.bodyMedium)
+            } else {
+                // The questions show when the panel is expanded; the two buttons are always there (a collapsed panel hides only the questions).
+                if (expanded) {
+                    Column(
+                        Modifier.fillMaxWidth().heightIn(max = 220.dp).verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(Spacing.xs),
+                    ) {
+                        for (check in step.checks) Text("• $check", style = MaterialTheme.typography.bodyMedium)
+                    }
                 }
                 Row(Modifier.fillMaxWidth().padding(vertical = Spacing.s), horizontalArrangement = Arrangement.spacedBy(Spacing.s)) {
                     AppButton("Problem", onClick = { LabRunner.markAsync(app, false) }, modifier = Modifier.weight(1f), style = AppButtonStyle.Outlined)
@@ -104,6 +113,7 @@ internal fun LabPanel() {
                 }
             }
         }
+    }
     }
 }
 
