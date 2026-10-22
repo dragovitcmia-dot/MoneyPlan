@@ -22,6 +22,9 @@ sealed interface UiTarget {
     /** Home with Plan a purchase open on its result for [priceText] (and [parts] chosen, when given). */
     data class Purchase(val priceText: String, val name: String = "Purchase", val parts: Int? = null) : UiTarget
 
+    /** History with [tab] and the search [query] applied; with [openFirst] the first row's (read-only) item sheet is open too. */
+    data class History(val tab: UpcomingType = UpcomingType.ALL, val query: String = "", val openFirst: Boolean = false) : UiTarget
+
     data object Settings : UiTarget
 
     /** Settings with the full Backups screen open. */

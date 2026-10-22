@@ -219,13 +219,61 @@ internal fun LabPickerPanel() {
         properties = androidx.compose.ui.window.DialogProperties(dismissOnBackPress = false, dismissOnClickOutside = false, usePlatformDefaultWidth = false),
     ) {
         val window = (androidx.compose.ui.platform.LocalView.current.parent as? androidx.compose.ui.window.DialogWindowProvider)?.window
+        // Large fonts: the picker fills the screen, so the panel is one compact row at the bottom (questions on demand); otherwise the full panel at the top.
+        val large = androidx.compose.ui.platform.LocalDensity.current.fontScale > 1.3f
         androidx.compose.runtime.SideEffect {
             window?.let {
-                it.setGravity(android.view.Gravity.TOP)
+                it.setGravity(if (large) android.view.Gravity.BOTTOM else android.view.Gravity.TOP)
                 it.clearFlags(android.view.WindowManager.LayoutParams.FLAG_DIM_BEHIND)
                 it.addFlags(android.view.WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or android.view.WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE)
             }
         }
-        LabPanel()
+        if (large) LabCompactPanel() else LabPanel()
+    }
+}
+
+/**
+ * The panel for the Move date picker at LARGE font sizes, where the picker fills the screen: one row at the bottom (a chevron for the questions,
+ * Problem, Looks right, Stop), text kept at the normal size. The questions open above the row on demand, so the picker's header and its
+ * weekday row stay visible by default.
+ */
+@Composable
+internal fun LabCompactPanel() {
+    val session by LabState.session.collectAsStateWithLifecycle()
+    val busy by LabState.busy.collectAsStateWithLifecycle()
+    val app = LocalContext.current.applicationContext as CashflowApp
+    var showQuestions by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    val s = session ?: return
+    val scenario = LabScenarios.byId(s.scenarioId) ?: return
+    val step = scenario.steps.getOrNull(s.step) ?: return
+    com.cashflow.app.ui.theme.CappedFontScale(max = 1.0f) {
+        Surface(
+            Modifier.fillMaxWidth().semantics { contentDescription = "Lab check panel" },
+            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+            tonalElevation = 3.dp,
+        ) {
+            Column(Modifier.fillMaxWidth().padding(horizontal = Spacing.s)) {
+                if (showQuestions && !busy) {
+                    Column(Modifier.fillMaxWidth().heightIn(max = 200.dp).verticalScroll(rememberScrollState()).padding(horizontal = Spacing.s, vertical = Spacing.s)) {
+                        Text("Check ${s.index + 1} of ${s.total} · ${scenario.title}", style = MaterialTheme.typography.labelLarge)
+                        for (check in step.checks) Text("• $check", style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+                Row(Modifier.fillMaxWidth().padding(vertical = Spacing.xs), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
+                    IconButton(onClick = { showQuestions = !showQuestions }, modifier = Modifier.size(48.dp)) {
+                        Icon(if (showQuestions) Icons.Filled.KeyboardArrowDown else Icons.Filled.KeyboardArrowUp, contentDescription = "Show the questions", modifier = Modifier.size(24.dp))
+                    }
+                    if (busy) {
+                        Text("Preparing…", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+                    } else {
+                        AppButton("Problem", onClick = { LabRunner.markAsync(app, false) }, modifier = Modifier.weight(1f), style = AppButtonStyle.Outlined)
+                        AppButton("Looks right", onClick = { LabRunner.markAsync(app, true) }, modifier = Modifier.weight(1f))
+                    }
+                    IconButton(onClick = { LabRunner.stop() }, modifier = Modifier.size(48.dp)) {
+                        Icon(Icons.Filled.Close, contentDescription = "Stop the checks", modifier = Modifier.size(24.dp))
+                    }
+                }
+            }
+        }
     }
 }

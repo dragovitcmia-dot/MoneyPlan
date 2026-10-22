@@ -58,6 +58,18 @@ interface TransactionDao {
     @Query("UPDATE transactions SET recurringRuleId = :ruleId WHERE id IN (:ids) AND recurringRuleId IS NULL")
     suspend fun relink(ids: List<Long>, ruleId: Long)
 
+    /** History: confirmed rows from [from] on, newest first. A month window, never the whole table (the date column is indexed). */
+    @Query("SELECT * FROM transactions WHERE status = 'CONFIRMED' AND date >= :from ORDER BY date DESC, id DESC")
+    fun observeConfirmedFrom(from: LocalDate): Flow<List<TransactionEntity>>
+
+    /** History search: every confirmed row whose name contains [query], case-insensitive (no wildcard characters to escape), newest first. */
+    @Query("SELECT * FROM transactions WHERE status = 'CONFIRMED' AND instr(lower(description), lower(:query)) > 0 ORDER BY date DESC, id DESC")
+    fun observeConfirmedMatching(query: String): Flow<List<TransactionEntity>>
+
+    /** The earliest confirmed day as an epoch day (null when nothing is confirmed): tells History when there is nothing more to load. */
+    @Query("SELECT MIN(date) FROM transactions WHERE status = 'CONFIRMED'")
+    fun observeEarliestConfirmed(): Flow<Long?>
+
     @Query("DELETE FROM transactions")
     suspend fun deleteAll()
 }

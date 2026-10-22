@@ -296,6 +296,8 @@ fun EntryComposer(
         BackHandler(enabled = !discard.asking) { requestClose() }
         Column(Modifier.fillMaxWidth().heightIn(max = maxSheetHeight)) {
         com.cashflow.app.lab.LabHooks.Panel() // Lab build only (a no-op elsewhere): the check panel, in the sheet, never over its content
+        // At large font sizes the header, the progress line and the amount step keep a 1.3x text size, so the whole keypad (also the 0 key) stays on screen.
+        com.cashflow.app.ui.theme.CappedFontScale {
         // Header: a band in the kind color with white bold text, like the big button on Home.
         Box(
             Modifier.fillMaxWidth().padding(horizontal = Spacing.xl, vertical = Spacing.s).clip(MaterialTheme.shapes.large).background(accentFill).padding(vertical = Spacing.m),
@@ -323,6 +325,7 @@ fun EntryComposer(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
+        }
 
         val problems = if (wizard.attempted) EntryWizard.problems(wizard) else emptyList()
         Column(
@@ -330,10 +333,12 @@ fun EntryComposer(
             verticalArrangement = Arrangement.spacedBy(Spacing.l),
         ) {
             when (wizard.step) {
-                WizardStep.AMOUNT -> AmountStep(
-                    form, problems,
-                    recent = if (isExpense) ui.recentExpenseAmounts else ui.recentIncomeAmounts,
-                ) { wizard = EntryWizard.update(wizard, it) }
+                WizardStep.AMOUNT -> com.cashflow.app.ui.theme.CappedFontScale {
+                    AmountStep(
+                        form, problems,
+                        recent = if (isExpense) ui.recentExpenseAmounts else ui.recentIncomeAmounts,
+                    ) { wizard = EntryWizard.update(wizard, it) }
+                }
                 WizardStep.NAME -> {
                     val suggestion = remember(form.description, kind, ui.history, ui.rules) { Suggestions.sameAsLast(form.description, kind, ui.history, ui.rules) }
                     NameStep(form, isExpense, names, problems, suggestion = suggestion, onSuggestion = ::applySuggestion, onNext = ::goNext) { wizard = EntryWizard.update(wizard, it) }

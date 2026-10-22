@@ -128,7 +128,7 @@ def main():
     name = os.environ.get("LAB_NAME", "dark-720")
     night = os.environ.get("LAB_NIGHT", "1") == "1"
     font = os.environ.get("LAB_FONT", "1.0")
-    count = int(os.environ.get("LAB_CHECKS", "13"))
+    count = int(os.environ.get("LAB_CHECKS", "20"))
     problems = []
     smoke.configure(night, font, "720x1560", "320")
     time.sleep(5)

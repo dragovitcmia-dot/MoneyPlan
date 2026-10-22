@@ -398,19 +398,43 @@ private fun SeriesRowCard(row: com.cashflow.app.engine.SeriesRow, onClick: () ->
 @Composable
 private fun UpcomingTabs(view: UpcomingView, onType: (UpcomingType) -> Unit, onToggleSeries: () -> Unit) {
     val primary = MaterialTheme.colorScheme.primary
+    FilterTabsRow(view.type, onType) {
+        IconToggleButton(
+            checked = view.showSeries,
+            onCheckedChange = { onToggleSeries() },
+            modifier = Modifier.size(48.dp),
+            colors = IconButtonDefaults.iconToggleButtonColors(
+                contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                checkedContainerColor = primary,
+                checkedContentColor = MaterialTheme.colorScheme.onPrimary,
+            ),
+        ) {
+            Icon(Icons.Filled.Refresh, contentDescription = stringResource(R.string.filter_repeating))
+        }
+    }
+}
+
+/**
+ * The tab row of Upcoming and History: three equal tabs (All neutral, Expenses red, Income green; the selected one bold with an underline) and,
+ * optionally, one more control at the end (Upcoming's repeat toggle). Every tab is at least 48 dp tall.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+internal fun FilterTabsRow(type: UpcomingType, onType: (UpcomingType) -> Unit, trailing: (@Composable () -> Unit)? = null) {
+    val primary = MaterialTheme.colorScheme.primary
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Row(Modifier.weight(1f).selectableGroup()) {
-            for ((type, label) in listOf(
+            for ((tab, label) in listOf(
                 UpcomingType.ALL to R.string.filter_all,
                 UpcomingType.EXPENSES to R.string.filter_expenses,
                 UpcomingType.INCOME to R.string.filter_income,
             )) {
-                val selected = view.type == type
+                val selected = type == tab
                 // All is neutral, Expenses red, Income green (selected text and underline)
-                val token = com.cashflow.app.engine.SemanticColor.ofTab(type)
+                val token = com.cashflow.app.engine.SemanticColor.ofTab(tab)
                 val tabColor = if (token == com.cashflow.app.engine.ColorToken.NEUTRAL) primary else token.color()
                 Box(
-                    Modifier.weight(1f).height(48.dp).selectable(selected = selected, onClick = { onType(type) }, role = Role.Tab),
+                    Modifier.weight(1f).height(48.dp).selectable(selected = selected, onClick = { onType(tab) }, role = Role.Tab),
                     contentAlignment = Alignment.Center,
                 ) {
                     Text(
@@ -430,17 +454,6 @@ private fun UpcomingTabs(view: UpcomingView, onType: (UpcomingType) -> Unit, onT
                 }
             }
         }
-        IconToggleButton(
-            checked = view.showSeries,
-            onCheckedChange = { onToggleSeries() },
-            modifier = Modifier.size(48.dp),
-            colors = IconButtonDefaults.iconToggleButtonColors(
-                contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                checkedContainerColor = primary,
-                checkedContentColor = MaterialTheme.colorScheme.onPrimary,
-            ),
-        ) {
-            Icon(Icons.Filled.Refresh, contentDescription = stringResource(R.string.filter_repeating))
-        }
+        trailing?.invoke()
     }
 }
