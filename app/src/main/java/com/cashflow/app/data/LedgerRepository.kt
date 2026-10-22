@@ -46,6 +46,17 @@ class LedgerRepository(private val db: AppDatabase, private val autoAccept: Auto
     // Row mapping can touch thousands of rows, so it runs off the main thread.
     val transactions: Flow<List<Transaction>> =
         txDao.observeAll().map { rows -> rows.map { it.toDomain() } }.flowOn(Dispatchers.Default)
+    /** History: confirmed rows from [from] on (a month window), newest first. */
+    fun confirmedFrom(from: LocalDate): Flow<List<Transaction>> =
+        txDao.observeConfirmedFrom(from).map { rows -> rows.map { it.toDomain() } }.flowOn(Dispatchers.Default)
+
+    /** History search: confirmed rows whose name contains [query], newest first. */
+    fun confirmedMatching(query: String): Flow<List<Transaction>> =
+        txDao.observeConfirmedMatching(query).map { rows -> rows.map { it.toDomain() } }.flowOn(Dispatchers.Default)
+
+    /** The earliest confirmed day, or null. */
+    val earliestConfirmed: Flow<LocalDate?> = txDao.observeEarliestConfirmed().map { day -> day?.let(LocalDate::ofEpochDay) }
+
     val rules: Flow<List<RecurringRule>> =
         ruleDao.observeAll().map { rows -> rows.map { it.toDomain() } }.flowOn(Dispatchers.Default)
 

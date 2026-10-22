@@ -461,3 +461,98 @@ class LabFlowTest {
         assertEquals("0 right, 0 problems, 4 not run", LabResults().summary(ids))
     }
 }
+
+/** The v0.10.2 scenarios: History with six months of items, hand-worked totals, and the empty state. */
+class LabScenariosV102Test {
+    private val real = LocalDate.of(2026, 10, 15)
+    private val t = LabScenarios.BASE_DAY
+    private fun seed(id: String) = LabScenarios.byId(id)!!.build(real)
+
+    /** Everything the seed puts into the ledger: its own rows plus what maintenance generates for its series. */
+    private fun rows(id: String): List<Transaction> {
+        val s = seed(id)
+        var next = 1L
+        val seeded = s.transactions.map { it.copy(id = next++) }
+        val generated = s.rules.filter { RuleMaintenance.isActive(it) }.flatMap { rule ->
+            RuleMaintenance.materialize(rule, seeded.filter { it.recurringRuleId == rule.id }, t)
+        }.map { it.copy(id = next++) }
+        return seeded + generated
+    }
+
+    @Test fun lots_of_history_seeds_hundreds_of_confirmed_rows_over_six_months() {
+        val all = rows("history-lots")
+        val confirmed = HistoryList.confirmedOnly(all)
+        assertTrue("${confirmed.size} confirmed", confirmed.size in 250..800)
+        val first = confirmed.minOf { it.date }
+        val last = confirmed.maxOf { it.date }
+        assertTrue(first.isBefore(t.minusMonths(5)))
+        assertEquals(t, last)
+        assertTrue(confirmed.any { it.source == TxSource.RECURRING }) // accepted series occurrences
+        assertTrue(confirmed.any { !it.isPlanned }) // Now expenses
+        assertTrue(confirmed.any { it.kind == TxKind.INCOME })
+        // nothing is overdue: the series' past occurrences were all accepted; only later ones wait
+        assertTrue(all.filter { it.status == TxStatus.PENDING }.all { it.date.isAfter(t) })
+    }
+
+    @Test fun one_item_is_named_phone_cover_and_the_search_finds_only_it() {
+        val confirmed = HistoryList.confirmedOnly(rows("history-lots"))
+        val hits = HistoryList.filter(confirmed, UpcomingType.EXPENSES, "cover")
+        assertEquals(1, hits.size)
+        assertEquals("Phone cover", hits.single().description)
+        assertEquals(LocalDate.of(2026, 10, 3), hits.single().date)
+        assertEquals(25_000L, hits.single().amount)
+        assertEquals("1 result, total -25 TND", HistoryList.resultsLine(hits))
+        assertEquals(1, HistoryList.filter(confirmed, UpcomingType.ALL, "COVER").size)
+        assertEquals("SAT 03 OCT 2026 · Done", ItemRules.meta(hits.single(), null))
+        assertTrue(ItemRules.actionsFor(hits.single(), t).history)
+    }
+
+    @Test fun the_totals_strip_adds_up_by_hand() {
+        // week 12..18 OCT: Coffee 6 + Lunch 14 = 20. month OCT spent: Rent 300 + Phone cover 25 + Groceries 42 + Taxi 18 + 20 = 405.
+        // month OCT received: Salary 1200 + Refund 80 = 1280.
+        val totals = HistoryList.totals(rows("history-lots"), t)
+        assertEquals(20_000L, totals.spentThisWeek)
+        assertEquals(405_000L, totals.spentThisMonth)
+        assertEquals(1_280_000L, totals.receivedThisMonth)
+        assertEquals("20 TND", Money.formatDisplay(totals.spentThisWeek))
+        assertEquals("405 TND", Money.formatDisplay(totals.spentThisMonth))
+        assertEquals("1 280 TND", Money.formatDisplay(totals.receivedThisMonth).replace('\u00A0', ' ').replace('\u202F', ' '))
+    }
+
+    @Test fun the_list_is_newest_first_with_day_totals_and_the_first_row_is_what_the_check_opens() {
+        val days = HistoryList.groupByDay(HistoryList.filter(rows("history-lots"), UpcomingType.ALL, ""))
+        assertEquals(t, days.first().date)
+        assertEquals(setOf("Coffee", "Lunch"), days.first().items.map { it.description }.toSet())
+        assertEquals(20_000L, days.first().spent)
+        assertEquals(0L, days.first().received)
+        assertEquals("MON 12 OCT 2026", AppDates.withWeekday(days.first().date))
+        assertTrue(days.zipWithNext().all { (a, b) -> a.date.isAfter(b.date) })
+        val oct1 = days.first { it.date == LocalDate.of(2026, 10, 1) }
+        assertEquals(1_200_000L, oct1.received)
+        // the first row of the Expenses tab with the search "cover" is Phone cover (what the last step opens)
+        assertEquals("Phone cover", HistoryList.filter(rows("history-lots"), UpcomingType.EXPENSES, "cover").first().description)
+    }
+
+    @Test fun the_steps_apply_the_tab_the_search_and_the_sheet_by_themselves() {
+        val targets = LabScenarios.byId("history-lots")!!.targets(t)
+        assertEquals(
+            listOf(
+                UiTarget.History(UpcomingType.ALL), UiTarget.History(UpcomingType.EXPENSES),
+                UiTarget.History(UpcomingType.EXPENSES, "cover"), UiTarget.History(UpcomingType.EXPENSES, "cover", openFirst = true),
+            ),
+            targets,
+        )
+    }
+
+    @Test fun history_empty_has_no_confirmed_row_and_zero_totals() {
+        val all = rows("history-empty")
+        assertTrue(HistoryList.confirmedOnly(all).isEmpty())
+        assertEquals(HistoryTotals(0, 0, 0), HistoryList.totals(all, t))
+        assertEquals("0 TND", Money.formatDisplay(0))
+        assertEquals(listOf(UiTarget.History(UpcomingType.ALL)), LabScenarios.byId("history-empty")!!.targets(t))
+    }
+
+    @Test fun the_history_scenarios_come_first_in_run_all_checks() {
+        assertEquals(listOf("history-lots", "history-empty"), LabScenarios.all.take(2).map { it.id })
+    }
+}

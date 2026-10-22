@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import com.cashflow.app.CashflowApp
 import com.cashflow.app.ui.calendar.CalendarViewModel
+import com.cashflow.app.ui.history.HistoryViewModel
 import com.cashflow.app.ui.home.HomeViewModel
 import com.cashflow.app.ui.settings.SettingsViewModel
 import com.cashflow.app.ui.upcoming.UpcomingViewModel
@@ -19,6 +20,8 @@ class ViewModelFactory(private val app: CashflowApp) : ViewModelProvider.Factory
             CalendarViewModel(app.snapshots, app.clock) as T
         modelClass.isAssignableFrom(UpcomingViewModel::class.java) ->
             UpcomingViewModel(app.snapshots, app.repository.seriesContext) as T
+        modelClass.isAssignableFrom(HistoryViewModel::class.java) ->
+            HistoryViewModel(app.repository, app.snapshots) as T
         else -> throw IllegalArgumentException("Unknown ViewModel ${modelClass.name}")
     }
 }

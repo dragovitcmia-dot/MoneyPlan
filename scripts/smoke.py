@@ -143,14 +143,17 @@ def find(text, scroll=True, last=False, timeout=FIND_TIMEOUT, contains=False):
         time.sleep(0.5)
 
 
-def find_slow(text, max_swipes=40):
+def find_slow(text, max_swipes=40, prefix=False):
     """Looks for `text` while scrolling down with slow, short drags (no fling), so a long list cannot jump past it
     between two looks. Raises NotFound after `max_swipes` drags."""
     nodes = []
     for _ in range(max_swipes):
         nodes = dump_nodes() or []
         dismiss_system_dialog(nodes)
-        hits = [b for t, d, b in nodes if t.strip() == text or d.strip() == text]
+        if prefix:
+            hits = [b for t, d, b in nodes if t.strip().startswith(text) or d.strip().startswith(text)]
+        else:
+            hits = [b for t, d, b in nodes if t.strip() == text or d.strip() == text]
         if hits:
             return sorted(hits, key=lambda b: (b[1], b[0]))[0]
         if nodes:
@@ -810,7 +813,7 @@ def plan_create_walk(name):
         tap_text(NAV_UPCOMING, scroll=False)
         time.sleep(1.5)
         scroll_to_top(15)  # the list keeps its position from the earlier walks; the planned item can be above or below it
-        find_slow("Phone", max_swipes=60)
+        find_slow("Phone", max_swipes=60, prefix=True)  # the parts are named "Phone 1/5", "Phone 2/5", ...
         screenshot(f"{name}-plan-in-upcoming")
     except NotFound as e:
         screenshot(f"{name}-plan-create-FAILED")

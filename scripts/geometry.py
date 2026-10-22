@@ -16,7 +16,8 @@ import xml.etree.ElementTree as ET
 
 STRINGS_XML = os.path.join(os.path.dirname(__file__), "..", "app", "src", "main", "res", "values", "strings.xml")
 MIN_NAV_HEIGHT_DP = 48
-MIN_NAV_WIDTH_SHARE = 0.20
+MIN_NAV_WIDTH_SHARE = 0.19  # five items: a fifth each (rounding to whole pixels must not fail it)
+MIN_NAV_WIDTH_DP = 48
 MIN_BUTTON_HEIGHT_DP = 40
 MIN_SETTINGS_ROW_DP = 56
 SCREEN_W = 1080
@@ -290,6 +291,64 @@ def check_upcoming(W, H, dp, nav_top):
     return problems
 
 
+def check_history(W, H, dp, nav_top):
+    """History: accepts one waiting item on Home (so History has a row), then measures the three tabs (>= 48 dp, equal width), the search field
+    (>= 56 dp) and the row (>= 56 dp, clickable), and checks that a tap on the row opens the item sheet as history (no actions)."""
+    problems = []
+    nodes, hits = wait_for(S["nav_home"])
+    tap(clickable_of(max(hits, key=lambda n: n.b[3])))
+    time.sleep(1.5)
+    for _ in range(8):  # the tab keeps its scroll position: look from the top
+        sh(f"input swipe {W // 2} {int(H * 0.3)} {W // 2} {int(H * 0.8)} 250")
+        time.sleep(0.3)
+    nodes, card = wait_until(lambda nodes: [n for n in nodes if n.text.startswith("Sunday expense") and n.b[3] < nav_top] or None, timeout=15)
+    if not card:
+        return ["History: the waiting 'Sunday expense' card was not found on Home (needed to confirm one item)"]
+    tap(clickable_of(card[0]))
+    nodes, acc = wait_for(S["action_accept"], timeout=15)
+    tap(clickable_of(acc[0]))
+    time.sleep(2)
+    nodes, hits = wait_for(S["nav_history"])
+    tap(clickable_of(max(hits, key=lambda n: n.b[3])))
+    labels = {"All": S["filter_all"], "Expenses": S["filter_expenses"], "Income": S["filter_income"]}
+    def ready(nodes):
+        tabs = {}
+        for name, label in labels.items():
+            hit = [n for n in nodes if (n.text == label or n.desc == label) and n.b[3] < nav_top]
+            if hit:
+                tabs[name] = clickable_of(min(hit, key=lambda n: n.b[1]))
+        field = [n for n in nodes if n.cls.endswith("EditText")]
+        rows = [n for n in nodes if n.text.startswith("Sunday expense") and n.b[3] < nav_top]
+        return (tabs, field[0], rows[0]) if len(tabs) == 3 and field and rows else None
+    nodes, found = wait_until(ready, timeout=25)
+    if found is None:
+        return ["History: the tabs, the search field and the confirmed row were not all found"]
+    tabs, field, row_node = found
+    row = clickable_of(row_node)
+    lines = []
+    for label, ctl, need_h in [*((n, c, MIN_NAV_HEIGHT_DP) for n, c in tabs.items()), ("Search field", field, MIN_SETTINGS_ROW_DP), ("Row", row, MIN_SETTINGS_ROW_DP)]:
+        inside = inside_screen(ctl, W, nav_top)
+        lines.append(f"{label}: {ctl.w / dp:.0f} x {ctl.h / dp:.0f} dp {'ok' if inside else 'OUTSIDE'}")
+        if ctl.h / dp < need_h:
+            problems.append(f"History {label!r} is {ctl.h / dp:.0f} dp tall, needs >= {need_h}")
+        if not inside:
+            problems.append(f"History {label!r} is not inside the screen above the bar: {ctl.b}")
+    if not row.clickable:
+        problems.append("the History row is not clickable")
+    widths = [t.w for t in tabs.values()]
+    if max(widths) - min(widths) > 2 * dp:
+        problems.append(f"the three History tabs are not equal width: {[round(w / dp) for w in widths]} dp")
+    print("HISTORY:", "; ".join(lines))
+    notice("Geometry: History", "; ".join(lines))
+    tap(row)
+    nodes, ok = wait_until(lambda nodes: any(n.text == "This is history and cannot be changed" for n in nodes) or None, timeout=15)
+    if not ok:
+        problems.append("a History row did not open the item sheet as history ('This is history and cannot be changed')")
+    sh("input keyevent 4")
+    time.sleep(1)
+    return problems
+
+
 def check_settings(W, H, dp, nav_top):
     """Settings is a list of uniform rows: the Backups row, "Remind me at" and "Check for updates" are clickable rows at least 56 dp
     tall, the auto-accept switch is at least 48 dp, and the Backups row opens a full screen with a back arrow of at least 48 dp."""
@@ -382,7 +441,7 @@ def main():
     problems = []
 
     # 1. bottom navigation
-    labels = [S["nav_home"], S["nav_calendar"], S["nav_upcoming"], S["nav_settings"]]
+    labels = [S["nav_home"], S["nav_calendar"], S["nav_upcoming"], S["nav_history"], S["nav_settings"]]
     nodes, _ = wait_for(S["nav_settings"])
     measured = []
     for label in labels:
@@ -399,6 +458,8 @@ def main():
             problems.append(f"nav item {label!r}: no clickable node around it")
         if hd < MIN_NAV_HEIGHT_DP:
             problems.append(f"nav item {label!r} is {hd:.0f} dp tall, needs >= {MIN_NAV_HEIGHT_DP}")
+        if wd < MIN_NAV_WIDTH_DP:
+            problems.append(f"nav item {label!r} is {wd:.0f} dp wide, needs >= {MIN_NAV_WIDTH_DP}")
         if item.w < MIN_NAV_WIDTH_SHARE * W:
             problems.append(f"nav item {label!r} is {item.w / W:.0%} of the screen width, needs >= {MIN_NAV_WIDTH_SHARE:.0%}")
         if item.b[0] < 0 or item.b[2] > W or item.b[1] < 0 or item.b[3] > H:
@@ -496,7 +557,9 @@ def main():
     time.sleep(1.5)
     # 3. Upcoming: the three filter chips (>= 48 dp, inside the screen) and, with Repeating selected, the series rows
     problems += check_upcoming(W, H, dp, nav_top)
-    # 4. Settings: uniform rows (>= 56 dp) and the Backups screen
+    # 4. History: tabs, search field, rows
+    problems += check_history(W, H, dp, nav_top)
+    # 5. Settings: uniform rows (>= 56 dp) and the Backups screen
     problems += check_settings(W, H, dp, nav_top)
 
     if problems:

@@ -51,6 +51,9 @@ fun Keypad(
     modifier: Modifier = Modifier,
 ) {
     val colors = MaterialTheme.cashflow
+    // At large font sizes the keys keep a 1.3x text size and are a little lower, so all four rows fit above the buttons.
+    val keyHeight = if (androidx.compose.ui.platform.LocalDensity.current.fontScale >= 1.29f) 60.dp else 68.dp
+    com.cashflow.app.ui.theme.CappedFontScale {
     Column(
         modifier.fillMaxWidth().background(colors.keypadBackground).padding(horizontal = 12.dp, vertical = 10.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
@@ -58,23 +61,25 @@ fun Keypad(
         for (row in listOf("123", "456", "789")) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 for (digit in row) {
-                    KeyButton(colors.keyDigit, { onKey(digit) }, Modifier.weight(1f)) { KeyLabel(digit.toString()) }
+                    KeyButton(colors.keyDigit, { onKey(digit) }, Modifier.weight(1f), keyHeight) { KeyLabel(digit.toString()) }
                 }
             }
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            KeyButton(colors.keyDigit, { onKey('.') }, Modifier.weight(1f)) { KeyLabel(".") }
-            KeyButton(colors.keyDigit, { onKey('0') }, Modifier.weight(1f)) { KeyLabel("0") }
+            KeyButton(colors.keyDigit, { onKey('.') }, Modifier.weight(1f), keyHeight) { KeyLabel(".") }
+            KeyButton(colors.keyDigit, { onKey('0') }, Modifier.weight(1f), keyHeight) { KeyLabel("0") }
             KeyButton(
                 fill = colors.keyAction,
                 onClick = onBackspace,
                 modifier = Modifier.weight(1f),
+                minHeight = keyHeight,
                 onLongClick = onClear,
                 description = stringResource(R.string.backspace_description),
             ) {
                 Icon(painterResource(R.drawable.ic_backspace), contentDescription = null, tint = colors.keyText)
             }
         }
+    }
     }
 }
 
@@ -89,6 +94,7 @@ private fun KeyButton(
     fill: Color,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    minHeight: androidx.compose.ui.unit.Dp = 68.dp,
     onLongClick: (() -> Unit)? = null,
     description: String? = null,
     content: @Composable () -> Unit,
@@ -97,7 +103,7 @@ private fun KeyButton(
     val pressed by source.collectIsPressedAsState()
     Box(
         modifier
-            .heightIn(min = 68.dp)
+            .heightIn(min = minHeight)
             .clip(KeyShape)
             .background(if (pressed) MaterialTheme.cashflow.keyPressed else fill)
             .combinedClickable(

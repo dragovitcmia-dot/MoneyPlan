@@ -25,6 +25,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Settings
@@ -117,9 +118,11 @@ class MainActivity : ComponentActivity() {
                 val settings: SettingsViewModel = viewModel(factory = factory)
                 val calendar: CalendarViewModel = viewModel(factory = factory)
                 val upcoming: UpcomingViewModel = viewModel(factory = factory)
+                val history: com.cashflow.app.ui.history.HistoryViewModel = viewModel(factory = factory)
                 // Scroll positions live here, above the tab switch, so each tab is where the user left it.
                 val homeList = rememberLazyListState()
                 val upcomingList = rememberLazyListState()
+                val historyList = rememberLazyListState()
                 val settingsScroll = rememberScrollState()
                 var tab by rememberSaveable { mutableIntStateOf(0) }
                 var showCenter by rememberSaveable { mutableStateOf(false) }
@@ -196,9 +199,13 @@ class MainActivity : ComponentActivity() {
                             tab = 0
                             homeRequest = t
                         }
-                        com.cashflow.app.engine.UiTarget.Settings -> tab = 3
+                        is com.cashflow.app.engine.UiTarget.History -> {
+                            tab = com.cashflow.app.engine.TabIndex.HISTORY
+                            history.show(t.tab, t.query, t.openFirst)
+                        }
+                        com.cashflow.app.engine.UiTarget.Settings -> tab = com.cashflow.app.engine.TabIndex.SETTINGS
                         com.cashflow.app.engine.UiTarget.Backups -> {
-                            tab = 3
+                            tab = com.cashflow.app.engine.TabIndex.SETTINGS
                             backupsOpen = true
                         }
                     }
@@ -241,6 +248,7 @@ class MainActivity : ComponentActivity() {
                                     NavTab(Icons.Filled.Home, R.string.nav_home),
                                     NavTab(Icons.Filled.DateRange, R.string.nav_calendar),
                                     NavTab(Icons.AutoMirrored.Filled.List, R.string.nav_upcoming),
+                                    NavTab(Icons.Filled.CheckCircle, R.string.nav_history),
                                     NavTab(Icons.Filled.Settings, R.string.nav_settings),
                                 ),
                                 selected = tab,
@@ -270,6 +278,7 @@ class MainActivity : ComponentActivity() {
                                 )
                                 1 -> CalendarScreen(calendar, home, settings, snackbar, padding)
                                 2 -> UpcomingScreen(upcoming, home, settings, snackbar, padding, upcomingList, openItemId = itemRequest, onOpenItemHandled = { itemRequest = null })
+                                3 -> com.cashflow.app.ui.history.HistoryScreen(history, home, snackbar, padding, historyList)
                                 else -> SettingsScreen(settings, app.repository, app.updateManager, padding, settingsScroll, backupsOpen, { backupsOpen = it })
                             }
                         }
@@ -277,7 +286,7 @@ class MainActivity : ComponentActivity() {
                             com.cashflow.app.ui.items.SeriesFromNotification(id, home, snackbar, onDismiss = { seriesRequest = null })
                         }
                         // Lab build only: its home and results screens cover the tab content (the bars stay); a no-op everywhere else.
-                        com.cashflow.app.lab.LabHooks.Overlay(onOpenSettings = { tab = 3 })
+                        com.cashflow.app.lab.LabHooks.Overlay(onOpenSettings = { tab = com.cashflow.app.engine.TabIndex.SETTINGS })
                         if (showCenter) {
                             // The notification center covers the tab content (the bars stay); Back or the arrow closes it.
                             Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {

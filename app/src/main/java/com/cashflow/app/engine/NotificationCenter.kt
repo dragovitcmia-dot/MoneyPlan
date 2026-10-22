@@ -99,3 +99,13 @@ object NavLogic {
     /** A tap on a notification or a bell row: that tab, center closed. */
     fun openTab(state: NavState, tab: Int): NavState = selectTab(state, tab)
 }
+
+/** The bottom bar, left to right: Home, Calendar, Upcoming, History, Settings. */
+object TabIndex {
+    const val HOME = 0
+    const val CALENDAR = 1
+    const val UPCOMING = 2
+    const val HISTORY = 3
+    const val SETTINGS = 4
+    const val COUNT = 5
+}

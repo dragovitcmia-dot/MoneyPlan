@@ -41,8 +41,11 @@ object NavBarSpec {
     /** Android's minimum comfortable touch target. */
     const val MIN_TARGET_DP = 48
 
-    /** The CI geometry check wants every item at least this share of the screen width. */
+    /** The CI geometry check wants every item at least this share of the screen width (five items: exactly a fifth). */
     const val MIN_WIDTH_SHARE = 0.20
+
+    /** Every item is at least this wide (dp), whatever the screen: five items fit down to 240 dp. */
+    const val MIN_ITEM_WIDTH_DP = 48
 
     fun cellWidthDp(screenWidthDp: Double, items: Int): Double = screenWidthDp / items
 }

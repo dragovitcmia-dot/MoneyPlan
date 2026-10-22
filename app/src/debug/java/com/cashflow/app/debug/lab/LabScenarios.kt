@@ -10,6 +10,7 @@ import com.cashflow.app.engine.TxKind
 import com.cashflow.app.engine.TxSource
 import com.cashflow.app.engine.TxStatus
 import com.cashflow.app.engine.UiTarget
+import com.cashflow.app.engine.UpcomingType
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -600,8 +601,83 @@ object LabScenarios {
         },
     )
 
+    // ---- new in v0.10.2: History -----------------------------------------------------------------------------------------
+
+    /** Six months of confirmed items: Now expenses, accepted series occurrences, income and one named "Phone cover". */
+    private val lotsOfHistory = LabScenario(
+        id = "history-lots",
+        title = "Lots of history (v0.10.2)",
+        description = "About six months of confirmed items (hundreds of rows). History on All, then the Expenses tab, a search, and a row's read-only sheet.",
+        steps = listOf(
+            step(
+                "Is the newest day first, MON 12 OCT 2026 with Coffee and Lunch, and do older days follow?",
+                "Does every day header show that day's spent in red (and received in green)?",
+                "Does the strip read Spent this week 20 TND, Spent this month 405 TND, Received this month 1 280 TND?",
+            ) { UiTarget.History(UpcomingType.ALL) },
+            step(
+                "Is the Expenses tab selected (red underline) and are all rows expenses?",
+                "Is the totals strip the same as on All?",
+            ) { UiTarget.History(UpcomingType.EXPENSES) },
+            step(
+                "Does the list show ONE row, Phone cover -25 TND, on SAT 03 OCT 2026?",
+                "Does a line read '1 result, total -25 TND'?",
+                "Is the totals strip still the same?",
+            ) { UiTarget.History(UpcomingType.EXPENSES, "cover") },
+            step(
+                "Is the item sheet of Phone cover open, with the one line 'SAT 03 OCT 2026 · Done'?",
+                "Does it say 'This is history and cannot be changed' with no buttons?",
+            ) { UiTarget.History(UpcomingType.EXPENSES, "cover", openFirst = true) },
+        ),
+        clock = at(BASE_DAY),
+        seed = { t ->
+            val first = t.minusDays(183) // 12 APR: the ledger starts the day before the first item
+            val gym = series(1, "Gym", 40, TxKind.EXPENSE, RecurrencePattern.Weekly(DayOfWeek.FRIDAY), LocalDate.of(2026, 4, 17), end = LocalDate.of(2026, 9, 25))
+            val rent = series(2, "Rent", 300, TxKind.EXPENSE, RecurrencePattern.DayOfMonth(5), LocalDate.of(2026, 5, 5))
+            val salary = series(3, "Salary", 1200, TxKind.INCOME, RecurrencePattern.DayOfMonth(1), LocalDate.of(2026, 5, 1))
+            val rules = listOf(gym, rent, salary)
+            // every occurrence up to yesterday was accepted (so nothing is overdue); later ones are generated as waiting
+            val accepted = rules.flatMap { rule ->
+                com.cashflow.app.engine.Recurrence.occurrences(rule, rule.startDate, t.minusDays(1)).map { answered(rule, it) }
+            }
+            val names = listOf("Groceries", "Coffee", "Taxi", "Lunch", "Pharmacy")
+            val daily = (0 until 170).flatMap { i ->
+                val day = first.plusDays(1L + i) // 13 APR .. 30 SEP
+                buildList {
+                    add(now(day, 4L + (i * 7) % 38, names[i % names.size]))
+                    if (i % 3 == 0) add(now(day, 3L + (i * 5) % 9, "Snack"))
+                    if (i % 20 == 7) add(one(day, 60L + (i * 3) % 40, "Freelance", TxKind.INCOME, TxStatus.CONFIRMED))
+                }
+            }
+            val recent = listOf(
+                one(t.minusDays(10), 80, "Refund", TxKind.INCOME, TxStatus.CONFIRMED),
+                now(t.minusDays(9), 25, "Phone cover"),
+                now(t.minusDays(3), 42, "Groceries"),
+                now(t.minusDays(1), 18, "Taxi"),
+                now(t, 6, "Coffee"),
+                now(t, 14, "Lunch"),
+            )
+            LabSeed(settings = settings(500, first), rules = rules, transactions = accepted + daily + recent)
+        },
+    )
+
+    /** A clean state: History shows only its empty line. */
+    private val historyEmpty = LabScenario(
+        id = "history-empty",
+        title = "History empty (v0.10.2)",
+        description = "Nothing confirmed yet: History on a clean state.",
+        steps = listOf(
+            step(
+                "Does it say 'Nothing here yet. Confirmed items show up here.'?",
+                "Do the three totals read 0 TND?",
+                "Are the tabs and the search field still shown above it?",
+            ) { UiTarget.History(UpcomingType.ALL) },
+        ),
+        clock = at(BASE_DAY),
+        seed = { t -> LabSeed(settings = settings(200, t.minusDays(3))) },
+    )
+
     val all: List<LabScenario> = listOf(
-        itemSheets, datePicker, upcomingDaily, spentToday, backupsRow,
+        lotsOfHistory, historyEmpty, itemSheets, datePicker, upcomingDaily, spentToday, backupsRow,
         reference, empty, upcomingTabs, purchaseFar, purchaseInstalments, historyGuard, askAmount, backupRestore,
         lastPaymentTomorrow, overduePending, homeStates, smartSuggestions,
     )
