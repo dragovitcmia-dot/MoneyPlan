@@ -326,7 +326,7 @@ def check_history(W, H, dp, nav_top):
     tabs, field, row_node = found
     row = clickable_of(row_node)
     lines = []
-    for label, ctl, need_h in [*tabs.items(), ("Search field", field, MIN_SETTINGS_ROW_DP), ("Row", row, MIN_SETTINGS_ROW_DP)]:
+    for label, ctl, need_h in [*((n, c, MIN_NAV_HEIGHT_DP) for n, c in tabs.items()), ("Search field", field, MIN_SETTINGS_ROW_DP), ("Row", row, MIN_SETTINGS_ROW_DP)]:
         inside = inside_screen(ctl, W, nav_top)
         lines.append(f"{label}: {ctl.w / dp:.0f} x {ctl.h / dp:.0f} dp {'ok' if inside else 'OUTSIDE'}")
         if ctl.h / dp < need_h:
