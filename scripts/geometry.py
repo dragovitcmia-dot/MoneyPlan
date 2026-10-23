@@ -18,6 +18,8 @@ STRINGS_XML = os.path.join(os.path.dirname(__file__), "..", "app", "src", "main"
 MIN_NAV_HEIGHT_DP = 48
 MIN_NAV_WIDTH_SHARE = 0.19  # five items: a fifth each (rounding to whole pixels must not fail it)
 MIN_NAV_WIDTH_DP = 48
+NAV_BAR_DP = 64  # NavBarSpec.BAR_HEIGHT_DP: every item is as tall as the bar
+NAV_LABEL_ONE_LINE_DP = 26  # a label at the capped 1.3x text size is ~16 dp tall; two lines would be ~32
 MIN_BUTTON_HEIGHT_DP = 40
 MIN_SETTINGS_ROW_DP = 56
 SCREEN_W = 1080
@@ -431,6 +433,49 @@ def check_settings(W, H, dp, nav_top):
     return problems
 
 
+def check_nav(W, H, dp, tag, one_line=False):
+    """The bottom bar: five items, each at least 48 dp tall and a fifth of the width, the WHOLE cell clickable (as tall as the bar),
+    inside the screen; with [one_line] each label is also a single line (the bar keeps its text at 1.3x and shrinks to fit)."""
+    problems = []
+    labels = [S["nav_home"], S["nav_calendar"], S["nav_upcoming"], S["nav_history"], S["nav_settings"]]
+    nodes, _ = wait_for(S["nav_settings"])
+    measured = []
+    for label in labels:
+        hits = [n for n in nodes if n.text == label or n.desc == label]
+        if not hits:
+            problems.append(f"[{tag}] nav item {label!r} not found")
+            continue
+        # the bottom-most match is the bar (a screen title may carry the same word)
+        label_node = max(hits, key=lambda n: n.b[3])
+        item = clickable_of(label_node)
+        print(f"  {label}: " + " <- ".join(f"{c.cls.split('.')[-1]}[{c.b[0]},{c.b[1]}][{c.b[2]},{c.b[3]}]{'C' if c.clickable else ''}{'S' if c.selected else ''}" for c in chain(label_node)[:4]))
+        hd, wd = item.h / dp, item.w / dp
+        measured.append(f"{label}: {wd:.0f} x {hd:.0f} dp ({item.w} x {item.h} px, {item.w / W:.0%} of width, clickable={item.clickable}, label {label_node.h / dp:.0f} dp tall)")
+        if not (item.clickable or item.selected):
+            problems.append(f"[{tag}] nav item {label!r}: no clickable node around it")
+        if hd < MIN_NAV_HEIGHT_DP:
+            problems.append(f"[{tag}] nav item {label!r} is {hd:.0f} dp tall, needs >= {MIN_NAV_HEIGHT_DP}")
+        if wd < MIN_NAV_WIDTH_DP:
+            problems.append(f"[{tag}] nav item {label!r} is {wd:.0f} dp wide, needs >= {MIN_NAV_WIDTH_DP}")
+        if item.w < MIN_NAV_WIDTH_SHARE * W:
+            problems.append(f"[{tag}] nav item {label!r} is {item.w / W:.0%} of the screen width, needs >= {MIN_NAV_WIDTH_SHARE:.0%}")
+        if item.b[0] < 0 or item.b[2] > W or item.b[1] < 0 or item.b[3] > H:
+            problems.append(f"[{tag}] nav item {label!r} is off screen: {item.b}")
+        if one_line:
+            # a whole cell, not just the icon or the label: the target is as tall as the bar and holds its label
+            if hd < NAV_BAR_DP - 4:
+                problems.append(f"[{tag}] nav item {label!r}: the tap target is {hd:.0f} dp tall, the bar is {NAV_BAR_DP} dp (not the full cell)")
+            if not (item.b[0] <= label_node.b[0] and label_node.b[2] <= item.b[2]):
+                problems.append(f"[{tag}] nav item {label!r}: the label {label_node.b} sticks out of its cell {item.b}")
+            if label_node.h / dp > NAV_LABEL_ONE_LINE_DP:
+                problems.append(f"[{tag}] nav item {label!r}: the label is {label_node.h / dp:.0f} dp tall, so it wraps (one line is <= {NAV_LABEL_ONE_LINE_DP})")
+    if len(measured) != len(labels):
+        problems.append(f"[{tag}] the bar shows {len(measured)} of {len(labels)} items")
+    print(f"NAV ITEMS ({tag}):\n  " + "\n  ".join(measured))
+    notice(f"Geometry: bottom navigation ({tag})", " | ".join(measured))
+    return problems
+
+
 def main():
     global SCREEN_W
     W, H, dpi = display()
@@ -441,31 +486,17 @@ def main():
     problems = []
 
     # 1. bottom navigation
-    labels = [S["nav_home"], S["nav_calendar"], S["nav_upcoming"], S["nav_history"], S["nav_settings"]]
-    nodes, _ = wait_for(S["nav_settings"])
-    measured = []
-    for label in labels:
-        hits = [n for n in nodes if n.text == label or n.desc == label]
-        if not hits:
-            problems.append(f"nav item {label!r} not found")
-            continue
-        # the bottom-most match is the bar (a screen title may carry the same word)
-        item = clickable_of(max(hits, key=lambda n: n.b[3]))
-        print(f"  {label}: " + " <- ".join(f"{c.cls.split('.')[-1]}[{c.b[0]},{c.b[1]}][{c.b[2]},{c.b[3]}]{'C' if c.clickable else ''}{'S' if c.selected else ''}" for c in chain(max(hits, key=lambda n: n.b[3]))[:4]))
-        hd, wd = item.h / dp, item.w / dp
-        measured.append(f"{label}: {wd:.0f} x {hd:.0f} dp ({item.w} x {item.h} px, {item.w / W:.0%} of width, clickable={item.clickable})")
-        if not (item.clickable or item.selected):
-            problems.append(f"nav item {label!r}: no clickable node around it")
-        if hd < MIN_NAV_HEIGHT_DP:
-            problems.append(f"nav item {label!r} is {hd:.0f} dp tall, needs >= {MIN_NAV_HEIGHT_DP}")
-        if wd < MIN_NAV_WIDTH_DP:
-            problems.append(f"nav item {label!r} is {wd:.0f} dp wide, needs >= {MIN_NAV_WIDTH_DP}")
-        if item.w < MIN_NAV_WIDTH_SHARE * W:
-            problems.append(f"nav item {label!r} is {item.w / W:.0%} of the screen width, needs >= {MIN_NAV_WIDTH_SHARE:.0%}")
-        if item.b[0] < 0 or item.b[2] > W or item.b[1] < 0 or item.b[3] > H:
-            problems.append(f"nav item {label!r} is off screen: {item.b}")
-    print("NAV ITEMS:\n  " + "\n  ".join(measured))
-    notice("Geometry: bottom navigation", " | ".join(measured))
+    problems += check_nav(W, H, dp, "font 1.0")
+
+    # 1a. the same bar at font scale 2.0: five items, full-cell tap targets, every label on ONE line
+    sh("settings put system font_scale 2.0")
+    time.sleep(3)
+    try:
+        problems += check_nav(W, H, dp, "font 2.0", one_line=True)
+    finally:
+        sh("settings put system font_scale 1.0")
+        time.sleep(3)
+        wait_for(S["nav_settings"])
 
     # 1b. the notification bell (top right of the main screens): a tap target of at least 48 dp each way
     bells = [n for n in nodes if n.desc.startswith(S["bell_desc"])]

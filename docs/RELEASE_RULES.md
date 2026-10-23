@@ -9,6 +9,9 @@ A release ships only when ALL of these hold:
 - the emulator launch check passes (real app and Lab);
 - the geometry gate (`scripts/geometry.py`) passes.
 
+**Bump `versionName` in the same commit as the feature.** The build workflow fails first thing if `versionName` equals the one in the
+currently released `latest-debug/version.json`, and a unit test ties `LabScenarios.CURRENT_RELEASE` to it.
+
 Builds run only on GitHub Actions. Releases are published from `main` to the pre-release tags `latest-debug` (real app) and
 `latest-lab` (Cashflow Lab). Merge to `main` with a merge commit, push `main` directly (no pull request), wait for the build
 and emulator jobs on `main`, then verify the release (APK downloads unauthenticated, sha256 equals `version.json`, certificate
@@ -50,10 +53,17 @@ Lab clock (system notifications off), navigates itself to the exact screen, shee
 sheet, a Move date picker, the add wizard on its Name step, the purchase result, the Backups screen, ...) and shows the compact check
 panel with 2 to 4 yes/no questions per screen and two buttons, "Looks right" and "Problem". A scenario that needs a different clock moves
 it by itself (`clockShiftDays`). The panel sits in the layout above the navigation bar (and inside sheets), never over content, and its
-buttons are at least 48 dp tall (the geometry gate measures them). The Lab home has "Run all checks" at the top and the scenario list;
-the Results screen shows a tick or a cross per scenario and is stored only in the Lab's own storage.
+buttons are at least 48 dp tall (the geometry gate measures them).
 
-**The phone test of every release is: open Lab, Run all checks, mark each scenario.**
+**Lean run (v0.10.3).** Every scenario carries `release`, the version it was introduced or last changed in (versionName without `-lab`).
+The Lab home button is **"Check this update"**: it runs only the scenarios tagged with the running version, and **never more than 5
+screens in total (`LabRelease.MAX_SCREENS`, held by a unit test)**; the panel shows progress such as "2 of 4". The Results screen shows
+only this update's checks (a tick or a cross each, stored only in the Lab's own storage). Older scenarios stay in a collapsed
+**"Older checks"** list at the bottom of the Lab home (with a "Run all checks" button); the CI still walks all of them in all three
+font/theme configurations. A release with more than 5 screens of new checks must cut questions, not raise the cap. When you change an
+older scenario's behaviour, change its `release` tag to the new version (and then count it against the cap).
+
+**The phone test of every release is: open Lab, Check this update, mark each scenario.**
 
 Lab rules: all lab-only code lives in `app/src/lab/java`; every other build type gets no-op stand-ins from `app/src/labStub/java`,
 so the real app contains no lab code (CI checks the real APK's dex for lab-only strings). The real app must behave exactly as before.

@@ -54,3 +54,24 @@ data class LabResults(val marks: Map<String, Boolean> = emptyMap()) {
         }
     }
 }
+
+/**
+ * The lean run: "Check this update" runs only the scenarios tagged with the running release (versionName without "-lab"), never more than
+ * [MAX_SCREENS] screens in total (a unit test holds the cap). Everything older stays in the collapsed "Older checks" list; the CI walks all.
+ */
+object LabRelease {
+    const val MAX_SCREENS = 5
+
+    /** "0.10.3-lab" and "0.10.3" are the same release. */
+    fun of(versionName: String): String = versionName.removeSuffix("-lab")
+
+    fun forUpdate(all: List<LabScenario>, versionName: String): List<LabScenario> = all.filter { it.release == of(versionName) }
+
+    fun older(all: List<LabScenario>, versionName: String): List<LabScenario> = all.filter { it.release != of(versionName) }
+
+    /** Screens (steps) the person looks at in [scenarios]. */
+    fun screens(scenarios: List<LabScenario>): Int = scenarios.sumOf { it.steps.size }
+
+    /** "2 of 4": the position of a check within the run on screen. */
+    fun progress(session: LabSession): String = "${session.index + 1} of ${session.total}"
+}

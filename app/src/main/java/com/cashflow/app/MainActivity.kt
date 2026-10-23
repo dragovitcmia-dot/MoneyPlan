@@ -207,6 +207,11 @@ class MainActivity : ComponentActivity() {
                             tab = com.cashflow.app.engine.TabIndex.HISTORY
                             history.show(t.tab, t.query, t.openFirst)
                         }
+                        com.cashflow.app.engine.UiTarget.NotificationCenter -> {
+                            tab = 0
+                            homeRequest = com.cashflow.app.engine.UiTarget.Home
+                            showCenter = true
+                        }
                         com.cashflow.app.engine.UiTarget.Settings -> tab = com.cashflow.app.engine.TabIndex.SETTINGS
                         com.cashflow.app.engine.UiTarget.Backups -> {
                             tab = com.cashflow.app.engine.TabIndex.SETTINGS
@@ -214,6 +219,16 @@ class MainActivity : ComponentActivity() {
                         }
                     }
                     com.cashflow.app.ui.UiTargets.consume(pending)
+                    // A scrolled History: wait for its rows to load, then move well down the list.
+                    if ((pending.target as? com.cashflow.app.engine.UiTarget.History)?.scrolled == true) {
+                        repeat(40) {
+                            if (historyList.layoutInfo.totalItemsCount > 40) {
+                                historyList.scrollToItem(40)
+                                return@LaunchedEffect
+                            }
+                            kotlinx.coroutines.delay(150)
+                        }
+                    }
                 }
                 BackHandler(enabled = showCenter) { showCenter = NavLogic.closeCenter(NavState(tab, showCenter)).centerOpen }
 

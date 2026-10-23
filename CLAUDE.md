@@ -8,4 +8,7 @@ GitHub Actions (`.github/workflows/build.yml`).
 geometry gate must pass), the permanent-history invariant, the geometry gate for tap targets, no database schema change without a
 real migration and a Before-update snapshot, and every release adds or updates Cashflow Lab scenarios for exactly what it changes
 and lists them in the final report. A Lab scenario never asks for typing, creating, editing or deleting (it navigates itself and asks 2 to 4
-yes/no questions per screen); the phone test of every release is "open Lab, Run all checks, mark each scenario".
+yes/no questions per screen); the phone test of every release is "open Lab, Check this update, mark each scenario". The Lab run is lean: each scenario is tagged with
+the release it was introduced or changed in, "Check this update" runs only the current version's scenarios, at most 5 screens (unit-test
+enforced); older ones sit in the collapsed "Older checks" list and the CI still walks all of them. Bump `versionName` in the same commit
+as the feature (CI fails if it equals the released one).

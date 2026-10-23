@@ -14,6 +14,25 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Process rule: every release bumps versionName in the same commit as its feature. A build whose versionName equals the one that is
+      # currently released (latest-debug/version.json, published from main) would ship a new APK under an old name, so it fails here, first.
+      - name: versionName must differ from the released version
+        if: github.event_name != 'workflow_dispatch'
+        run: |
+          NEW=$(sed -n 's/^[[:space:]]*versionName = "\([^"]*\)".*/\1/p' app/build.gradle.kts | head -1)
+          [ -n "$NEW" ] || { echo "::error title=versionName::could not read versionName from app/build.gradle.kts"; exit 1; }
+          if JSON=$(curl -fsSL --retry 3 "https://github.com/Dragovitcmia-dot/MoneyPlan/releases/download/latest-debug/version.json"); then
+            RELEASED=$(printf '%s' "$JSON" | sed -n 's/.*"versionName": *"\([^"]*\)".*/\1/p')
+            echo "versionName in this commit: $NEW; released (latest-debug): ${RELEASED:-none}"
+            if [ "$NEW" = "$RELEASED" ]; then
+              echo "::error title=versionName not bumped::versionName $NEW is already the released version. Bump it in the same commit as the feature."
+              exit 1
+            fi
+            echo "::notice title=versionName::$NEW (released: $RELEASED)"
+          else
+            echo "::warning title=versionName::could not read the released version.json; check skipped"
+          fi
+
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
