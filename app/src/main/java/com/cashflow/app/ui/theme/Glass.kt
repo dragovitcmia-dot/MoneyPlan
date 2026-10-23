@@ -163,12 +163,12 @@ fun GlassSheet(
         onDismissRequest = onDismissRequest,
         sheetState = sheetState,
         shape = shape,
-        containerColor = Color.Transparent,
+        containerColor = tint, // the sheet itself is the translucent tint, so nothing inside it (insets included) is left unglazed
         dragHandle = null,
         properties = properties,
     ) {
         BlurBehindWindow()
-        Column(Modifier.fillMaxWidth().clip(shape).background(tint).glassEdge(shape, dark)) {
+        Column(Modifier.fillMaxWidth().glassEdge(shape, dark)) {
             Box(Modifier.fillMaxWidth().padding(vertical = 12.dp), contentAlignment = Alignment.Center) {
                 Box(
                     Modifier.size(width = 32.dp, height = 4.dp).clip(RoundedCornerShape(2.dp))

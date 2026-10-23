@@ -496,7 +496,8 @@ def main():
     finally:
         sh("settings put system font_scale 1.0")
         time.sleep(3)
-        wait_for(S["nav_settings"])
+    labels = [S["nav_home"], S["nav_calendar"], S["nav_upcoming"], S["nav_history"], S["nav_settings"]]
+    nodes, _ = wait_for(S["nav_settings"])
 
     # 1b. the notification bell (top right of the main screens): a tap target of at least 48 dp each way
     bells = [n for n in nodes if n.desc.startswith(S["bell_desc"])]
