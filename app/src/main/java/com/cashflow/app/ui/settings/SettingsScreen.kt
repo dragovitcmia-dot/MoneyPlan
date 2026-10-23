@@ -108,11 +108,27 @@ fun SettingsScreen(
                     SettingsCard.NOTIFICATIONS -> NotificationsCard(viewModel, current)
                     SettingsCard.BACKUP -> BackupsGroup { onBackupsOpen(true) }
                     SettingsCard.STARTING_POINT -> key(generation) { StartingPointCard(viewModel, current, layout) }
+                    SettingsCard.APPEARANCE -> AppearanceCard()
                     SettingsCard.APP_UPDATES -> AppUpdatesSection(updateManager)
                     SettingsCard.DEVELOPER_TOOLS -> DebugSection(repository) { viewModel.reload { generation++ } }
                 }
             }
         }
+    }
+}
+
+/** One switch: frosted glass on the bottom bar, sheets and the notification center. Applies at once; kept in preferences, not the database. */
+@Composable
+private fun AppearanceCard() {
+    val app = LocalContext.current.applicationContext as CashflowApp
+    val on by app.uiPrefs.glassEffects.collectAsStateWithLifecycle()
+    SettingsGroup(stringResource(R.string.appearance_title)) {
+        SwitchRow(
+            title = stringResource(R.string.glass_effects_title),
+            subtitle = stringResource(R.string.glass_effects_helper),
+            checked = on,
+            onChange = { app.uiPrefs.setGlassEffects(it) },
+        )
     }
 }
 

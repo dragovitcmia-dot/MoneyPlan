@@ -26,6 +26,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.RectangleShape
+import com.cashflow.app.ui.theme.LocalGlass
+import com.cashflow.app.ui.theme.glassSurface
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -58,7 +62,11 @@ class NavTab(val icon: ImageVector, @StringRes val label: Int)
  */
 @Composable
 fun BottomTabBar(tabs: List<NavTab>, selected: Int, onSelect: (Int) -> Unit, modifier: Modifier = Modifier) {
-    Surface(color = MaterialTheme.colorScheme.surface, modifier = modifier.fillMaxWidth()) {
+    // Frosted glass when it is on (the content scrolls under the bar); the plain opaque surface otherwise.
+    val glass = LocalGlass.current
+    val surface = MaterialTheme.colorScheme.surface
+    val glassBar = if (glass.active) Modifier.glassSurface(RectangleShape, surface, topEdgeOnly = true) else Modifier
+    Surface(color = if (glass.active) Color.Transparent else surface, modifier = modifier.fillMaxWidth().then(glassBar)) {
         Column {
             Row(Modifier.fillMaxWidth().height(NavBarSpec.BAR_HEIGHT_DP.dp)) {
                 tabs.forEachIndexed { index, tab ->

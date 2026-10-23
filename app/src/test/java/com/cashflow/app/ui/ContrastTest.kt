@@ -1,6 +1,9 @@
 package com.cashflow.app.ui
 
 import com.cashflow.app.ui.theme.Contrast
+import com.cashflow.app.ui.theme.GlassSpec
+import com.cashflow.app.ui.theme.glassGraphicColors
+import com.cashflow.app.ui.theme.glassTextColors
 import com.cashflow.app.ui.theme.Palette
 import com.cashflow.app.ui.theme.ThemePalette
 import com.cashflow.app.ui.theme.blend
@@ -224,5 +227,53 @@ class ContrastTest {
         assertEquals(0xFFEB0000L, Palette.EXPENSE_RED)
         assertEquals(0xFF008800L, Palette.INCOME_GREEN)
         assertEquals(0xFFFFFFFFL, Palette.KIND_LABEL)
+    }
+
+    // ---- Glass (v0.10.3): the tint over the WORST backdrops, pure white and pure black ----------------------------------
+
+    private val backdrops = listOf("white" to 0xFFFFFFFFL, "black" to 0xFF000000L)
+
+    private fun glassOver(dark: Boolean, backdrop: Long): Long =
+        blend(GlassSpec.tint(dark), backdrop, GlassSpec.tintAlpha(dark))
+
+    private fun glassFailures(dark: Boolean, palette: ThemePalette, colors: List<Pair<String, Long>>, required: Double): List<String> =
+        backdrops.flatMap { (backdropName, backdrop) ->
+            val glass = glassOver(dark, backdrop)
+            colors.filter { Contrast.ratio(it.second, glass) < required }
+                .map { "${it.first} on glass over $backdropName: %.2f < $required".format(Contrast.ratio(it.second, glass)) }
+        }
+
+    @Test fun dark_glass_text_meets_4_5_over_pure_white_and_pure_black() {
+        val failures = glassFailures(true, Palette.dark, Palette.dark.glassTextColors(), Contrast.NORMAL_TEXT)
+        assertTrue("dark glass:\n" + failures.joinToString("\n"), failures.isEmpty())
+    }
+
+    @Test fun light_glass_text_meets_4_5_over_pure_white_and_pure_black() {
+        val failures = glassFailures(false, Palette.light, Palette.light.glassTextColors(), Contrast.NORMAL_TEXT)
+        assertTrue("light glass:\n" + failures.joinToString("\n"), failures.isEmpty())
+    }
+
+    @Test fun glass_icons_meet_3_to_1_over_pure_white_and_pure_black_in_both_themes() {
+        val failures = glassFailures(true, Palette.dark, Palette.dark.glassGraphicColors(), Contrast.GRAPHIC) +
+            glassFailures(false, Palette.light, Palette.light.glassGraphicColors(), Contrast.GRAPHIC)
+        assertTrue("glass graphics:\n" + failures.joinToString("\n"), failures.isEmpty())
+    }
+
+    @Test fun the_glass_alphas_are_just_enough_not_arbitrary() {
+        // One step lower (0.02) must fail somewhere, so the alpha is the smallest round value that passes, not padding.
+        for (dark in listOf(true, false)) {
+            val palette = if (dark) Palette.dark else Palette.light
+            val lower = GlassSpec.tintAlpha(dark) - 0.05f
+            val fails = backdrops.any { (_, b) ->
+                palette.glassTextColors().any { Contrast.ratio(it.second, blend(GlassSpec.tint(dark), b, lower)) < Contrast.NORMAL_TEXT }
+            }
+            assertTrue("the ${if (dark) "dark" else "light"} glass alpha could be lower", fails)
+        }
+    }
+
+    @Test fun glass_tints_are_the_dark_surface_and_white() {
+        assertEquals(Palette.dark.surface, GlassSpec.DARK_TINT)
+        assertEquals(0xFFFFFFFFL, GlassSpec.LIGHT_TINT)
+        assertEquals(Palette.light.surface, GlassSpec.LIGHT_TINT)
     }
 }

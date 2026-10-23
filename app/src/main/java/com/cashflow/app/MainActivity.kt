@@ -15,6 +15,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -44,6 +46,8 @@ import com.cashflow.app.engine.NavState
 import com.cashflow.app.engine.NotificationRoute
 import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.cashflow.app.ui.theme.glassSource
+import com.cashflow.app.ui.theme.glassSurface
 import androidx.compose.runtime.rememberCoroutineScope
 import java.time.LocalDate
 import java.time.YearMonth
@@ -230,7 +234,9 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
-                CompositionLocalProvider(LocalNotificationPermission provides permission) {
+                val glassOn by app.uiPrefs.glassEffects.collectAsStateWithLifecycle()
+                val glass = com.cashflow.app.ui.theme.rememberGlass(glassOn)
+                CompositionLocalProvider(LocalNotificationPermission provides permission, com.cashflow.app.ui.theme.LocalGlass provides glass) {
                 Scaffold(
                     containerColor = MaterialTheme.colorScheme.background,
                     snackbarHost = { SnackbarHost(snackbar) },
@@ -266,6 +272,8 @@ class MainActivity : ComponentActivity() {
                 ) { padding ->
                     // A short crossfade is all the transition there is: cheap to run and to re-enter.
                     Box(Modifier.fillMaxSize()) {
+                        // The tab content is the backdrop the glass bottom bar and notification center blur.
+                        Box(Modifier.fillMaxSize().glassSource()) {
                         Crossfade(targetState = tab, animationSpec = tween(120), label = "tabs") { selected ->
                             when (selected) {
                                 0 -> HomeScreen(
@@ -285,14 +293,22 @@ class MainActivity : ComponentActivity() {
                         seriesRequest?.let { id ->
                             com.cashflow.app.ui.items.SeriesFromNotification(id, home, snackbar, onDismiss = { seriesRequest = null })
                         }
+                        }
                         // Lab build only: its home and results screens cover the tab content (the bars stay); a no-op everywhere else.
                         com.cashflow.app.lab.LabHooks.Overlay(onOpenSettings = { tab = com.cashflow.app.engine.TabIndex.SETTINGS })
                         if (showCenter) {
                             // The notification center covers the tab content (the bars stay); Back or the arrow closes it.
-                            Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+                            // With glass on it stops above the bottom bar and is a frosted panel over the tab content.
+                            val centerModifier = if (glass.active) {
+                                Modifier.fillMaxSize().padding(bottom = padding.calculateBottomPadding())
+                                    .glassSurface(androidx.compose.ui.graphics.RectangleShape, MaterialTheme.colorScheme.background)
+                            } else {
+                                Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)
+                            }
+                            Box(centerModifier) {
                                 NotificationCenterScreen(
                                     app = app,
-                                    contentPadding = padding,
+                                    contentPadding = if (glass.active) PaddingValues(top = padding.calculateTopPadding()) else padding,
                                     onClose = { showCenter = NavLogic.closeCenter(NavState(tab, showCenter)).centerOpen },
                                     onOpen = { entry ->
                                         navigate(
