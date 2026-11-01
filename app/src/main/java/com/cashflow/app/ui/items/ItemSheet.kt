@@ -150,7 +150,7 @@ fun ItemSheet(
         scope.launch { sheetState.hide() }.invokeOnCompletion { onDismiss() }
     }
 
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
+    com.cashflow.app.ui.theme.GlassSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
         com.cashflow.app.lab.LabHooks.Panel() // Lab build only: the check panel
         Column(
             Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = Spacing.l).padding(bottom = Spacing.l).navigationBarsPadding(),

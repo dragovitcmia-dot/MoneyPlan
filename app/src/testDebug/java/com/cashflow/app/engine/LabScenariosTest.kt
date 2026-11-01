@@ -2,6 +2,7 @@ package com.cashflow.app.engine
 
 import com.cashflow.app.debug.ReferenceScenario
 import com.cashflow.app.debug.lab.LabFlow
+import com.cashflow.app.debug.lab.LabRelease
 import com.cashflow.app.debug.lab.LabResults
 import com.cashflow.app.debug.lab.LabScenario
 import com.cashflow.app.debug.lab.LabSession
@@ -552,7 +553,79 @@ class LabScenariosV102Test {
         assertEquals(listOf(UiTarget.History(UpcomingType.ALL)), LabScenarios.byId("history-empty")!!.targets(t))
     }
 
-    @Test fun the_history_scenarios_come_first_in_run_all_checks() {
-        assertEquals(listOf("history-lots", "history-empty"), LabScenarios.all.take(2).map { it.id })
+    @Test fun the_history_scenarios_are_tagged_with_the_release_that_changed_them() {
+        assertEquals(listOf("history-lots", "history-empty"), LabScenarios.all.filter { it.release == "0.10.2" }.map { it.id })
+    }
+}
+
+/** The v0.10.3 lean run: release tags, "Check this update", the five-screen cap, and the four glass checks. */
+class LabScenariosV103Test {
+    private val real = LocalDate.of(2026, 10, 15)
+
+    private fun scenario(id: String): LabScenario = LabScenarios.byId(id)!!
+
+    private fun rows(s: LabSeed, today: LocalDate): List<Transaction> {
+        var next = 1L
+        val seeded = s.transactions.map { it.copy(id = next++) }
+        val generated = s.rules.filter { RuleMaintenance.isActive(it) }.flatMap { rule ->
+            RuleMaintenance.materialize(rule, seeded.filter { it.recurringRuleId == rule.id }, today)
+        }.map { it.copy(id = next++) }
+        return seeded + generated
+    }
+
+    private fun currentVersionName(): String? {
+        val file = listOf("build.gradle.kts", "app/build.gradle.kts").map { java.io.File(it) }.firstOrNull { it.isFile } ?: return null
+        return Regex("""versionName\s*=\s*"([^"]+)"""").find(file.readText())?.groupValues?.get(1)
+    }
+
+    @Test fun every_scenario_is_tagged_with_a_release_and_the_current_release_matches_versionName() {
+        val shape = Regex("""\d+\.\d+\.\d+""")
+        for (s in LabScenarios.all) assertTrue("${s.id}: release '${s.release}'", shape.matches(s.release))
+        val versionName = currentVersionName()
+        if (versionName != null) assertEquals("LabScenarios.CURRENT_RELEASE must follow versionName", versionName, LabScenarios.CURRENT_RELEASE)
+    }
+
+    @Test fun check_this_update_runs_only_the_current_release_and_never_more_than_five_screens() {
+        val update = LabRelease.forUpdate(LabScenarios.all, LabScenarios.CURRENT_RELEASE)
+        assertTrue("every release adds Lab scenarios", update.isNotEmpty())
+        assertTrue("${LabRelease.screens(update)} screens, the cap is ${LabRelease.MAX_SCREENS}", LabRelease.screens(update) <= LabRelease.MAX_SCREENS)
+        assertEquals(5, LabRelease.MAX_SCREENS)
+        assertTrue(update.all { it.release == LabScenarios.CURRENT_RELEASE })
+        val older = LabRelease.older(LabScenarios.all, LabScenarios.CURRENT_RELEASE)
+        assertEquals(LabScenarios.all.size, update.size + older.size)
+        assertTrue(older.none { it.release == LabScenarios.CURRENT_RELEASE })
+    }
+
+    @Test fun the_lab_build_suffix_does_not_change_the_release() {
+        assertEquals("0.10.3", LabRelease.of("0.10.3-lab"))
+        assertEquals("0.10.3", LabRelease.of("0.10.3"))
+        assertEquals(LabRelease.forUpdate(LabScenarios.all, "0.10.3").map { it.id }, LabRelease.forUpdate(LabScenarios.all, "0.10.3-lab").map { it.id })
+        assertTrue(LabRelease.forUpdate(LabScenarios.all, "9.9.9").isEmpty())
+    }
+
+    @Test fun progress_reads_two_of_four() {
+        assertEquals("2 of 4", LabRelease.progress(LabSession(listOf("a", "b", "c", "d"), index = 1)))
+        assertEquals("1 of 1", LabRelease.progress(LabSession(listOf("a"))))
+    }
+
+    @Test fun this_release_has_the_four_glass_checks_with_their_own_seeds() {
+        val update = LabRelease.forUpdate(LabScenarios.all, "0.10.3")
+        assertEquals(listOf("glass-bottom-bar", "glass-item-sheet", "glass-notification-center", "glass-off"), update.map { it.id })
+        assertEquals(4, LabRelease.screens(update))
+        // only the last one turns glass off; only the center has bell entries
+        assertEquals(listOf(false, false, false, true), update.map { it.build(real).glassOff })
+        val bells = scenario("glass-notification-center").build(real).bells
+        assertEquals(5, bells.size)
+        assertTrue(bells.count { !it.read } >= 3 && bells.any { it.read })
+        assertTrue(update.filter { it.id != "glass-notification-center" }.all { it.build(real).bells.isEmpty() })
+        assertEquals(listOf<UiTarget>(UiTarget.NotificationCenter), scenario("glass-notification-center").targets(LabScenarios.BASE_DAY))
+        assertEquals(UiTarget.History(UpcomingType.ALL, scrolled = true), scenario("glass-bottom-bar").targets(LabScenarios.BASE_DAY).single())
+        assertEquals(scenario("glass-bottom-bar").targets(LabScenarios.BASE_DAY), scenario("glass-off").targets(LabScenarios.BASE_DAY))
+        assertEquals(UiTarget.CalendarDay(LabScenarios.BASE_DAY.plusDays(5), "Dentist"), scenario("glass-item-sheet").targets(LabScenarios.BASE_DAY).single())
+    }
+
+    @Test fun the_scrolled_history_has_enough_rows_to_scroll_under_the_bar() {
+        val seed = scenario("glass-bottom-bar").build(real)
+        assertTrue(rows(seed, scenario("glass-bottom-bar").today(real)).size > 200)
     }
 }

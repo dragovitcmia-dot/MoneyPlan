@@ -30,6 +30,21 @@ data class LabSeed(
     val transactions: List<Transaction> = emptyList(),
     val askAmountRuleIds: Set<Long> = emptySet(),
     val backups: List<LabBackup> = emptyList(),
+    /** Bell entries (the notification center) to create, newest first or in any order. */
+    val bells: List<LabBell> = emptyList(),
+    /** The "Glass effects" setting is switched off for this scenario (it is on for every other one). */
+    val glassOff: Boolean = false,
+)
+
+/** One bell entry the Lab puts into the notification center: [minutesAgo] before the Lab clock; unread unless [read]. */
+data class LabBell(
+    val type: com.cashflow.app.engine.NotificationType,
+    val title: String,
+    val body: String,
+    val minutesAgo: Long = 0,
+    val amountTnd: Long? = null,
+    val relatedDaysFromToday: Int = 0,
+    val read: Boolean = false,
 )
 
 /**
@@ -49,6 +64,8 @@ class LabStep(
  */
 class LabScenario(
     val id: String,
+    /** The release (versionName without the "-lab" suffix) this scenario was introduced or last changed in: "Check this update" runs the ones tagged with the running version. */
+    val release: String,
     val title: String,
     val description: String,
     val steps: List<LabStep>,
@@ -106,6 +123,7 @@ object LabScenarios {
     /** The one item sheet: four items in turn (waiting one-time, due, series, history). */
     private val itemSheets = LabScenario(
         id = "item-sheets",
+        release = "0.10.1",
         title = "Item sheets (v0.10.1)",
         description = "Four items, four sheets: waiting one-time, due with Accept, a series item and a history item. Same layout, one sheet at a time.",
         steps = listOf(
@@ -146,6 +164,7 @@ object LabScenarios {
     /** Today to forever: a waiting item two days ahead, its Move date picker open. */
     private val datePicker = LabScenario(
         id = "date-picker",
+        release = "0.10.1",
         title = "Date picker: today to forever (v0.10.1)",
         description = "A payment two days ahead and a weekly series item, each with its Move date picker already open.",
         steps = listOf(
@@ -172,6 +191,7 @@ object LabScenarios {
     /** A daily income and a weekly expense in one normal list: no special card. */
     private val upcomingDaily = LabScenario(
         id = "upcoming-daily",
+        release = "0.10.1",
         title = "Upcoming: daily income, no special card (v0.10.1)",
         description = "A daily income series and a weekly expense: both are normal repeating rows.",
         steps = listOf(
@@ -196,6 +216,7 @@ object LabScenarios {
     /** Now expenses on today and yesterday: the day list, the day line and Home agree. */
     private val spentToday = LabScenario(
         id = "spent-today",
+        release = "0.10.1",
         title = "Spent today (v0.10.1)",
         description = "Three 'Now' expenses: two today (12 and 8 TND) and one yesterday (30 TND).",
         steps = listOf(
@@ -221,6 +242,7 @@ object LabScenarios {
     /** Seven backups: the collapsed Settings row, then the Backups screen. */
     private val backupsRow = LabScenario(
         id = "backups-row",
+        release = "0.10.1",
         title = "Backups row (v0.10.1)",
         description = "Seven backups on seven days: one row in Settings, everything else on its own screen.",
         steps = listOf(
@@ -252,6 +274,7 @@ object LabScenarios {
 
     private val reference = LabScenario(
         id = "reference",
+        release = "0.9.1",
         title = "Reference sheet",
         description = "The original sheet: start 180 TND, +30 a day, the 25 expenses and the Sunday rule.",
         steps = listOf(
@@ -280,6 +303,7 @@ object LabScenarios {
 
     private val empty = LabScenario(
         id = "empty",
+        release = "0.9.1",
         title = "Empty app",
         description = "No data at all, real time. Like a fresh install.",
         steps = listOf(
@@ -298,6 +322,7 @@ object LabScenarios {
 
     private val upcomingTabs = LabScenario(
         id = "upcoming-tabs",
+        release = "0.9.1",
         title = "Upcoming tabs (v0.9.1)",
         description = "Mixed repeating and one-time income and expenses to look at the three tabs and the repeat toggle.",
         steps = listOf(
@@ -337,6 +362,7 @@ object LabScenarios {
 
     private val purchaseFar = LabScenario(
         id = "purchase-far",
+        release = "0.9.1",
         title = "Plan a purchase months away (v0.9.1)",
         description = "Almost no money until the first salary on 1 FEB 2027: the earliest safe date for 1,200 TND is months away.",
         steps = listOf(
@@ -367,6 +393,7 @@ object LabScenarios {
 
     private val purchaseInstalments = LabScenario(
         id = "purchase-instalments",
+        release = "0.9.1",
         title = "Plan a purchase: instalments and today (v0.9.1)",
         description = "Weekly income and spending: pay-all is possible soon, instalments run for weeks.",
         steps = listOf(
@@ -394,6 +421,7 @@ object LabScenarios {
 
     private val historyGuard = LabScenario(
         id = "history-guard",
+        release = "0.9.0",
         title = "Permanent history (v0.9.0)",
         description = "A series with accepted past rows, an overdue row and future rows: what each can still do.",
         steps = listOf(
@@ -429,6 +457,7 @@ object LabScenarios {
 
     private val askAmount = LabScenario(
         id = "ask-amount",
+        release = "0.9.0",
         title = "Amount asked each time (v0.9.0)",
         description = "A bill whose amount changes, due today, plus fixed items.",
         steps = listOf(
@@ -456,6 +485,7 @@ object LabScenarios {
 
     private val backupRestore = LabScenario(
         id = "backup-restore",
+        release = "0.9.0",
         title = "Backups screen (v0.9.0)",
         description = "Two backups and a small ledger: the Backups screen with Back up now, Restore, Export and Import.",
         steps = listOf(
@@ -477,6 +507,7 @@ object LabScenarios {
 
     private val lastPaymentTomorrow = LabScenario(
         id = "last-payment-tomorrow",
+        release = "0.9.1",
         title = "Last payment tomorrow (v0.9.1)",
         description = "A daily series that ends tomorrow; the clock starts at 11:55, five minutes before the 12:00 reminder time.",
         steps = listOf(
@@ -500,6 +531,7 @@ object LabScenarios {
 
     private val overduePending = LabScenario(
         id = "overdue-pending",
+        release = "0.9.1",
         title = "Overdue and pending items on Home (v0.9.1)",
         description = "Five items waiting, two of them income, from 10 days ago to today, plus one accepted item and one for later.",
         steps = listOf(
@@ -532,6 +564,7 @@ object LabScenarios {
 
     private val homeStates = LabScenario(
         id = "home-states",
+        release = "0.10.0",
         title = "Home states (v0.10.0)",
         description = "Normal now; after the Lab moves its clock 30 days a shortage is ahead.",
         steps = listOf(
@@ -556,6 +589,7 @@ object LabScenarios {
 
     private val smartSuggestions = LabScenario(
         id = "smart-suggestions",
+        release = "0.10.0",
         title = "Smart suggestions (v0.10.0)",
         description = "History with repeating names (Gym, Rent, Salary) and one-time ones (Coffee beans, Taxi, Pharmacy, Refund).",
         steps = listOf(
@@ -606,6 +640,7 @@ object LabScenarios {
     /** Six months of confirmed items: Now expenses, accepted series occurrences, income and one named "Phone cover". */
     private val lotsOfHistory = LabScenario(
         id = "history-lots",
+        release = "0.10.2",
         title = "Lots of history (v0.10.2)",
         description = "About six months of confirmed items (hundreds of rows). History on All, then the Expenses tab, a search, and a row's read-only sheet.",
         steps = listOf(
@@ -663,6 +698,7 @@ object LabScenarios {
     /** A clean state: History shows only its empty line. */
     private val historyEmpty = LabScenario(
         id = "history-empty",
+        release = "0.10.2",
         title = "History empty (v0.10.2)",
         description = "Nothing confirmed yet: History on a clean state.",
         steps = listOf(
@@ -676,7 +712,94 @@ object LabScenarios {
         seed = { t -> LabSeed(settings = settings(200, t.minusDays(3))) },
     )
 
+    // ---- new in v0.10.3: glass ---------------------------------------------------------------------------------------------
+
+    /** The release this catalogue is for: "Check this update" runs the scenarios tagged with it. A test ties it to versionName in app/build.gradle.kts. */
+    const val CURRENT_RELEASE = "0.10.3"
+
+    private const val GLASS = "0.10.3"
+
+    /** (a) The bottom bar with the History list scrolled under it (the six-month seed), glass on. */
+    private val glassBar = LabScenario(
+        id = "glass-bottom-bar",
+        release = GLASS,
+        title = "Glass bottom bar over a long list (v0.10.3)",
+        description = "History with six months of rows, scrolled: the rows pass under the frosted bottom bar.",
+        steps = listOf(
+            step(
+                "Do the rows scroll UNDER the bottom bar, showing through it softly instead of stopping at its edge?",
+                "Are all five labels and icons (Home, Calendar, Upcoming, History, Settings) sharp and easy to read?",
+                "Does the bar have a thin lighter edge on top and no heavy shadow?",
+            ) { UiTarget.History(UpcomingType.ALL, scrolled = true) },
+        ),
+        clock = at(BASE_DAY),
+        seed = lotsOfHistory.seed,
+    )
+
+    /** (b) An item sheet over the Calendar, glass on. */
+    private val glassSheet = LabScenario(
+        id = "glass-item-sheet",
+        release = GLASS,
+        title = "Glass item sheet over the Calendar (v0.10.3)",
+        description = "The item sheet of a waiting expense, slightly see-through over the Calendar.",
+        steps = listOf(
+            step(
+                "Does the sheet look like frosted glass, with the Calendar showing faintly (blurred) behind it?",
+                "Are the name, the red amount and the Change and Move date buttons easy to read?",
+                "Does the sheet have rounded top corners and a thin lighter edge?",
+            ) { t -> UiTarget.CalendarDay(t.plusDays(5), "Dentist") },
+        ),
+        clock = at(BASE_DAY),
+        seed = itemSheets.seed,
+    )
+
+    /** (c) The notification center over Home with several entries, glass on. */
+    private val glassCenter = LabScenario(
+        id = "glass-notification-center",
+        release = GLASS,
+        title = "Glass notification center (v0.10.3)",
+        description = "Five notifications in the bell, the center open over Home.",
+        steps = listOf(
+            step(
+                "Is the bell panel frosted glass, with Home faintly visible behind it?",
+                "Are the title, Mark all read, the Today and Earlier headings and every row easy to read?",
+                "Does the bottom bar stay visible and sharp under the panel?",
+            ) { UiTarget.NotificationCenter },
+        ),
+        clock = at(BASE_DAY),
+        seed = { t ->
+            LabSeed(
+                settings = settings(500, t.minusDays(10)),
+                transactions = listOf(one(t.plusDays(1), 300, "Rent"), one(t.plusDays(4), 120, "Dentist"), one(t, 15, "Lunch")),
+                bells = listOf(
+                    LabBell(com.cashflow.app.engine.NotificationType.SHORTAGE, "Money may run short on Fri 16 Oct", "Your balance would dip to -35 TND after Rent.", minutesAgo = 20, relatedDaysFromToday = 4),
+                    LabBell(com.cashflow.app.engine.NotificationType.DAY_OF, "Today: Lunch 15 TND", "One item is waiting for you.", minutesAgo = 55, amountTnd = -15),
+                    LabBell(com.cashflow.app.engine.NotificationType.HEADS_UP_DAY, "Tomorrow: Rent 300 TND", "Rent is due tomorrow.", minutesAgo = 180, amountTnd = -300, relatedDaysFromToday = 1),
+                    LabBell(com.cashflow.app.engine.NotificationType.AUTO_INCOME, "Salary received", "1 200 TND was added.", minutesAgo = 26 * 60, amountTnd = 1200, read = true),
+                    LabBell(com.cashflow.app.engine.NotificationType.INFO, "Welcome to Cashflow", "Add what you spend and what you earn.", minutesAgo = 50 * 60, read = true),
+                ),
+            )
+        },
+    )
+
+    /** (d) The same screen as (a) with "Glass effects" off: the solid bar of before. */
+    private val glassOffBar = LabScenario(
+        id = "glass-off",
+        release = GLASS,
+        title = "Glass effects off (v0.10.3)",
+        description = "The same scrolled History with the Glass effects setting off: the plain solid bar.",
+        steps = listOf(
+            step(
+                "Is the bottom bar a solid color, with the rows stopping at its top edge (nothing shows through)?",
+                "Is the bar plain, with no lighter edge or glow, like in the version before?",
+            ) { UiTarget.History(UpcomingType.ALL, scrolled = true) },
+        ),
+        clock = at(BASE_DAY),
+        seed = { t -> lotsOfHistory.seed(t).copy(glassOff = true) },
+    )
+
     val all: List<LabScenario> = listOf(
+        glassBar, glassSheet, glassCenter, glassOffBar,
         lotsOfHistory, historyEmpty, itemSheets, datePicker, upcomingDaily, spentToday, backupsRow,
         reference, empty, upcomingTabs, purchaseFar, purchaseInstalments, historyGuard, askAmount, backupRestore,
         lastPaymentTomorrow, overduePending, homeStates, smartSuggestions,

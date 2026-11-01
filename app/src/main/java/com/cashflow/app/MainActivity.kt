@@ -15,6 +15,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -44,6 +46,8 @@ import com.cashflow.app.engine.NavState
 import com.cashflow.app.engine.NotificationRoute
 import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.cashflow.app.ui.theme.glassSource
+import com.cashflow.app.ui.theme.glassSurface
 import androidx.compose.runtime.rememberCoroutineScope
 import java.time.LocalDate
 import java.time.YearMonth
@@ -203,6 +207,11 @@ class MainActivity : ComponentActivity() {
                             tab = com.cashflow.app.engine.TabIndex.HISTORY
                             history.show(t.tab, t.query, t.openFirst)
                         }
+                        com.cashflow.app.engine.UiTarget.NotificationCenter -> {
+                            tab = 0
+                            homeRequest = com.cashflow.app.engine.UiTarget.Home
+                            showCenter = true
+                        }
                         com.cashflow.app.engine.UiTarget.Settings -> tab = com.cashflow.app.engine.TabIndex.SETTINGS
                         com.cashflow.app.engine.UiTarget.Backups -> {
                             tab = com.cashflow.app.engine.TabIndex.SETTINGS
@@ -210,6 +219,18 @@ class MainActivity : ComponentActivity() {
                         }
                     }
                     com.cashflow.app.ui.UiTargets.consume(pending)
+                    // A scrolled History: wait for its rows to load, then move well down the list.
+                    if ((pending.target as? com.cashflow.app.engine.UiTarget.History)?.scrolled == true) {
+                        repeat(40) {
+                            // History loads by month: the current month alone is a couple of dozen rows, enough to scroll a good way.
+                            val total = historyList.layoutInfo.totalItemsCount
+                            if (total >= 14) {
+                                historyList.scrollToItem(minOf(total - 6, 14))
+                                return@LaunchedEffect
+                            }
+                            kotlinx.coroutines.delay(150)
+                        }
+                    }
                 }
                 BackHandler(enabled = showCenter) { showCenter = NavLogic.closeCenter(NavState(tab, showCenter)).centerOpen }
 
@@ -230,7 +251,9 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
-                CompositionLocalProvider(LocalNotificationPermission provides permission) {
+                val glassOn by app.uiPrefs.glassEffects.collectAsStateWithLifecycle()
+                val glass = com.cashflow.app.ui.theme.rememberGlass(glassOn)
+                CompositionLocalProvider(LocalNotificationPermission provides permission, com.cashflow.app.ui.theme.LocalGlass provides glass) {
                 Scaffold(
                     containerColor = MaterialTheme.colorScheme.background,
                     snackbarHost = { SnackbarHost(snackbar) },
@@ -266,6 +289,8 @@ class MainActivity : ComponentActivity() {
                 ) { padding ->
                     // A short crossfade is all the transition there is: cheap to run and to re-enter.
                     Box(Modifier.fillMaxSize()) {
+                        // The tab content is the backdrop the glass bottom bar and notification center blur.
+                        Box(Modifier.fillMaxSize().glassSource()) {
                         Crossfade(targetState = tab, animationSpec = tween(120), label = "tabs") { selected ->
                             when (selected) {
                                 0 -> HomeScreen(
@@ -285,14 +310,22 @@ class MainActivity : ComponentActivity() {
                         seriesRequest?.let { id ->
                             com.cashflow.app.ui.items.SeriesFromNotification(id, home, snackbar, onDismiss = { seriesRequest = null })
                         }
+                        }
                         // Lab build only: its home and results screens cover the tab content (the bars stay); a no-op everywhere else.
                         com.cashflow.app.lab.LabHooks.Overlay(onOpenSettings = { tab = com.cashflow.app.engine.TabIndex.SETTINGS })
                         if (showCenter) {
                             // The notification center covers the tab content (the bars stay); Back or the arrow closes it.
-                            Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+                            // With glass on it stops above the bottom bar and is a frosted panel over the tab content.
+                            val centerModifier = if (glass.active) {
+                                Modifier.fillMaxSize().padding(bottom = padding.calculateBottomPadding())
+                                    .glassSurface(androidx.compose.ui.graphics.RectangleShape, MaterialTheme.colorScheme.background)
+                            } else {
+                                Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)
+                            }
+                            Box(centerModifier) {
                                 NotificationCenterScreen(
                                     app = app,
-                                    contentPadding = padding,
+                                    contentPadding = if (glass.active) PaddingValues(top = padding.calculateTopPadding()) else padding,
                                     onClose = { showCenter = NavLogic.closeCenter(NavState(tab, showCenter)).centerOpen },
                                     onOpen = { entry ->
                                         navigate(

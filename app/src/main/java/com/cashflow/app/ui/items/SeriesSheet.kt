@@ -90,7 +90,7 @@ fun SeriesSheet(
         scope.launch { sheetState.hide() }.invokeOnCompletion { onDismiss() }
     }
 
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
+    com.cashflow.app.ui.theme.GlassSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
         Column(
             Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = Spacing.xl).padding(bottom = Spacing.l).navigationBarsPadding(),
             verticalArrangement = Arrangement.spacedBy(Spacing.l),
@@ -365,7 +365,7 @@ internal fun SeriesEditSheet(
     } else emptyList()
     val askTitle = stringResource(R.string.series_ask_amount)
 
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
+    com.cashflow.app.ui.theme.GlassSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
         Column(
             Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = Spacing.xl).padding(bottom = Spacing.l).navigationBarsPadding(),
             verticalArrangement = Arrangement.spacedBy(Spacing.l),

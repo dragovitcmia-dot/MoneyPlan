@@ -15,7 +15,7 @@ android {
         targetSdk = 35
         // CI run number so every build can install over the previous one; 1 for local builds.
         versionCode = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 1
-        versionName = "0.10.2"
+        versionName = "0.10.3"
 
         // Per-variant identity. The real app is the default; the "lab" build type overrides all of these (see below).
         buildConfigField("boolean", "IS_LAB", "false")
@@ -133,6 +133,8 @@ dependencies {
     ksp("androidx.room:room-compiler:$room")
 
     implementation("androidx.work:work-runtime-ktx:2.9.1")
+    // Frosted glass (pinned; 1.0.2 is built for Kotlin 2.0.21 and Compose 1.7). Only used on Android 12+.
+    implementation("dev.chrisbanes.haze:haze:1.0.2")
 
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.xerial:sqlite-jdbc:3.46.1.3") // real SQLite files for the backup round-trip tests

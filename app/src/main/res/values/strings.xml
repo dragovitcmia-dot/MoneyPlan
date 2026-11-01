@@ -268,6 +268,9 @@
 
     <!-- Settings cards -->
     <string name="income_card_title">Income</string>
+    <string name="appearance_title">Appearance</string>
+    <string name="glass_effects_title">Glass effects</string>
+    <string name="glass_effects_helper">Frosted glass on the bottom bar and sheets (Android 12 and newer)</string>
     <string name="starting_title">Starting point</string>
     <string name="starting_locked_note">Clear all data to start again</string>
     <string name="developer_title">Developer tools</string>

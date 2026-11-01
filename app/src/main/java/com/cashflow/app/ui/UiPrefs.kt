@@ -19,7 +19,19 @@ class UiPrefs(context: Context) {
         prefs.edit().putBoolean(KEY_SWIPE_HINT_DISMISSED, true).apply()
     }
 
+    private val _glassEffects = MutableStateFlow(prefs.getBoolean(KEY_GLASS_EFFECTS, com.cashflow.app.ui.theme.GlassSpec.DEFAULT_ENABLED))
+
+    /** The "Glass effects" setting: frosted glass on the bottom bar, sheets and the notification center. On by default. */
+    val glassEffects: StateFlow<Boolean> = _glassEffects
+
+    fun setGlassEffects(on: Boolean) {
+        if (_glassEffects.value == on) return
+        _glassEffects.value = on
+        prefs.edit().putBoolean(KEY_GLASS_EFFECTS, on).apply()
+    }
+
     private companion object {
         const val KEY_SWIPE_HINT_DISMISSED = "swipe_hint_dismissed"
+        const val KEY_GLASS_EFFECTS = "glass_effects"
     }
 }

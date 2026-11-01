@@ -287,7 +287,7 @@ fun EntryComposer(
     )
     val maxSheetHeight = (LocalConfiguration.current.screenHeightDp * 0.92f).dp
 
-    ModalBottomSheet(
+    com.cashflow.app.ui.theme.GlassSheet(
         onDismissRequest = ::requestClose,
         sheetState = sheetState,
         containerColor = MaterialTheme.colorScheme.background,

@@ -40,6 +40,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.cashflow.app.CashflowApp
 import com.cashflow.app.debug.lab.LabScenario
+import com.cashflow.app.debug.lab.LabRelease
 import com.cashflow.app.debug.lab.LabScenarios
 import com.cashflow.app.ui.components.AppButton
 import com.cashflow.app.ui.components.AppButtonStyle
@@ -77,9 +78,9 @@ internal fun LabPanel() {
             ) {
                 Text(
                     if (expanded) {
-                        "Check ${s.index + 1} of ${s.total} · ${scenario.title}" + if (scenario.steps.size > 1) " · screen ${s.step + 1}/${scenario.steps.size}" else ""
+                        "Check ${LabRelease.progress(s)} · ${scenario.title}" + if (scenario.steps.size > 1) " · screen ${s.step + 1}/${scenario.steps.size}" else ""
                     } else {
-                        "Check ${s.index + 1} of ${s.total} · tap to see the questions"
+                        "Check ${LabRelease.progress(s)} · tap to see the questions"
                     },
                     style = MaterialTheme.typography.labelLarge,
                     maxLines = 1,
@@ -130,25 +131,51 @@ internal fun LabOverlays(onOpenSettings: () -> Unit) {
     }
 }
 
+/** The scenarios of the running release: what "Check this update" and the Results screen are about. */
+private fun updateScenarios(): List<LabScenario> = LabRelease.forUpdate(LabScenarios.all, com.cashflow.app.BuildConfig.VERSION_NAME)
+
 @Composable
 private fun LabHome(onOpenSettings: () -> Unit) {
     val results by LabState.results.collectAsStateWithLifecycle()
     val app = LocalContext.current.applicationContext as CashflowApp
-    val scope = rememberCoroutineScope()
-    val ids = LabScenarios.all.map { it.id }
+    val version = LabRelease.of(com.cashflow.app.BuildConfig.VERSION_NAME)
+    val update = updateScenarios()
+    val older = LabRelease.older(LabScenarios.all, com.cashflow.app.BuildConfig.VERSION_NAME)
+    val updateIds = update.map { it.id }
+    var olderOpen by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
     Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         Column(
             Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(top = 104.dp, start = Spacing.l, end = Spacing.l, bottom = 88.dp),
             verticalArrangement = Arrangement.spacedBy(Spacing.m),
         ) {
             Text("Cashflow Lab", style = MaterialTheme.typography.headlineMedium)
-            AppButton("Run all checks", onClick = { LabRunner.beginAsync(app, ids) }, modifier = Modifier.fillMaxWidth())
+            AppButton("Check this update", onClick = { LabRunner.beginAsync(app, updateIds) }, modifier = Modifier.fillMaxWidth())
+            Text(
+                "Version $version: ${update.size} ${if (update.size == 1) "check" else "checks"}, ${LabRelease.screens(update)} screens",
+                style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Spacing.s)) {
                 AppButton("Results", onClick = { LabState.showResults() }, modifier = Modifier.weight(1f), style = AppButtonStyle.Outlined)
                 AppButton("Tools", onClick = { LabState.hideOverlay(); onOpenSettings() }, modifier = Modifier.weight(1f), style = AppButtonStyle.Outlined)
             }
-            Text(results.summary(ids), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            for (scenario in LabScenarios.all) ScenarioRow(scenario, results.mark(scenario.id)) { LabRunner.beginAsync(app, listOf(scenario.id)) }
+            Text(results.summary(updateIds), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            for (scenario in update) ScenarioRow(scenario, results.mark(scenario.id)) { LabRunner.beginAsync(app, listOf(scenario.id)) }
+            if (older.isNotEmpty()) {
+                // Everything from earlier releases is one tap away but out of the way (the CI walks all of it).
+                HorizontalDivider()
+                Row(
+                    Modifier.fillMaxWidth().heightIn(min = 56.dp).clickable(role = Role.Button) { olderOpen = !olderOpen },
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.s),
+                ) {
+                    Text("Older checks (${older.size})", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+                    Icon(if (olderOpen) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown, contentDescription = if (olderOpen) "Collapse older checks" else "Expand older checks")
+                }
+                if (olderOpen) {
+                    AppButton("Run all checks", onClick = { LabRunner.beginAsync(app, LabScenarios.all.map { it.id }) }, modifier = Modifier.fillMaxWidth(), style = AppButtonStyle.Outlined)
+                    for (scenario in older) ScenarioRow(scenario, results.mark(scenario.id)) { LabRunner.beginAsync(app, listOf(scenario.id)) }
+                }
+            }
         }
     }
 }
@@ -185,22 +212,22 @@ private fun markColor(mark: Boolean?) = when (mark) {
     null -> MaterialTheme.colorScheme.onSurfaceVariant
 }
 
-/** One line per scenario with a tick or a cross, readable at a glance in one screenshot. */
+/** One line per scenario of THIS update with a tick or a cross, readable at a glance in one screenshot. */
 @Composable
 private fun LabResultsScreen() {
     val results by LabState.results.collectAsStateWithLifecycle()
     val app = LocalContext.current.applicationContext as CashflowApp
-    val scope = rememberCoroutineScope()
-    val ids = LabScenarios.all.map { it.id }
+    val update = updateScenarios()
+    val ids = update.map { it.id }
     Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         Column(
             Modifier.fillMaxSize().padding(top = 104.dp, start = Spacing.l, end = Spacing.l, bottom = 88.dp),
             verticalArrangement = Arrangement.spacedBy(Spacing.s),
         ) {
             Text("Results", style = MaterialTheme.typography.headlineMedium)
-            Text(results.summary(ids), style = MaterialTheme.typography.titleMedium)
+            Text("Version ${LabRelease.of(com.cashflow.app.BuildConfig.VERSION_NAME)} · ${results.summary(ids)}", style = MaterialTheme.typography.titleMedium)
             Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                for (scenario in LabScenarios.all) {
+                for (scenario in update) {
                     val mark = results.mark(scenario.id)
                     Row(Modifier.fillMaxWidth().heightIn(min = 28.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.m)) {
                         Text(markGlyph(mark), style = MaterialTheme.typography.titleMedium, color = markColor(mark), fontWeight = FontWeight.Bold, modifier = Modifier.size(24.dp))
@@ -212,7 +239,7 @@ private fun LabResultsScreen() {
                 AppButton("Lab home", onClick = { LabState.showHome() }, modifier = Modifier.weight(1f), style = AppButtonStyle.Outlined)
                 AppButton("Clear results", onClick = { LabState.clearResults() }, modifier = Modifier.weight(1f), style = AppButtonStyle.Outlined)
             }
-            AppButton("Run all checks", onClick = { LabRunner.beginAsync(app, ids) }, modifier = Modifier.fillMaxWidth())
+            AppButton("Check this update", onClick = { LabRunner.beginAsync(app, ids) }, modifier = Modifier.fillMaxWidth())
         }
     }
 }
@@ -266,7 +293,7 @@ internal fun LabCompactPanel() {
             Column(Modifier.fillMaxWidth().padding(horizontal = Spacing.s)) {
                 if (showQuestions && !busy) {
                     Column(Modifier.fillMaxWidth().heightIn(max = 200.dp).verticalScroll(rememberScrollState()).padding(horizontal = Spacing.s, vertical = Spacing.s)) {
-                        Text("Check ${s.index + 1} of ${s.total} · ${scenario.title}", style = MaterialTheme.typography.labelLarge)
+                        Text("Check ${LabRelease.progress(s)} · ${scenario.title}", style = MaterialTheme.typography.labelLarge)
                         for (check in step.checks) Text("• $check", style = MaterialTheme.typography.bodySmall)
                     }
                 }

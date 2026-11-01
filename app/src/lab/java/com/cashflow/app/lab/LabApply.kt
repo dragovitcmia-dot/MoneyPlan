@@ -18,6 +18,8 @@ object LabApply {
         repo.insertTransactions(seed.transactions)
         repo.updateSettings(seed.settings, today) // also generates the rows of the series
         for (id in seed.askAmountRuleIds) repo.setAskAmount(id, true)
+        seedBells(app, seed, today)
+        app.uiPrefs.setGlassEffects(!seed.glassOff) // every scenario starts with glass on, except the one that checks it off
         seedBackups(app, scenario, seed, today)
         LabState.shiftDays = 0
         LabState.rememberScenario(scenario.id)
@@ -36,6 +38,25 @@ object LabApply {
     suspend fun clockMoved(app: CashflowApp) {
         app.repository.runMaintenance(AppClock.today())
         app.snapshots.refreshDay()
+    }
+
+    /** The bell entries of the scenario, written as the app itself would (unread unless the seed says read). */
+    private suspend fun seedBells(app: CashflowApp, seed: com.cashflow.app.debug.lab.LabSeed, today: java.time.LocalDate) {
+        if (seed.bells.isEmpty()) return
+        val now = AppClock.now()
+        seed.bells.forEachIndexed { i, bell ->
+            val key = "LAB|$i"
+            val decision = com.cashflow.app.engine.NotificationDecision(
+                key = key, type = bell.type, title = bell.title, body = bell.body,
+                relatedDate = today.plusDays(bell.relatedDaysFromToday.toLong()), route = com.cashflow.app.engine.NotificationRoute.UPCOMING,
+                post = false, bellKey = key, amountMillimes = bell.amountTnd?.times(1000L),
+            )
+            app.notificationCenter.record(decision, key, now.minusSeconds(bell.minutesAgo * 60))
+        }
+        for (entry in app.notificationCenter.all()) {
+            val i = entry.key.removePrefix("LAB|").toIntOrNull() ?: continue
+            if (seed.bells.getOrNull(i)?.read == true) app.notificationCenter.markRead(entry.id)
+        }
     }
 
     /** The scenario's backups: each is a real snapshot of the seeded data, taken with the Lab clock set to its day (the newest at "now"). */
