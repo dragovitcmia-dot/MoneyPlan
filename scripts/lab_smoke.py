@@ -140,7 +140,8 @@ def walk(name, shots):
     smoke.screenshot(f"{name}-lab-results")  # the Results screen shows only this update's checks
     nodes = wait_for_text("Lab home", timeout=10)
     tap_box(max(node_boxes(nodes, "Lab home"), key=lambda b: b[3]))
-    nodes = wait_for_text("Older checks", timeout=15)
+    time.sleep(1.5)
+    nodes = smoke.dump_nodes() or []
     older = [b for t, d, b in nodes if t.strip().startswith("Older checks")]
     for _ in range(4):  # the row is the last on the home: scroll to it (large fonts push it off screen)
         if older:

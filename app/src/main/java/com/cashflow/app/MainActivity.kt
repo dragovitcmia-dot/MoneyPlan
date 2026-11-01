@@ -222,8 +222,10 @@ class MainActivity : ComponentActivity() {
                     // A scrolled History: wait for its rows to load, then move well down the list.
                     if ((pending.target as? com.cashflow.app.engine.UiTarget.History)?.scrolled == true) {
                         repeat(40) {
-                            if (historyList.layoutInfo.totalItemsCount > 40) {
-                                historyList.scrollToItem(40)
+                            // History loads by month: the current month alone is a couple of dozen rows, enough to scroll a good way.
+                            val total = historyList.layoutInfo.totalItemsCount
+                            if (total >= 14) {
+                                historyList.scrollToItem(minOf(total - 6, 14))
                                 return@LaunchedEffect
                             }
                             kotlinx.coroutines.delay(150)
